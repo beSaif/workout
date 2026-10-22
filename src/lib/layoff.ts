@@ -67,7 +67,7 @@ export function restartActiveBlock(
   if (!active) return { sessions, blocks }
 
   const newBlocks = blocks.map((b) =>
-    b.id === active.id ? { ...b, sessionIds: [], startDate: null, endDate: null } : b
+    b.id === active.id ? { ...b, sessionIds: [], skippedSlots: undefined, startDate: null, endDate: null } : b
   )
   const newSessions = sessions
     .filter((s) => s.confirmed)

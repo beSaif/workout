@@ -132,6 +132,34 @@ export function getBlockLength(
 }
 
 /**
+ * How far into the block the user is: sessions logged plus slots jumped over. The
+ * next session prescribes from this index, and the block is done once it reaches
+ * getBlockLength().
+ */
+export function blockPosition(block: Pick<TrainingBlock, "sessionIds" | "skippedSlots">): number {
+  return block.sessionIds.length + (block.skippedSlots?.length ?? 0)
+}
+
+/**
+ * Each logged session's 1-based place in its block. Sessions fill the slots in the
+ * order given (oldest first), stepping around any slot that was jumped over.
+ */
+export function blockSlotNumbers(
+  block: Pick<TrainingBlock, "skippedSlots">,
+  chronoSessionIds: number[]
+): Map<number, number> {
+  const skipped = new Set(block.skippedSlots ?? [])
+  const numbers = new Map<number, number>()
+  let slot = 0
+  for (const id of chronoSessionIds) {
+    while (skipped.has(slot)) slot++
+    numbers.set(id, slot + 1)
+    slot++
+  }
+  return numbers
+}
+
+/**
  * Prescription for the nth session of a specific block. Re-acclimation reads its
  * weight from rebuildLoads; every other phase delegates to the percentage scheme.
  */
@@ -170,6 +198,13 @@ export function deriveNextAnchor(completedRealizationBlock: TrainingBlock, sessi
   const lastPeak = peakSessions[peakSessions.length - 1]
 
   if (!lastPeak) return completedRealizationBlock.anchorWeight
+
+  // The anchor is read off the final single. If that one was jumped over, the last
+  // Peak logged is a lighter double or triple, and reading it would cut the anchor.
+  const finalSlot = getBlockLength(completedRealizationBlock) - 1
+  if (completedRealizationBlock.skippedSlots?.includes(finalSlot)) {
+    return completedRealizationBlock.anchorWeight
+  }
 
   const lastPeakWeight = getWorkingSets(lastPeak)[0]?.kg ?? completedRealizationBlock.anchorWeight
   const lastPeakRPE = getLastWorkingSet(lastPeak)?.rpe ?? null

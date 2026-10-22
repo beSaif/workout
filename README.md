@@ -27,7 +27,7 @@ your home screen.
 
 - **Main Lift mode**: block periodization for one lift. The main lift is always first in the
   session; the next load is prescribed from how the last one went, and e1RM (Brzycki) tracks the
-  trend.
+  trend. Feeling strong? Tap any later session in the block view to jump straight to it.
 - **Balanced mode**: training days, muscle groups and exercises of your own, logged the same way.
 - **Plan with Dot**: answer five questions and an LLM rewrites your routine, previewed before it's
   applied and undoable for a week. Or copy the prompt into your own chatbot and paste the plan

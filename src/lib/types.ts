@@ -43,6 +43,12 @@ export interface TrainingBlock {
   phase: BlockPhase
   status: BlockStatus
   sessionIds: number[]
+  /**
+   * 0-based slots of this block the user jumped over without training them. A slot
+   * counts towards the block's progress like a logged session, so the next session
+   * prescribes from `sessionIds.length + skippedSlots.length` (see blockPosition).
+   */
+  skippedSlots?: number[]
   anchorWeight: number
   startDate: string | null
   endDate: string | null

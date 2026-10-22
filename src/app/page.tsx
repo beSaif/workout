@@ -10,19 +10,22 @@ import {
   prescribeBlockSession,
   prescribeForBlock,
   getBlockLength,
-  createNextBlock,
+  blockPosition,
+  blockSlotNumbers,
   migrateSessionTypes,
   BLOCK_LENGTHS,
   PHASE_LABEL,
   PHASE_SESSION_TYPE,
 } from "@/lib/prescription"
 import { generateWarmups } from "@/lib/warmup"
+import { closeBlock, jumpToSession, peekNextBlock, JumpTarget } from "@/lib/jump"
 import { getLayoffState, restartActiveBlock } from "@/lib/layoff"
 import { scheduleIncompleteSessionReminder, cancelIncompleteSessionReminder } from "@/lib/swNotify"
 import { calcE1RM, roundToPlate } from "@/lib/e1rm"
 import { MuscleGroupConfig, DEFAULT_MUSCLE_GROUPS, DEFAULT_TRAINING_DAYS } from "@/lib/exerciseConfig"
 import { TrainingDay } from "@/lib/types"
 import SessionCard from "@/components/SessionCard"
+import PreviewSessionRow from "@/components/PreviewSessionRow"
 import BlockHeader from "@/components/BlockHeader"
 import ProgramTimeline from "@/components/ProgramTimeline"
 import StatsGrid from "@/components/StatsGrid"
@@ -87,7 +90,7 @@ function createUpcomingSession(
   let blockId: number | undefined
 
   if (activeBlock) {
-    const sessionIndexInBlock = activeBlock.sessionIds.length
+    const sessionIndexInBlock = blockPosition(activeBlock)
     prescription = prescribeForBlock(activeBlock, sessionIndexInBlock)
     blockId = activeBlock.id
   } else {
@@ -106,7 +109,7 @@ function createUpcomingSession(
   }))
   const maxId = sessions.length > 0 ? Math.max(...sessions.map((s) => s.id)) : 0
 
-  const sessionIndex = activeBlock ? activeBlock.sessionIds.length : 0
+  const sessionIndex = activeBlock ? blockPosition(activeBlock) : 0
   const phase = activeBlock?.phase ?? "accumulation"
   const blockLength = activeBlock ? getBlockLength(activeBlock) : BLOCK_LENGTHS.accumulation
   const coachNote = `[${PHASE_LABEL[phase]} ${sessionIndex + 1}/${blockLength}] ${prescription.weight}kg × ${prescription.reps} × ${prescription.sets}. Stay tight, drive the bar.`
@@ -139,6 +142,16 @@ function upcomingMatchesMode(upcoming: Session | undefined, profile: UserProfile
   if (!upcoming) return false
   if (isLiftFocused(profile)) return upcoming.skippedMainLift === true || upcoming.type !== "Free"
   return upcoming.type === "Free"
+}
+
+/** A block slot by phase and place, e.g. "Intensity 3" — what the program calls it. */
+function slotLabel(phase: BlockPhase, index: number): string {
+  const name = phase === "reacclimation" ? PHASE_LABEL[phase] : PHASE_SESSION_TYPE[phase]
+  return `${name} ${index + 1}`
+}
+
+function countSkippedSlots(blocks: TrainingBlock[]): number {
+  return blocks.reduce((n, b) => n + (b.skippedSlots?.length ?? 0), 0)
 }
 
 /** The prescribed opener of an upcoming session, e.g. "62.5kg × 6 × 4". */
@@ -202,6 +215,14 @@ export default function Page() {
   const presenceInitialisedRef = useRef(false)
   const [viewingBlockId, setViewingBlockId] = useState<number | null>(null)
   const [viewingUpcomingPhase, setViewingUpcomingPhase] = useState<BlockPhase | null>(null)
+  // The last jump, kept so it can be undone while the blocks are still as it left them.
+  // Not persisted: once the page reloads or anything moves the blocks, the jump stands.
+  const [jumpUndo, setJumpUndo] = useState<{
+    before: TrainingBlock[]
+    after: TrainingBlock[]
+    upcoming: Session
+    label: string
+  } | null>(null)
   const [weights, setWeights] = useState<WeightEntry[]>([])
   /**
    * False until there is a weight log worth drawing: the local copy if it has entries,
@@ -678,7 +699,8 @@ export default function Page() {
 
     if (activeBlock) {
       const updatedBlockSessionIds = [...activeBlock.sessionIds, updatedSession.id]
-      const isBlockComplete = updatedBlockSessionIds.length >= getBlockLength(activeBlock)
+      const isBlockComplete =
+        blockPosition({ ...activeBlock, sessionIds: updatedBlockSessionIds }) >= getBlockLength(activeBlock)
 
       if (isBlockComplete) {
         const completedBlock: TrainingBlock = {
@@ -687,27 +709,9 @@ export default function Page() {
           status: "completed",
           endDate: updatedSession.date ?? null,
         }
-
         // Re-acclimation finishes by resuming the interrupted block it was rebuilding
         // toward, rather than advancing into a fresh phase.
-        const resumeBlock =
-          activeBlock.phase === "reacclimation" && activeBlock.resumeBlockId !== undefined
-            ? currentBlocks.find((b) => b.id === activeBlock.resumeBlockId)
-            : undefined
-
-        if (resumeBlock) {
-          finalBlocks = currentBlocks.map((b) => {
-            if (b.id === activeBlock.id) return completedBlock
-            if (b.id === resumeBlock.id) return { ...b, status: "active" as const, endDate: null }
-            return b
-          })
-        } else {
-          const maxBlockId = Math.max(...currentBlocks.map((b) => b.id))
-          const newBlock = createNextBlock(completedBlock, confirmedSessions, maxBlockId + 1)
-          finalBlocks = currentBlocks
-            .map((b) => (b.id === activeBlock.id ? completedBlock : b))
-            .concat(newBlock)
-        }
+        finalBlocks = closeBlock(currentBlocks, completedBlock, confirmedSessions)
       } else {
         finalBlocks = currentBlocks.map((b) =>
           b.id === activeBlock.id ? { ...b, sessionIds: updatedBlockSessionIds } : b
@@ -799,6 +803,72 @@ export default function Page() {
       saveAll(updated, blocks)
       return updated
     })
+  }
+
+  /**
+   * Move the program straight to a later session (e.g. from Volume 2 to Intensity 3),
+   * leaving everything in between unlogged. Blocks run past are closed as they stand.
+   */
+  function handleJumpTo(target: JumpTarget) {
+    if (!profile) return
+    const previous = sessions.find((s) => !s.confirmed)
+    if (!previous) return
+    const confirmedSessions = sessions.filter((s) => s.confirmed)
+    const jumped = jumpToSession(blocks, confirmedSessions, target, new Date().toISOString())
+    if (!jumped) return
+
+    const regenerated = createUpcomingSession(confirmedSessions, jumped, exerciseConfig, profile, trainingDays)
+    const label = slotLabel(target.phase, target.index)
+    const to = describePrescription(regenerated)
+    const fromKg = previous.skippedMainLift ? undefined : previous.sets.find((s) => !s.isWarmup)?.kg
+    const toKg = regenerated.sets.find((s) => !s.isWarmup)?.kg
+    const jumpKg = fromKg != null && toKg != null ? toKg - fromKg : 0
+    const skipped = countSkippedSlots(jumped) - countSkippedSlots(blocks)
+
+    const ask =
+      `Jump to ${label}${to ? ` — ${to}` : ""}? ` +
+      `${skipped} session${skipped === 1 ? "" : "s"} in between ${skipped === 1 ? "is" : "are"} skipped and won't count as trained.` +
+      (jumpKg > 0 ? ` That's +${jumpKg}kg on today's ${fromKg}kg.` : "")
+    if (!window.confirm(ask)) return
+
+    // A bigger load than the body has been prepared for: the first working set decides.
+    const caution =
+      jumpKg > 0
+        ? ` Jumped ahead from ${fromKg}kg — if the first working set moves slow, drop 2.5kg for the rest.`
+        : ""
+    const upcoming: Session = {
+      ...regenerated,
+      id: previous.id,
+      coachNote: regenerated.coachNote + caution,
+      selectedTrainingDayId: previous.selectedTrainingDayId,
+      selectedMuscleGroups: previous.selectedMuscleGroups,
+    }
+
+    dropStaleDraft(previous.id)
+    const finalSessions = sortSessions([...confirmedSessions, upcoming])
+    setSessions(finalSessions)
+    setBlocks(jumped)
+    saveAll(finalSessions, jumped)
+    setViewingBlockId(null)
+    setViewingUpcomingPhase(null)
+    setJumpUndo({ before: blocks, after: jumped, upcoming: previous, label })
+  }
+
+  /** Put the program back where it stood before the last jump. */
+  function handleUndoJump() {
+    if (!jumpUndo || jumpUndo.after !== blocks) return
+    const current = sessions.find((s) => !s.confirmed)
+    const restored: Session = {
+      ...jumpUndo.upcoming,
+      selectedTrainingDayId: current?.selectedTrainingDayId ?? jumpUndo.upcoming.selectedTrainingDayId,
+      selectedMuscleGroups: current?.selectedMuscleGroups ?? jumpUndo.upcoming.selectedMuscleGroups,
+    }
+    dropStaleDraft(restored.id)
+    const finalSessions = sortSessions([...sessions.filter((s) => s.confirmed), restored])
+    setSessions(finalSessions)
+    setBlocks(jumpUndo.before)
+    saveAll(finalSessions, jumpUndo.before)
+    setJumpUndo(null)
   }
 
   function handleAvatarClick(p: UserPresence) {
@@ -962,16 +1032,19 @@ export default function Page() {
     .filter((s) => viewingBlockSessionIds.has(s.id))
     .sort((a, b) => new Date(a.date!).getTime() - new Date(b.date!).getTime())
 
-  const blockIndexMap = new Map<number, number>()
+  let blockIndexMap = new Map<number, number>()
   if (activeBlock) {
     const chronoConfirmed = [...activeBlockSessions].sort(
       (a, b) => new Date(a.date!).getTime() - new Date(b.date!).getTime()
     )
-    chronoConfirmed.forEach((s, i) => blockIndexMap.set(s.id, i + 1))
+    blockIndexMap = blockSlotNumbers(activeBlock, chronoConfirmed.map((s) => s.id))
     if (upcoming?.blockId === activeBlock.id) {
-      blockIndexMap.set(upcoming.id, activeBlockSessions.length + 1)
+      blockIndexMap.set(upcoming.id, blockPosition(activeBlock) + 1)
     }
   }
+  const viewingBlockIndexMap = viewingBlock
+    ? blockSlotNumbers(viewingBlock, viewingBlockSessions.map((s) => s.id))
+    : new Map<number, number>()
 
   // Long enough away that the plan is stale? Nudge at a week, offer a restart at two.
   const layoff = getLayoffState(sessions)
@@ -1000,7 +1073,7 @@ export default function Page() {
       : undefined
   const heldPrescription = (() => {
     if (!liftFocused || !activeBlock) return undefined
-    const p = prescribeForBlock(activeBlock, activeBlock.sessionIds.length)
+    const p = prescribeForBlock(activeBlock, blockPosition(activeBlock))
     return `${p.weight}kg × ${p.reps} × ${p.sets}`
   })()
   const firstName = profile.name.split(" ")[0]
@@ -1218,7 +1291,10 @@ export default function Page() {
           {viewingBlock && !viewingUpcomingPhase && (
             <BlockHeader
               block={viewingBlock}
-              confirmedCount={viewingBlock === activeBlock ? activeBlockSessions.length : viewingBlockSessions.length}
+              confirmedCount={
+                (viewingBlock === activeBlock ? activeBlockSessions.length : viewingBlockSessions.length) +
+                (viewingBlock.skippedSlots?.length ?? 0)
+              }
               onEditAnchor={viewingBlock === activeBlock ? handleEditAnchor : undefined}
             />
           )}
@@ -1270,12 +1346,12 @@ export default function Page() {
                 {Array.from({ length: total }, (_, i) => {
                   const p = prescribeBlockSession(viewingUpcomingPhase, i, activeBlock.anchorWeight)
                   return (
-                    <div key={i} className="px-4 py-3 rounded-xl bg-[#f5f5f5] mb-2 flex justify-between items-center opacity-50">
-                      <span className="text-xs text-[#888888]">Session {i + 1}</span>
-                      <span className="text-xs font-semibold text-[#555555]">
-                        {p.weight}kg × {p.reps} × {p.sets}
-                      </span>
-                    </div>
+                    <PreviewSessionRow
+                      key={i}
+                      label={`Session ${i + 1}`}
+                      prescription={`${p.weight}kg × ${p.reps} × ${p.sets}`}
+                      onJump={upcoming ? () => handleJumpTo({ phase: viewingUpcomingPhase, index: i }) : undefined}
+                    />
                   )
                 })}
               </>
@@ -1285,6 +1361,17 @@ export default function Page() {
           {/* Active block: upcoming + confirmed sessions + previews */}
           {viewingBlock === activeBlock && !viewingUpcomingPhase && (
             <>
+              {jumpUndo && jumpUndo.after === blocks && (
+                <div className="flex items-center justify-between rounded-xl bg-[#eff6ff] px-4 py-2.5 mb-2">
+                  <span className="text-xs font-semibold text-[#1e3a5f]">Jumped to {jumpUndo.label}</span>
+                  <button
+                    onClick={handleUndoJump}
+                    className="text-xs font-semibold text-[#1e3a5f] underline active:opacity-70"
+                  >
+                    Undo
+                  </button>
+                </div>
+              )}
               {upcoming && (
                 <SessionCard
                   session={upcoming}
@@ -1314,27 +1401,48 @@ export default function Page() {
                   mainLiftShortLabel={liftShort}
                 />
               ))}
-              {/* Previews for sessions not yet generated */}
+              {/* Slots jumped over: no session behind them, but they still count in the block */}
+              {activeBlock && (activeBlock.skippedSlots?.length ?? 0) > 0 && (
+                <div className="px-4 py-2.5 rounded-xl border border-dashed border-[#e8e8e8] mb-2">
+                  <span className="text-xs text-[#aaaaaa]">
+                    Skipped · Session {[...activeBlock.skippedSlots!].sort((a, b) => a - b).map((i) => i + 1).join(", ")}
+                  </span>
+                </div>
+              )}
+              {/* Previews for sessions not yet generated. Tapping one jumps straight to it. */}
               {activeBlock && (() => {
-                const shownSessions =
-                  activeBlockSessions.length + (upcoming && !upcoming.skippedMainLift ? 1 : 0)
+                const position = blockPosition(activeBlock)
+                const shownSessions = position + (upcoming && !upcoming.skippedMainLift ? 1 : 0)
                 const remaining = getBlockLength(activeBlock) - shownSessions
-                if (remaining <= 0) return null
-                return Array.from({ length: remaining }, (_, i) => {
-                  const idx = shownSessions + i
-                  const p = prescribeForBlock(activeBlock, idx)
-                  return (
-                    <div
-                      key={idx}
-                      className="px-4 py-3 rounded-xl bg-[#f5f5f5] mb-2 flex justify-between items-center opacity-40"
-                    >
-                      <span className="text-xs text-[#888888]">Session {idx + 1}</span>
-                      <span className="text-xs font-semibold text-muted">
-                        {p.weight}kg × {p.reps} × {p.sets}
-                      </span>
-                    </div>
-                  )
-                })
+                if (remaining > 0) {
+                  return Array.from({ length: remaining }, (_, i) => {
+                    const idx = shownSessions + i
+                    const p = prescribeForBlock(activeBlock, idx)
+                    return (
+                      <PreviewSessionRow
+                        key={idx}
+                        faint
+                        label={`Session ${idx + 1}`}
+                        prescription={`${p.weight}kg × ${p.reps} × ${p.sets}`}
+                        onJump={upcoming && idx > position ? () => handleJumpTo({ phase: activeBlock.phase, index: idx }) : undefined}
+                      />
+                    )
+                  })
+                }
+                // Last session of the block: offer the one after it, so today's can be
+                // skipped outright even where the block has nothing left to preview.
+                const next = upcoming && !upcoming.skippedMainLift ? peekNextBlock(blocks, confirmed) : undefined
+                if (!next) return null
+                const nextIdx = blockPosition(next)
+                const p = prescribeForBlock(next, nextIdx)
+                return (
+                  <PreviewSessionRow
+                    faint
+                    label={`Next · ${slotLabel(next.phase, nextIdx)}`}
+                    prescription={`${p.weight}kg × ${p.reps} × ${p.sets}`}
+                    onJump={() => handleJumpTo({ phase: next.phase, index: nextIdx })}
+                  />
+                )
               })()}
             </>
           )}
@@ -1344,7 +1452,7 @@ export default function Page() {
             <SessionCard
               key={s.id}
               session={s}
-              blockIndex={i + 1}
+              blockIndex={viewingBlockIndexMap.get(s.id) ?? i + 1}
               onEdit={handleEditSession}
               onUnlog={handleUnlogSession}
               onShare={setShareSession}

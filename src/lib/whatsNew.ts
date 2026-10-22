@@ -17,6 +17,15 @@ export interface WhatsNewRelease {
  */
 export const WHATS_NEW: WhatsNewRelease[] = [
   {
+    version: 10,
+    items: [
+      {
+        title: "Jump ahead in your block",
+        body: "Today's load feels too light? Every later session on Home now has a Jump button. Tap one (or tap Intensity, Peak or Deload on the timeline and pick a session there) to make it your next session. The ones in between are marked skipped, not trained, and the block carries on from where you landed. Changed your mind? Undo sits right above the card.",
+      },
+    ],
+  },
+  {
     version: 9,
     items: [
       {
