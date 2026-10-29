@@ -50,6 +50,11 @@ export interface TrainingBlock {
    */
   skippedSlots?: number[]
   anchorWeight: number
+  /**
+   * Sessions in this block, set from the user's benching frequency when the block is
+   * made. Blocks saved before it existed fall back to BLOCK_LENGTHS.
+   */
+  length?: number
   startDate: string | null
   endDate: string | null
   /** Re-acclimation only: per-session rebuild loads (kg). Block length = rebuildLoads.length. */

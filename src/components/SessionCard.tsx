@@ -24,6 +24,8 @@ interface SessionCardProps {
   mainLiftShortLabel?: string
   /** The load being held for the next session, e.g. "62.5kg × 6 × 4". */
   heldPrescription?: string
+  /** Upcoming only: the effort to aim for, and why the load moved if it did. */
+  targetLine?: string
   /** Coach nudge shown on the upcoming card after repeated skips. */
   skipNudge?: string
 }
@@ -51,6 +53,7 @@ export default function SessionCard({
   recommendedDayId,
   mainLiftShortLabel,
   heldPrescription,
+  targetLine,
   skipNudge,
 }: SessionCardProps) {
   const isUpcoming = !session.confirmed
@@ -177,6 +180,10 @@ export default function SessionCard({
             )}
           </div>
         </div>
+      )}
+
+      {topWeight != null && targetLine && (
+        <p className="text-[11px] font-semibold text-[#3b5f8a] leading-snug mt-2">{targetLine}</p>
       )}
 
       {/* Main lift sat out: say where its load went, so the block still reads as on track */}

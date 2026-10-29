@@ -13,13 +13,16 @@ import {
   blockPosition,
   blockSlotNumbers,
   migrateSessionTypes,
-  BLOCK_LENGTHS,
+  cycleLoadOffset,
+  blockLengthFor,
+  measureSessionsPerWeek,
   PHASE_LABEL,
   PHASE_SESSION_TYPE,
+  type Prescription,
 } from "@/lib/prescription"
 import { generateWarmups } from "@/lib/warmup"
 import { closeBlock, jumpToSession, peekNextBlock, JumpTarget } from "@/lib/jump"
-import { getLayoffState, restartActiveBlock } from "@/lib/layoff"
+import { getLayoffState, layoffAnchor, restartActiveBlock } from "@/lib/layoff"
 import { scheduleIncompleteSessionReminder, cancelIncompleteSessionReminder } from "@/lib/swNotify"
 import { calcE1RM, roundToPlate } from "@/lib/e1rm"
 import { MuscleGroupConfig, DEFAULT_MUSCLE_GROUPS, DEFAULT_TRAINING_DAYS } from "@/lib/exerciseConfig"
@@ -86,18 +89,18 @@ function createUpcomingSession(
 
   const activeBlock = getActiveBlock(blocks)
 
-  let prescription: ReturnType<typeof prescribeBlockSession>
+  let prescription: Prescription
   let blockId: number | undefined
 
   if (activeBlock) {
     const sessionIndexInBlock = blockPosition(activeBlock)
-    prescription = prescribeForBlock(activeBlock, sessionIndexInBlock)
+    prescription = prescribeForBlock(activeBlock, sessionIndexInBlock, cycleLoadOffset(blocks, sessions, activeBlock))
     blockId = activeBlock.id
   } else {
     prescription = prescribeBlockSession("accumulation", 0, profile.anchor ?? 0)
   }
 
-  const warmups = generateWarmups(prescription.weight)
+  const warmups = generateWarmups(prescription.weight, prescription.reps)
   const workingSets = Array.from({ length: prescription.sets }, (_, i) => ({
     id: `S${i + 1}`,
     kg: prescription.weight,
@@ -111,8 +114,9 @@ function createUpcomingSession(
 
   const sessionIndex = activeBlock ? blockPosition(activeBlock) : 0
   const phase = activeBlock?.phase ?? "accumulation"
-  const blockLength = activeBlock ? getBlockLength(activeBlock) : BLOCK_LENGTHS.accumulation
-  const coachNote = `[${PHASE_LABEL[phase]} ${sessionIndex + 1}/${blockLength}] ${prescription.weight}kg × ${prescription.reps} × ${prescription.sets}. Stay tight, drive the bar.`
+  const blockLength = activeBlock ? getBlockLength(activeBlock) : blockLengthFor("accumulation", measureSessionsPerWeek(sessions, null))
+  const effort = prescription.rpe != null ? ` ${prescription.light ? "Light day, aim" : "Aim"} for RPE ${prescription.rpe}.` : ""
+  const coachNote = `[${PHASE_LABEL[phase]} ${sessionIndex + 1}/${blockLength}] ${prescription.weight}kg × ${prescription.reps} × ${prescription.sets}.${effort} Stay tight, drive the bar.`
 
   const nextDay = suggestNextDay(sessions, trainingDays, config)?.day
 
@@ -365,6 +369,7 @@ export default function Page() {
               anchorWeight: roundToPlate(p.anchor ?? 0),
               startDate: null,
               endDate: null,
+              length: blockLengthFor("accumulation", measureSessionsPerWeek(confirmed, null)),
             }]
             const upcoming = createUpcomingSession(confirmed, seededBlocks, config, p, days)
             finalSessions = sortSessions([...confirmed, upcoming])
@@ -626,6 +631,7 @@ export default function Page() {
         anchorWeight: anchor,
         startDate: null,
         endDate: null,
+        length: blockLengthFor("accumulation", measureSessionsPerWeek(confirmed, null)),
       }]
     }
 
@@ -908,9 +914,26 @@ export default function Page() {
 
   function handleSaveEdit(updatedSession: Session) {
     setSessions((prev) => {
-      const updated = prev.map((s) =>
+      let updated = prev.map((s) =>
         s.id === updatedSession.id ? updatedSession : s
       )
+      // An edited RPE or rep count changes what the cycle has learned, so re-plan the
+      // upcoming loads, keeping the day picked and the main lift choice on the card.
+      const upcoming = updated.find((s) => !s.confirmed)
+      if (profile && isLiftFocused(profile) && upcoming && !upcoming.skippedMainLift) {
+        const confirmed = updated.filter((s) => s.confirmed)
+        const regenerated = createUpcomingSession(confirmed, blocks, exerciseConfig, profile, trainingDays)
+        updated = sortSessions([
+          ...confirmed,
+          {
+            ...regenerated,
+            id: upcoming.id,
+            selectedTrainingDayId: upcoming.selectedTrainingDayId,
+            selectedMuscleGroups: upcoming.selectedMuscleGroups,
+            extraWorkouts: upcoming.extraWorkouts,
+          },
+        ])
+      }
       saveAll(updated, blocks)
       return updated
     })
@@ -978,7 +1001,7 @@ export default function Page() {
     if (!active) return
     if (
       !confirm(
-        `Restart ${PHASE_LABEL[active.phase]} from session 1 at ${active.anchorWeight}kg? Your logged sessions stay in history.`
+        `Restart ${PHASE_LABEL[active.phase]} from session 1 with your anchor eased 5% to ${layoffAnchor(active.anchorWeight)}kg? Your logged sessions stay in history.`
       )
     )
       return
@@ -1071,10 +1094,27 @@ export default function Page() {
     consecutiveSkips >= 2
       ? `${liftShort} skipped ${consecutiveSkips} sessions running — it's first up today.`
       : undefined
-  const heldPrescription = (() => {
-    if (!liftFocused || !activeBlock) return undefined
-    const p = prescribeForBlock(activeBlock, blockPosition(activeBlock))
-    return `${p.weight}kg × ${p.reps} × ${p.sets}`
+  // What the cycle has learned so far, applied to every load still to come this cycle.
+  const activeOffset = activeBlock ? cycleLoadOffset(blocks, confirmed, activeBlock) : 0
+  const upcomingRx = liftFocused && activeBlock
+    ? prescribeForBlock(activeBlock, blockPosition(activeBlock), activeOffset)
+    : undefined
+  const heldPrescription = upcomingRx
+    ? `${upcomingRx.weight}kg × ${upcomingRx.reps} × ${upcomingRx.sets}`
+    : undefined
+  const upcomingTarget = (() => {
+    if (!upcomingRx || upcomingRx.rpe == null || upcoming?.skippedMainLift) return undefined
+    const isTest = activeBlock?.phase === "realization" && blockPosition(activeBlock) === getBlockLength(activeBlock) - 1
+    const effort = isTest
+      ? "Max single · log its RPE, it sets your next anchor"
+      : `${upcomingRx.light ? "Light day · aim" : "Aim"} for RPE ${upcomingRx.rpe}`
+    const adjust =
+      activeOffset > 0
+        ? ` · +${activeOffset}kg, recent sessions felt easy`
+        : activeOffset < 0
+        ? ` · ${activeOffset}kg, recent sessions ran hard`
+        : ""
+    return effort + adjust
   })()
   const firstName = profile.name.split(" ")[0]
 
@@ -1320,7 +1360,12 @@ export default function Page() {
               reacclimation: { bg: "bg-[#fdf3e7]", bar: "bg-[#b06a1e]", label: "text-[#8a4d14]", meta: "text-[#b06a1e]" },
             }
             const style = phaseColor[viewingUpcomingPhase]
-            const total = BLOCK_LENGTHS[viewingUpcomingPhase]
+            const total = blockLengthFor(viewingUpcomingPhase, measureSessionsPerWeek(confirmed, null))
+            const previewOffset = cycleLoadOffset(blocks, confirmed, {
+              id: Number.MAX_SAFE_INTEGER,
+              phase: viewingUpcomingPhase,
+              anchorWeight: activeBlock.anchorWeight,
+            })
             return (
               <>
                 <div className={`${style.bg} rounded-xl px-4 py-3 mb-2`}>
@@ -1344,11 +1389,11 @@ export default function Page() {
                   <span>back to current block</span>
                 </button>
                 {Array.from({ length: total }, (_, i) => {
-                  const p = prescribeBlockSession(viewingUpcomingPhase, i, activeBlock.anchorWeight)
+                  const p = prescribeBlockSession(viewingUpcomingPhase, i, activeBlock.anchorWeight, total, previewOffset)
                   return (
                     <PreviewSessionRow
                       key={i}
-                      label={`Session ${i + 1}`}
+                      label={`Session ${i + 1}${p.light ? " · light" : ""}`}
                       prescription={`${p.weight}kg × ${p.reps} × ${p.sets}`}
                       onJump={upcoming ? () => handleJumpTo({ phase: viewingUpcomingPhase, index: i }) : undefined}
                     />
@@ -1385,6 +1430,7 @@ export default function Page() {
                   recommendedDayId={recommendedDay?.day.id}
                   mainLiftShortLabel={liftShort}
                   heldPrescription={heldPrescription}
+                  targetLine={upcomingTarget}
                   skipNudge={skipNudge}
                 />
               )}
@@ -1417,12 +1463,12 @@ export default function Page() {
                 if (remaining > 0) {
                   return Array.from({ length: remaining }, (_, i) => {
                     const idx = shownSessions + i
-                    const p = prescribeForBlock(activeBlock, idx)
+                    const p = prescribeForBlock(activeBlock, idx, activeOffset)
                     return (
                       <PreviewSessionRow
                         key={idx}
                         faint
-                        label={`Session ${idx + 1}`}
+                        label={`Session ${idx + 1}${p.light ? " · light" : ""}`}
                         prescription={`${p.weight}kg × ${p.reps} × ${p.sets}`}
                         onJump={upcoming && idx > position ? () => handleJumpTo({ phase: activeBlock.phase, index: idx }) : undefined}
                       />
@@ -1434,7 +1480,7 @@ export default function Page() {
                 const next = upcoming && !upcoming.skippedMainLift ? peekNextBlock(blocks, confirmed) : undefined
                 if (!next) return null
                 const nextIdx = blockPosition(next)
-                const p = prescribeForBlock(next, nextIdx)
+                const p = prescribeForBlock(next, nextIdx, cycleLoadOffset(blocks, confirmed, next))
                 return (
                   <PreviewSessionRow
                     faint
@@ -1533,7 +1579,7 @@ export default function Page() {
           <div className="bg-white w-full max-w-[393px] rounded-t-2xl px-6 pt-6 pb-10 max-h-[90dvh] overflow-y-auto">
             <p className="text-base font-semibold text-[#111111] mb-1">Set your anchor weight</p>
             <p className="text-sm text-[#777777] mb-6">
-              Your anchor is the 1RM this cycle is built around. All block prescriptions are calculated as a percentage of this.
+              Your anchor is the 1RM this cycle is built around. Every load is a percentage of it, nudged by how your logged RPEs compare with the targets.
             </p>
             <label className="block text-[10px] font-semibold uppercase tracking-widest text-[#aaaaaa] mb-2">
               Current 1RM (kg)

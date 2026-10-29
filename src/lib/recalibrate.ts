@@ -1,5 +1,5 @@
 import { Session, TrainingBlock } from "./types"
-import { blockPosition, getBlockLength, prescribeForBlock } from "./prescription"
+import { blockPosition, cycleLoadOffset, getBlockLength, prescribeForBlock } from "./prescription"
 import { roundToPlate } from "./e1rm"
 
 /** Step between consecutive rebuild loads when climbing back after an interruption. */
@@ -59,7 +59,11 @@ export function recalibrate(sessions: Session[], blocks: TrainingBlock[]): Recal
     const resumeBlock = newBlocks.find((b) => b.id === active.resumeBlockId)
     if (resumeBlock) {
       // The weight the interrupted block wants when it picks back up.
-      const resumeWeight = prescribeForBlock(resumeBlock, blockPosition(resumeBlock)).weight
+      const resumeWeight = prescribeForBlock(
+        resumeBlock,
+        blockPosition(resumeBlock),
+        cycleLoadOffset(newBlocks, confirmed, resumeBlock)
+      ).weight
 
       const doneSessions = active.sessionIds
         .map((id) => confirmed.find((s) => s.id === id))
