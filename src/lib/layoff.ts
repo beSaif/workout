@@ -1,4 +1,6 @@
 import { Session, TrainingBlock } from "./types"
+import { roundToPlate } from "./e1rm"
+import { blockLengthFor, measureSessionsPerWeek } from "./prescription"
 
 /** Days off after which the bar starts feeling heavy — worth a heads-up, nothing more. */
 export const LAYOFF_NUDGE_DAYS = 7
@@ -48,8 +50,17 @@ export function getLayoffState(sessions: Session[], now: Date = new Date()): Lay
   return { tier, days, lastSessionDate }
 }
 
+/** Share of the anchor taken off when a block restarts after a layoff. */
+export const LAYOFF_ANCHOR_CUT = 0.05
+
+/** The anchor a block restarts at after a layoff: two weeks off costs real strength. */
+export function layoffAnchor(anchorWeight: number): number {
+  return roundToPlate(anchorWeight * (1 - LAYOFF_ANCHOR_CUT))
+}
+
 /**
- * Restart the active block from session 1, keeping its phase and anchor weight.
+ * Restart the active block from session 1, keeping its phase and taking 5% off its
+ * anchor, so a block that restarts in the peak isn't chasing a pre-layoff max.
  *
  * Sessions already logged in the block stay in history (their lifts, e1RMs and PRs
  * are real) but are unlinked from the block, so the block re-prescribes from its
@@ -67,7 +78,9 @@ export function restartActiveBlock(
   if (!active) return { sessions, blocks }
 
   const newBlocks = blocks.map((b) =>
-    b.id === active.id ? { ...b, sessionIds: [], skippedSlots: undefined, startDate: null, endDate: null } : b
+    b.id === active.id
+      ? { ...b, anchorWeight: layoffAnchor(b.anchorWeight), sessionIds: [], skippedSlots: undefined, startDate: null, endDate: null }
+      : b
   )
   const newSessions = sessions
     .filter((s) => s.confirmed)
@@ -99,6 +112,7 @@ export function resetToFirstBlock(
     anchorWeight: anchor,
     startDate: null,
     endDate: null,
+    length: blockLengthFor("accumulation", measureSessionsPerWeek(sessions, null)),
   }
 
   const confirmed = sessions.filter((s) => s.confirmed)
@@ -109,7 +123,7 @@ export function resetToFirstBlock(
   const notes = [
     `Cleared ${blocks.length} block${blocks.length === 1 ? "" : "s"} → single Accumulation block at ${anchor}kg`,
     `Kept ${confirmed.length} confirmed session${confirmed.length === 1 ? "" : "s"} in history (unlinked from blocks)`,
-    "Next session prescribes as Accumulation 1/4",
+    `Next session prescribes as Accumulation 1/${firstBlock.length}`,
   ]
   if (sessions.some((s) => !s.confirmed)) notes.push("Cleared upcoming session (regenerates on next load)")
 

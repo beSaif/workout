@@ -17,6 +17,15 @@ export interface WhatsNewRelease {
  */
 export const WHATS_NEW: WhatsNewRelease[] = [
   {
+    version: 11,
+    items: [
+      {
+        title: "Loads that learn from your RPE",
+        body: "Every session now has a target RPE, shown under the load on the Up next card. Log your RPE and the next loads move with you: about 2.5% more when a session felt 1.5 or more easier than target, a step back when it ran a full point harder (from RPE 8 up) or you missed reps. The peak block is gentler too: doubles, then openers, then a max single. That single, with its RPE, sets your next anchor, which can move up to 5% per cycle instead of 2.5kg. Blocks are now sized to how often you bench, and if you bench four or more times a week the repeats run light. Heavy days warm up with singles.",
+      },
+    ],
+  },
+  {
     version: 10,
     items: [
       {
