@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from "react"
 import { useRouter } from "next/navigation"
-import { Session, TrainingBlock, BlockPhase, MuscleGroup, UserProfile, UserPresence, GymbroMessage, WeightEntry } from "@/lib/types"
+import { Session, TrainingBlock, BlockPhase, MuscleGroup, UserProfile, UserPresence, GymbroMessage, WeightEntry, CycleLength } from "@/lib/types"
 import { isLiftFocused, getMainLiftLabel, getMainLiftShortLabel, countConsecutiveSkips, currentStretchSkips } from "@/lib/trainingMode"
 import { loadSessionsLocal, loadBlocksLocal, loadExerciseConfigLocal, loadTrainingDaysLocal, loadAll, loadExerciseConfig, loadTrainingDays, saveAll, loadDraft, clearDraft, loadProfile, loadProfileLocal, loadPresencesLocal, savePresencesLocal, loadFriendEmailsLocal, saveFriendEmailsLocal, loadFriendLastActiveLocal, saveFriendLastActiveLocal, clearMiniPlayer, loadLayoffDismissLocal, saveLayoffDismissLocal, loadWeights, loadWeightsLocal, saveWeights, loadWeighInSkipLocal, saveWeighInSkipLocal } from "@/lib/storage"
 import type { SessionDraft } from "@/lib/types"
@@ -15,6 +15,9 @@ import {
   migrateSessionTypes,
   cycleLoadOffset,
   blockLengthFor,
+  createFirstBlock,
+  cycleLengthFor,
+  SCHEME_VERSION,
   measureSessionsPerWeek,
   PHASE_LABEL,
   PHASE_SESSION_TYPE,
@@ -29,7 +32,8 @@ import { MuscleGroupConfig, DEFAULT_MUSCLE_GROUPS, DEFAULT_TRAINING_DAYS } from 
 import { TrainingDay } from "@/lib/types"
 import SessionCard from "@/components/SessionCard"
 import PreviewSessionRow from "@/components/PreviewSessionRow"
-import BlockHeader from "@/components/BlockHeader"
+import CycleReportSheet from "@/components/CycleReportSheet"
+import { buildCycleReport } from "@/lib/cycleReport"
 import ProgramTimeline from "@/components/ProgramTimeline"
 import StatsGrid from "@/components/StatsGrid"
 import ProgressBar from "@/components/ProgressBar"
@@ -204,6 +208,8 @@ export default function Page() {
   const [friendLastActive, setFriendLastActive] = useState<Record<string, string>>(() => loadFriendLastActiveLocal())
   const [friendProfiles, setFriendProfiles] = useState<UserProfile[]>([])
   const [showHypePanel, setShowHypePanel] = useState(false)
+  /** The deload whose cycle report is open: shown once that cycle's last session is logged. */
+  const [cycleReportId, setCycleReportId] = useState<number | null>(null)
   const [lastConfirmed, setLastConfirmed] = useState<Session | null>(null)
   const [lastPR, setLastPR] = useState<{ e1rm: number; previous: number } | null>(null)
   const [shareSession, setShareSession] = useState<Session | null>(null)
@@ -361,16 +367,7 @@ export default function Page() {
           // Balanced users have no anchor and no blocks)
           if (finalBlocks.length === 0 && isLiftFocused(p)) {
             const confirmed = finalSessions.filter((s) => s.confirmed)
-            const seededBlocks: TrainingBlock[] = [{
-              id: 1,
-              phase: "accumulation",
-              status: "active",
-              sessionIds: [],
-              anchorWeight: roundToPlate(p.anchor ?? 0),
-              startDate: null,
-              endDate: null,
-              length: blockLengthFor("accumulation", measureSessionsPerWeek(confirmed, null)),
-            }]
+            const seededBlocks: TrainingBlock[] = [createFirstBlock(1, p.anchor ?? 0, confirmed, cycleLengthFor(p.trainingAge))]
             const upcoming = createUpcomingSession(confirmed, seededBlocks, config, p, days)
             finalSessions = sortSessions([...confirmed, upcoming])
             finalBlocks = seededBlocks
@@ -609,6 +606,40 @@ export default function Page() {
     setAnchorPrompt(true)
   }
 
+  /**
+   * Start the next cycle from the report's answers: the Volume block that opens it takes
+   * the chosen peak and is resized to the chosen frequency, which the rest of the cycle
+   * carries. Only before its first session, so no logged load is re-planned.
+   */
+  function handleStartCycle(peak: number, sessionsPerWeek: number, cycleLength: CycleLength) {
+    setCycleReportId(null)
+    if (!profile) return
+    const active = getActiveBlock(blocks)
+    if (!active || active.phase !== "accumulation" || blockPosition(active) > 0) return
+    const confirmed = sessions.filter((s) => s.confirmed)
+    const finalBlocks = blocks.map((b) =>
+      b.id === active.id
+        ? {
+            ...b,
+            anchorWeight: roundToPlate(peak),
+            sessionsPerWeek,
+            cycleLength,
+            setUp: true,
+            length: blockLengthFor("accumulation", sessionsPerWeek, { cycleLength }),
+          }
+        : b
+    )
+    const previous = sessions.find((s) => !s.confirmed)
+    const regenerated = createUpcomingSession(confirmed, finalBlocks, exerciseConfig, profile, trainingDays)
+    const upcoming: Session = previous
+      ? { ...regenerated, selectedTrainingDayId: previous.selectedTrainingDayId, selectedMuscleGroups: previous.selectedMuscleGroups }
+      : regenerated
+    const finalSessions = sortSessions([...confirmed, upcoming])
+    saveAll(finalSessions, finalBlocks)
+    setSessions(finalSessions)
+    setBlocks(finalBlocks)
+  }
+
   function handleConfirmAnchor() {
     if (!profile) return
     const parsed = parseFloat(anchorInput)
@@ -623,16 +654,7 @@ export default function Page() {
         b.id === activeBlock.id ? { ...b, anchorWeight: anchor } : b
       )
     } else {
-      finalBlocks = [{
-        id: 1,
-        phase: "accumulation",
-        status: "active",
-        sessionIds: [],
-        anchorWeight: anchor,
-        startDate: null,
-        endDate: null,
-        length: blockLengthFor("accumulation", measureSessionsPerWeek(confirmed, null)),
-      }]
+      finalBlocks = [createFirstBlock(1, anchor, confirmed, cycleLengthFor(profile.trainingAge))]
     }
 
     // Keep the day and extras already picked on the upcoming card; only the loads change.
@@ -718,6 +740,8 @@ export default function Page() {
         // Re-acclimation finishes by resuming the interrupted block it was rebuilding
         // toward, rather than advancing into a fresh phase.
         finalBlocks = closeBlock(currentBlocks, completedBlock, confirmedSessions)
+        // The deload was the cycle's last block: recap it and set up the next one.
+        if (completedBlock.phase === "deload" && completedBlock.review) setCycleReportId(completedBlock.id)
       } else {
         finalBlocks = currentBlocks.map((b) =>
           b.id === activeBlock.id ? { ...b, sessionIds: updatedBlockSessionIds } : b
@@ -1001,7 +1025,7 @@ export default function Page() {
     if (!active) return
     if (
       !confirm(
-        `Restart ${PHASE_LABEL[active.phase]} from session 1 with your anchor eased 5% to ${layoffAnchor(active.anchorWeight)}kg? Your logged sessions stay in history.`
+        `Restart ${PHASE_LABEL[active.phase]} from session 1 with this cycle's peak eased 5% to ${layoffAnchor(active.anchorWeight)}kg? Your logged sessions stay in history.`
       )
     )
       return
@@ -1103,20 +1127,36 @@ export default function Page() {
     ? `${upcomingRx.weight}kg × ${upcomingRx.reps} × ${upcomingRx.sets}`
     : undefined
   const upcomingTarget = (() => {
-    if (!upcomingRx || upcomingRx.rpe == null || upcoming?.skippedMainLift) return undefined
+    if (!upcomingRx || upcoming?.skippedMainLift) return undefined
+    if (activeBlock?.phase === "deload") return "Deload · keep every set easy, well short of failure"
+    if (upcomingRx.rpe == null) return undefined
     const isTest = activeBlock?.phase === "realization" && blockPosition(activeBlock) === getBlockLength(activeBlock) - 1
     const effort = isTest
-      ? "Max single · log its RPE, it sets your next anchor"
+      ? `Peak single · aim for RPE ${upcomingRx.rpe}. Log it: it sets next cycle's peak.`
       : `${upcomingRx.light ? "Light day · aim" : "Aim"} for RPE ${upcomingRx.rpe}`
     const adjust =
       activeOffset > 0
-        ? ` · +${activeOffset}kg, recent sessions felt easy`
+        ? `\n+${activeOffset}kg on the plan: recent sessions felt easy`
         : activeOffset < 0
-        ? ` · ${activeOffset}kg, recent sessions ran hard`
+        ? `\n−${-activeOffset}kg off the plan: recent sessions ran hard`
         : ""
     return effort + adjust
   })()
   const firstName = profile.name.split(" ")[0]
+  // Phases still to come are sized from the frequency chosen for this cycle, else the measured one.
+  const planPerWeek = activeBlock?.sessionsPerWeek ?? measureSessionsPerWeek(confirmed, null)
+  // A new cycle that hasn't started yet can still reopen the report of the one before it.
+  const reportableDeload = (() => {
+    if (!activeBlock || activeBlock.phase !== "accumulation" || blockPosition(activeBlock) > 0) return undefined
+    const before = [...blocks].filter((b) => b.id < activeBlock.id).sort((a, b) => b.id - a.id)[0]
+    return before?.phase === "deload" && before.review ? before : undefined
+  })()
+  const cycleReport = cycleReportId != null ? buildCycleReport(blocks, confirmed, cycleReportId) : null
+  const currentPhaseName = !activeBlock
+    ? "current block"
+    : activeBlock.phase === "reacclimation"
+    ? PHASE_LABEL.reacclimation
+    : PHASE_SESSION_TYPE[activeBlock.phase]
 
   // Anything already covering the screen. The weight sheets queue behind all of it —
   // slamming a weigh-in prompt over a session the user is mid-way through logging
@@ -1127,6 +1167,7 @@ export default function Page() {
     draftPrompt != null ||
     anchorPrompt ||
     showHypePanel ||
+    cycleReport != null ||
     shareSession != null ||
     msgPopupFriend != null
 
@@ -1323,22 +1364,17 @@ export default function Page() {
               setViewingUpcomingPhase(phase)
               setViewingBlockId(null)
             }}
+            onEditPeak={
+              // Before a new cycle's first session, Edit reopens the cycle report, which sets
+              // the peak and the days a week together. Otherwise it edits the peak alone.
+              reportableDeload ? () => setCycleReportId(reportableDeload.id) : handleEditAnchor
+            }
+            upcomingLength={(phase) => blockLengthFor(phase, planPerWeek, { cycleLength: activeBlock?.cycleLength })}
           />
         )}
 
         {/* Block view */}
         <div className="mb-4">
-          {viewingBlock && !viewingUpcomingPhase && (
-            <BlockHeader
-              block={viewingBlock}
-              confirmedCount={
-                (viewingBlock === activeBlock ? activeBlockSessions.length : viewingBlockSessions.length) +
-                (viewingBlock.skippedSlots?.length ?? 0)
-              }
-              onEditAnchor={viewingBlock === activeBlock ? handleEditAnchor : undefined}
-            />
-          )}
-
           {/* Banner when browsing a past block */}
           {viewingBlock !== activeBlock && !viewingUpcomingPhase && (
             <button
@@ -1346,55 +1382,43 @@ export default function Page() {
               className="w-full text-left text-xs text-muted-light bg-[#f5f5f5] rounded-xl px-4 py-2.5 mb-2 flex items-center gap-2 active:opacity-70"
             >
               <span>←</span>
-              <span>back to current block</span>
+              <span>Back to {currentPhaseName}</span>
             </button>
           )}
 
           {/* Upcoming phase preview */}
           {viewingUpcomingPhase && activeBlock && (() => {
-            const phaseColor: Record<BlockPhase, { bg: string; bar: string; label: string; meta: string }> = {
-              accumulation: { bg: "bg-[#f0f7f0]", bar: "bg-[#2d6a2d]", label: "text-[#2d6a2d]", meta: "text-[#4a8a4a]" },
-              transmutation: { bg: "bg-[#f5f0ff]", bar: "bg-[#5a2d8a]", label: "text-[#5a2d8a]", meta: "text-[#7a4daa]" },
-              realization: { bg: "bg-[#eff6ff]", bar: "bg-[#1e3a5f]", label: "text-[#1e3a5f]", meta: "text-[#3b5f8a]" },
-              deload: { bg: "bg-[#f5f5f5]", bar: "bg-[#888888]", label: "text-[#555555]", meta: "text-[#888888]" },
-              reacclimation: { bg: "bg-[#fdf3e7]", bar: "bg-[#b06a1e]", label: "text-[#8a4d14]", meta: "text-[#b06a1e]" },
+            const total = blockLengthFor(viewingUpcomingPhase, planPerWeek, { cycleLength: activeBlock.cycleLength })
+            // Blocks still to come are made on the current schemes, carrying the cycle's volume and rep range.
+            const previewProgram = {
+              schemeVersion: SCHEME_VERSION,
+              repRange: activeBlock.repRange,
+              extraSets: activeBlock.extraSets,
+              cycleLength: activeBlock.cycleLength,
             }
-            const style = phaseColor[viewingUpcomingPhase]
-            const total = blockLengthFor(viewingUpcomingPhase, measureSessionsPerWeek(confirmed, null))
             const previewOffset = cycleLoadOffset(blocks, confirmed, {
               id: Number.MAX_SAFE_INTEGER,
               phase: viewingUpcomingPhase,
               anchorWeight: activeBlock.anchorWeight,
+              ...previewProgram,
             })
             return (
               <>
-                <div className={`${style.bg} rounded-xl px-4 py-3 mb-2`}>
-                  <div className="flex items-center justify-between mb-2">
-                    <div className="flex items-center gap-2">
-                      <div className={`w-1.5 h-4 rounded-full ${style.bar}`} />
-                      <span className={`text-sm font-semibold ${style.label}`}>
-                        {PHASE_SESSION_TYPE[viewingUpcomingPhase]}
-                      </span>
-                      <span className={`text-xs ${style.meta}`}>· projected</span>
-                    </div>
-                    <span className={`text-xs font-semibold ${style.label} opacity-60`}>{total} sessions</span>
-                  </div>
-                  <div className="h-1 rounded-full bg-black/10" />
-                </div>
                 <button
                   onClick={() => setViewingUpcomingPhase(null)}
                   className="w-full text-left text-xs text-muted-light bg-[#f5f5f5] rounded-xl px-4 py-2.5 mb-2 flex items-center gap-2 active:opacity-70"
                 >
                   <span>←</span>
-                  <span>back to current block</span>
+                  <span>Back to {currentPhaseName}</span>
                 </button>
                 {Array.from({ length: total }, (_, i) => {
-                  const p = prescribeBlockSession(viewingUpcomingPhase, i, activeBlock.anchorWeight, total, previewOffset)
+                  const p = prescribeBlockSession(viewingUpcomingPhase, i, activeBlock.anchorWeight, total, previewOffset, previewProgram)
                   return (
                     <PreviewSessionRow
                       key={i}
-                      label={`Session ${i + 1}${p.light ? " · light" : ""}`}
-                      prescription={`${p.weight}kg × ${p.reps} × ${p.sets}`}
+                      label={`Session ${i + 1}`}
+                      rx={p}
+                      tag={viewingUpcomingPhase === "realization" && i === total - 1 ? "Peak single" : undefined}
                       onJump={upcoming ? () => handleJumpTo({ phase: viewingUpcomingPhase, index: i }) : undefined}
                     />
                   )
@@ -1468,8 +1492,9 @@ export default function Page() {
                       <PreviewSessionRow
                         key={idx}
                         faint
-                        label={`Session ${idx + 1}${p.light ? " · light" : ""}`}
-                        prescription={`${p.weight}kg × ${p.reps} × ${p.sets}`}
+                        label={`Session ${idx + 1}`}
+                        rx={p}
+                        tag={activeBlock.phase === "realization" && idx === getBlockLength(activeBlock) - 1 ? "Peak single" : undefined}
                         onJump={upcoming && idx > position ? () => handleJumpTo({ phase: activeBlock.phase, index: idx }) : undefined}
                       />
                     )
@@ -1485,7 +1510,7 @@ export default function Page() {
                   <PreviewSessionRow
                     faint
                     label={`Next · ${slotLabel(next.phase, nextIdx)}`}
-                    prescription={`${p.weight}kg × ${p.reps} × ${p.sets}`}
+                    rx={p}
                     onJump={() => handleJumpTo({ phase: next.phase, index: nextIdx })}
                   />
                 )
@@ -1573,16 +1598,16 @@ export default function Page() {
         </div>
       )}
 
-      {/* Anchor weight setup / edit */}
+      {/* Cycle peak setup / edit (stored as the block's anchorWeight) */}
       {anchorPrompt && (
         <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40">
           <div className="bg-white w-full max-w-[393px] rounded-t-2xl px-6 pt-6 pb-10 max-h-[90dvh] overflow-y-auto">
-            <p className="text-base font-semibold text-[#111111] mb-1">Set your anchor weight</p>
+            <p className="text-base font-semibold text-[#111111] mb-1">Set this cycle&apos;s peak</p>
             <p className="text-sm text-[#777777] mb-6">
-              Your anchor is the 1RM this cycle is built around. Every load is a percentage of it, nudged by how your logged RPEs compare with the targets.
+              The single this cycle builds to, tested at the end of Peak. Every session is a percentage of it, nudged by how your logged RPEs compare with the targets. When the cycle ends, what your single showed sets the next one.
             </p>
             <label className="block text-[10px] font-semibold uppercase tracking-widest text-[#aaaaaa] mb-2">
-              Current 1RM (kg)
+              Peak (kg)
             </label>
             <input
               type="number"
@@ -1597,10 +1622,30 @@ export default function Page() {
               disabled={isNaN(parseFloat(anchorInput)) || parseFloat(anchorInput) <= 0}
               className="w-full bg-[#1e3a5f] text-white text-sm font-semibold rounded-xl py-3.5 hover:bg-[#16304f] active:bg-[#0f2540] transition-colors disabled:opacity-40"
             >
-              {getActiveBlock(blocks) ? "Update anchor" : "Start Block 1: Accumulation"}
+              {getActiveBlock(blocks) ? "Update peak" : "Start Block 1: Accumulation"}
             </button>
           </div>
         </div>
+      )}
+
+      {/* Cycle report: after the deload that closes a cycle, before the next one starts */}
+      {cycleReport && !showHypePanel && (
+        <CycleReportSheet
+          report={cycleReport}
+          liftShort={liftShort}
+          onStart={handleStartCycle}
+          onClose={() => setCycleReportId(null)}
+          current={
+            activeBlock?.phase === "accumulation"
+              ? {
+                  peak: activeBlock.anchorWeight,
+                  sessionsPerWeek: activeBlock.sessionsPerWeek,
+                  cycleLength: activeBlock.cycleLength,
+                  setUp: activeBlock.setUp,
+                }
+              : undefined
+          }
+        />
       )}
 
       {/* Hype panel after session confirm */}

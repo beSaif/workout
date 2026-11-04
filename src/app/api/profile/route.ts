@@ -193,6 +193,11 @@ export async function POST(request: Request) {
   // here means "unchanged", deliberately unlike `trainingMode` above, which defaults.
   const weighInDaily =
     typeof body.weighInDaily === "boolean" ? body.weighInDaily : existing?.weighInDaily
+  // Asked once at onboarding; later saves that don't send it keep the answer.
+  const trainingAge =
+    body.trainingAge === "new" || body.trainingAge === "some" || body.trainingAge === "years"
+      ? body.trainingAge
+      : existing?.trainingAge
   const goalBwRaw = Number(body.goalBw)
   const goalBw =
     Number.isFinite(goalBwRaw) && goalBwRaw > 0 ? goalBwRaw : existing?.goalBw
@@ -208,6 +213,7 @@ export async function POST(request: Request) {
     // Left absent while the user has never been asked, which is what fires the prompt.
     ...(weighInDaily !== undefined ? { weighInDaily } : {}),
     ...(goalBw !== undefined ? { goalBw } : {}),
+    ...(trainingAge !== undefined ? { trainingAge } : {}),
     createdAt: existing?.createdAt ?? new Date().toISOString(),
   }
 

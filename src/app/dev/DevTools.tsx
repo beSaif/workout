@@ -271,7 +271,7 @@ export default function DevTools() {
         <h2 className="text-sm font-semibold text-[#111111] mb-1">Reset block</h2>
         <p className="text-xs text-[#aaaaaa] mb-3">
           Winds the program back to session 1 of block 1 (Accumulation), carrying over your
-          current anchor weight. Every logged session stays in history — only the block
+          current peak. Every logged session stays in history — only the block
           bookkeeping is cleared. Use after a long layoff.
         </p>
         <button

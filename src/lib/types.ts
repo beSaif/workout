@@ -49,6 +49,10 @@ export interface TrainingBlock {
    * prescribes from `sessionIds.length + skippedSlots.length` (see blockPosition).
    */
   skippedSlots?: number[]
+  /**
+   * The cycle's peak: the single the block's cycle builds to and every load is a
+   * percentage of. Shown to the user as "peak"; the field keeps its original name.
+   */
   anchorWeight: number
   /**
    * Sessions in this block, set from the user's benching frequency when the block is
@@ -61,7 +65,42 @@ export interface TrainingBlock {
   rebuildLoads?: number[]
   /** Re-acclimation only: id of the interrupted block to reactivate once rebuilds are done. */
   resumeBlockId?: number
+  /**
+   * Which percentage schemes the block runs. Absent on blocks saved before cycles were
+   * lengthened: those run version 1 until they finish.
+   */
+  schemeVersion?: number
+  /** Version 2: accumulation's rep range. Absent means "moderate". */
+  repRange?: RepRange
+  /** Version 2: working sets added to every heavy accumulation session, earned a set per cycle that raised the peak. */
+  extraSets?: number
+  /** Version 2: cycles in a row that ended without raising the peak. */
+  stalls?: number
+  /**
+   * Bench days a week the user chose for this cycle (asked by the cycle report). Blocks
+   * are sized from it instead of the measured frequency, and carry it to the next block.
+   */
+  sessionsPerWeek?: number
+  /** Version 2: how long the cycle runs (short ~4 weeks, standard ~6, long ~8). Absent means standard. */
+  cycleLength?: CycleLength
+  /** Set on a cycle's first block once the cycle report's answers were applied to it. */
+  setUp?: boolean
+  /** Set on the deload that closes a cycle: how the cycle's peak test went and what changes for the next one. */
+  review?: {
+    previousAnchor: number
+    outcome: "raised" | "stalled" | "untested"
+    change: "volume-up" | "volume-reset" | "rep-range" | null
+  }
 }
+
+/** How long a cycle runs: short (~4 weeks), standard (~6) or long (~8). */
+export type CycleLength = "short" | "standard" | "long"
+
+/** How long someone has been lifting, which sets their starting cycle length. */
+export type TrainingAge = "new" | "some" | "years"
+
+/** Accumulation's rep range: eights to sixes, or sixes to fours after a plateau. */
+export type RepRange = "moderate" | "heavy"
 
 export type MainLift = "bench" | "deadlift" | "squat"
 
@@ -109,6 +148,8 @@ export interface UserProfile {
    * what makes the one-time opt-in prompt fire — so this stays tri-state on purpose.
    */
   weighInDaily?: boolean
+  /** How long they've been lifting (asked at onboarding): picks the first cycle's length. */
+  trainingAge?: TrainingAge
   /** Goal bodyweight in kg. Only drives the goal line and projection on /weight. */
   goalBw?: number
   createdAt: string

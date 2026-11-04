@@ -65,7 +65,9 @@ const KG_VALUES = Array.from(
   { length: Math.floor((300 - 20) / 2.5) + 1 },
   (_, i) => 20 + i * 2.5
 )
-const REPS_VALUES = Array.from({ length: 20 }, (_, i) => i + 1)
+/** Main-lift reps start at 0: a set logged at 0 is a missed attempt (a failed single, say). */
+const REPS_VALUES = Array.from({ length: 21 }, (_, i) => i)
+const formatMainReps = (v: number | null) => (v === 0 ? "miss" : v == null ? "—" : String(v))
 const RPE_VALUES: (number | null)[] = [
   null,
   ...Array.from({ length: 19 }, (_, i) => 1 + i * 0.5),
@@ -863,7 +865,7 @@ export default function LogSessionModal({
         } else if (field === "reps") {
           updated._repsStr = raw
           const val = parseInt(raw, 10)
-          if (!isNaN(val) && val > 0) {
+          if (!isNaN(val) && val >= 0) {
             updated.reps = val
             updated.e1rm = calcE1RM(updated.kg, val)
           }
@@ -1536,6 +1538,7 @@ export default function LogSessionModal({
                           selected={set.reps}
                           onChange={(v) => { if (v !== null) updateSet(idx, "reps", String(v)) }}
                           label="reps"
+                          format={formatMainReps}
                         />
                         {!set.isWarmup && (
                           <DrumRollPicker
@@ -1854,6 +1857,7 @@ export default function LogSessionModal({
                             selected={item.set.reps}
                             onChange={(v) => { if (v !== null) updateSet(item.globalIndex, "reps", String(v)) }}
                             label="reps"
+                            format={formatMainReps}
                             disabled={isDone}
                           />
                           <DrumRollPicker

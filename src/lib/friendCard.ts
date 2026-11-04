@@ -84,7 +84,7 @@ function workingSets(
   mainLiftLabel: string
 ): Array<{ exercise: string; kg: number; reps: number }> {
   const out = session.sets
-    .filter((s) => !s.isWarmup)
+    .filter((s) => !s.isWarmup && s.reps > 0)
     .map((s) => ({ exercise: mainLiftLabel, kg: s.kg, reps: s.reps }))
 
   for (const workout of session.extraWorkouts ?? []) {
