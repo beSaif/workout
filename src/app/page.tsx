@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from "react"
 import { useRouter } from "next/navigation"
-import { Session, TrainingBlock, BlockPhase, MuscleGroup, UserProfile, UserPresence, GymbroMessage, WeightEntry } from "@/lib/types"
+import { Session, TrainingBlock, BlockPhase, MuscleGroup, UserProfile, UserPresence, GymbroMessage, WeightEntry, CycleLength } from "@/lib/types"
 import { isLiftFocused, getMainLiftLabel, getMainLiftShortLabel, countConsecutiveSkips, currentStretchSkips } from "@/lib/trainingMode"
 import { loadSessionsLocal, loadBlocksLocal, loadExerciseConfigLocal, loadTrainingDaysLocal, loadAll, loadExerciseConfig, loadTrainingDays, saveAll, loadDraft, clearDraft, loadProfile, loadProfileLocal, loadPresencesLocal, savePresencesLocal, loadFriendEmailsLocal, saveFriendEmailsLocal, loadFriendLastActiveLocal, saveFriendLastActiveLocal, clearMiniPlayer, loadLayoffDismissLocal, saveLayoffDismissLocal, loadWeights, loadWeightsLocal, saveWeights, loadWeighInSkipLocal, saveWeighInSkipLocal } from "@/lib/storage"
 import type { SessionDraft } from "@/lib/types"
@@ -16,6 +16,7 @@ import {
   cycleLoadOffset,
   blockLengthFor,
   createFirstBlock,
+  cycleLengthFor,
   SCHEME_VERSION,
   measureSessionsPerWeek,
   PHASE_LABEL,
@@ -366,7 +367,7 @@ export default function Page() {
           // Balanced users have no anchor and no blocks)
           if (finalBlocks.length === 0 && isLiftFocused(p)) {
             const confirmed = finalSessions.filter((s) => s.confirmed)
-            const seededBlocks: TrainingBlock[] = [createFirstBlock(1, p.anchor ?? 0, confirmed)]
+            const seededBlocks: TrainingBlock[] = [createFirstBlock(1, p.anchor ?? 0, confirmed, cycleLengthFor(p.trainingAge))]
             const upcoming = createUpcomingSession(confirmed, seededBlocks, config, p, days)
             finalSessions = sortSessions([...confirmed, upcoming])
             finalBlocks = seededBlocks
@@ -610,7 +611,7 @@ export default function Page() {
    * the chosen peak and is resized to the chosen frequency, which the rest of the cycle
    * carries. Only before its first session, so no logged load is re-planned.
    */
-  function handleStartCycle(peak: number, sessionsPerWeek: number) {
+  function handleStartCycle(peak: number, sessionsPerWeek: number, cycleLength: CycleLength) {
     setCycleReportId(null)
     if (!profile) return
     const active = getActiveBlock(blocks)
@@ -622,7 +623,9 @@ export default function Page() {
             ...b,
             anchorWeight: roundToPlate(peak),
             sessionsPerWeek,
-            length: blockLengthFor("accumulation", sessionsPerWeek),
+            cycleLength,
+            setUp: true,
+            length: blockLengthFor("accumulation", sessionsPerWeek, { cycleLength }),
           }
         : b
     )
@@ -651,7 +654,7 @@ export default function Page() {
         b.id === activeBlock.id ? { ...b, anchorWeight: anchor } : b
       )
     } else {
-      finalBlocks = [createFirstBlock(1, anchor, confirmed)]
+      finalBlocks = [createFirstBlock(1, anchor, confirmed, cycleLengthFor(profile.trainingAge))]
     }
 
     // Keep the day and extras already picked on the upcoming card; only the loads change.
@@ -1366,7 +1369,7 @@ export default function Page() {
               // the peak and the days a week together. Otherwise it edits the peak alone.
               reportableDeload ? () => setCycleReportId(reportableDeload.id) : handleEditAnchor
             }
-            upcomingLength={(phase) => blockLengthFor(phase, planPerWeek)}
+            upcomingLength={(phase) => blockLengthFor(phase, planPerWeek, { cycleLength: activeBlock?.cycleLength })}
           />
         )}
 
@@ -1385,12 +1388,13 @@ export default function Page() {
 
           {/* Upcoming phase preview */}
           {viewingUpcomingPhase && activeBlock && (() => {
-            const total = blockLengthFor(viewingUpcomingPhase, planPerWeek)
+            const total = blockLengthFor(viewingUpcomingPhase, planPerWeek, { cycleLength: activeBlock.cycleLength })
             // Blocks still to come are made on the current schemes, carrying the cycle's volume and rep range.
             const previewProgram = {
               schemeVersion: SCHEME_VERSION,
               repRange: activeBlock.repRange,
               extraSets: activeBlock.extraSets,
+              cycleLength: activeBlock.cycleLength,
             }
             const previewOffset = cycleLoadOffset(blocks, confirmed, {
               id: Number.MAX_SAFE_INTEGER,
@@ -1633,7 +1637,12 @@ export default function Page() {
           onClose={() => setCycleReportId(null)}
           current={
             activeBlock?.phase === "accumulation"
-              ? { peak: activeBlock.anchorWeight, sessionsPerWeek: activeBlock.sessionsPerWeek }
+              ? {
+                  peak: activeBlock.anchorWeight,
+                  sessionsPerWeek: activeBlock.sessionsPerWeek,
+                  cycleLength: activeBlock.cycleLength,
+                  setUp: activeBlock.setUp,
+                }
               : undefined
           }
         />

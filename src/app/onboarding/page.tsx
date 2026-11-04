@@ -3,16 +3,23 @@
 import { useState, useEffect, useLayoutEffect } from "react"
 import { useRouter } from "next/navigation"
 import { signIn } from "next-auth/react"
-import { MainLift, MAIN_LIFT_LABEL, TrainingMode, TRAINING_MODE_LABEL, TRAINING_MODE_DESC } from "@/lib/types"
+import { MainLift, MAIN_LIFT_LABEL, TrainingMode, TRAINING_MODE_LABEL, TRAINING_MODE_DESC, TrainingAge } from "@/lib/types"
 import { loadProfile, saveProfile } from "@/lib/storage"
 import { markWhatsNewSeen } from "@/lib/whatsNew"
 
 // 0 name · 1 bodyweight · 2 hook · 3 two parts · 4 training focus
-// 5 lift · 6 phases · 7 anchor · 8 target (lift-focused only) · 9 sign in
-type Step = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9
+// 5 lift · 10 experience · 6 phases · 7 anchor · 8 target (lift-focused only) · 9 sign in
+// Steps run in ALL_STEPS order; 10 was added later, between 5 and 6.
+type Step = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10
 const LAST_STEP: Step = 9
 const MODE_STEP: Step = 4
-const ALL_STEPS: Step[] = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+const ALL_STEPS: Step[] = [0, 1, 2, 3, 4, 5, 10, 6, 7, 8, 9]
+
+const TRAINING_AGES: { value: TrainingAge; label: string; detail: string }[] = [
+  { value: "new", label: "under a year", detail: "shorter cycles, about 4 weeks: you can still add weight fast." },
+  { value: "some", label: "1–3 years", detail: "about 6 weeks a cycle." },
+  { value: "years", label: "3+ years", detail: "longer cycles, about 8 weeks: more time to build volume." },
+]
 const BALANCED_STEPS: Step[] = [0, 1, 2, 3, 4, 9]
 
 const LIFTS: MainLift[] = ["bench", "deadlift", "squat"]
@@ -27,6 +34,8 @@ interface PendingOnboarding {
   lift: MainLift | null
   anchor: string
   target: string
+  /** Absent on payloads written before the experience question shipped. */
+  trainingAge?: TrainingAge | null
   /** Absent on payloads written before daily check-ins shipped — see autoFinish. */
   weighInDaily?: boolean
 }
@@ -52,6 +61,7 @@ export default function OnboardingPage() {
   const [lift, setLift] = useState<MainLift | null>(null)
   const [anchor, setAnchor] = useState("")
   const [target, setTarget] = useState("")
+  const [trainingAge, setTrainingAge] = useState<TrainingAge | null>(null)
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
@@ -102,7 +112,12 @@ export default function OnboardingPage() {
       bw: parseFloat(d.bw),
       trainingMode: d.mode,
       ...(liftFocused && d.lift
-        ? { mainLift: d.lift, anchor: parseFloat(d.anchor), target: parseFloat(d.target) }
+        ? {
+            mainLift: d.lift,
+            anchor: parseFloat(d.anchor),
+            target: parseFloat(d.target),
+            ...(d.trainingAge ? { trainingAge: d.trainingAge } : {}),
+          }
         : {}),
       // A payload stashed before this shipped has no answer. Leave the field absent
       // rather than defaulting to false, so those users get asked on the home screen
@@ -137,7 +152,7 @@ export default function OnboardingPage() {
   }
 
   async function handleGoogleSignIn() {
-    const pending: PendingOnboarding = { name, bw, mode: mode ?? "lift-focused", lift, anchor, target, weighInDaily }
+    const pending: PendingOnboarding = { name, bw, mode: mode ?? "lift-focused", lift, anchor, target, trainingAge, weighInDaily }
     localStorage.setItem(PENDING_KEY, JSON.stringify(pending))
     await signIn("google", { callbackUrl: "/onboarding?auth=1" })
   }
@@ -154,6 +169,7 @@ export default function OnboardingPage() {
     if (step === 3) return true
     if (step === 4) return mode !== null
     if (step === 5) return lift !== null
+    if (step === 10) return trainingAge !== null
     if (step === 6) return true
     if (step === 7) {
       const v = parseFloat(anchor)
@@ -352,6 +368,28 @@ export default function OnboardingPage() {
             </Question>
           )}
 
+          {/* Step 10: how long they've lifted, which sets the first cycle's length */}
+          {step === 10 && (
+            <Question label="how long have you been lifting?" hint="it sets how long each cycle runs. you can change it after every cycle.">
+              <div className="space-y-2">
+                {TRAINING_AGES.map((t) => (
+                  <button
+                    key={t.value}
+                    onClick={() => setTrainingAge(t.value)}
+                    className={`w-full text-left px-4 py-3.5 rounded-xl border-2 transition-colors ${
+                      trainingAge === t.value
+                        ? "border-[#1e3a5f] bg-[#eff6ff] text-[#1e3a5f]"
+                        : "border-[#e8e8e8] text-[#111111] hover:border-[#cccccc]"
+                    }`}
+                  >
+                    <span className="block text-base font-semibold">{t.label}</span>
+                    <span className="block text-xs text-[#888888] mt-0.5">{t.detail}</span>
+                  </button>
+                ))}
+              </div>
+            </Question>
+          )}
+
           {/* Step 6: label then phases — labels first, then descriptions */}
           {step === 6 && (
             <Question
@@ -491,8 +529,8 @@ export default function OnboardingPage() {
 }
 
 const PHASES = [
-  { color: "#2d6a2d", name: "volume",    desc: "more reps, lighter. build the base. about 3 weeks." },
-  { color: "#5a2d8a", name: "intensity", desc: "fewer reps, heavier. about 2 weeks." },
+  { color: "#2d6a2d", name: "volume",    desc: "more reps, lighter. build the base. 2 to 4 weeks." },
+  { color: "#5a2d8a", name: "intensity", desc: "fewer reps, heavier. 1 to 3 weeks." },
   { color: "#1e3a5f", name: "peak",      desc: "taper, then test a new max. about 1 week." },
   { color: "#888888", name: "deload",    desc: "back off. let it sink in. a session, or a week if the cycle stalled." },
 ] as const

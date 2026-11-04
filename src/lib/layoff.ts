@@ -104,7 +104,7 @@ export function resetToFirstBlock(
   const anchor =
     active?.anchorWeight ?? blocks[blocks.length - 1]?.anchorWeight ?? 60
 
-  const firstBlock = createFirstBlock(1, anchor, sessions)
+  const firstBlock = createFirstBlock(1, anchor, sessions, active?.cycleLength)
 
   const confirmed = sessions.filter((s) => s.confirmed)
   const newSessions = confirmed.map((s) =>

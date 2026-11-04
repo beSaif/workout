@@ -1,4 +1,4 @@
-import { BlockPhase, Session, TrainingBlock } from "./types"
+import { BlockPhase, CycleLength, Session, TrainingBlock } from "./types"
 import { calcE1RM } from "./e1rm"
 import {
   blockSlotNumbers,
@@ -30,6 +30,40 @@ export interface CycleReport {
   missedSets: number
   /** Bench days a week the next cycle is sized from today. */
   sessionsPerWeek: number
+  /** The length this cycle ran at. */
+  cycleLength: CycleLength
+  /** The length the next cycle should run at, and why when it differs. */
+  suggestedLength: CycleLength
+  lengthReason: string | null
+}
+
+const LENGTH_ORDER: CycleLength[] = ["short", "standard", "long"]
+
+/** A cycle that raised the peak with almost nothing harder than planned. */
+function wentEasy(r: Pick<CycleReport, "outcome" | "effort">): boolean {
+  const rated = r.effort.onTarget + r.effort.harder + r.effort.easier
+  return r.outcome === "raised" && rated > 0 && r.effort.harder <= rated * 0.1 && r.effort.easier >= r.effort.harder
+}
+
+/**
+ * The next cycle's length from how this one and the one before went. Two easy cycles in a
+ * row: one step shorter, so the peak gets tested sooner. A cycle that didn't raise the
+ * peak: one step longer, so Volume gets more time. Otherwise unchanged.
+ */
+function suggestLength(
+  current: CycleLength,
+  outcome: CycleReport["outcome"],
+  thisEasy: boolean,
+  previousEasy: boolean
+): { length: CycleLength; reason: string | null } {
+  const i = LENGTH_ORDER.indexOf(current)
+  if (outcome === "stalled" && i < LENGTH_ORDER.length - 1) {
+    return { length: LENGTH_ORDER[i + 1], reason: "No new peak, so a longer cycle gives Volume more time." }
+  }
+  if (thisEasy && previousEasy && i > 0) {
+    return { length: LENGTH_ORDER[i - 1], reason: "Two cycles in a row went up with sessions to spare, so a shorter cycle tests sooner." }
+  }
+  return { length: current, reason: null }
 }
 
 export interface PhaseLine {
@@ -58,7 +92,12 @@ function bestE1RM(sessions: Session[]): number | null {
  * The report for the cycle a deload closed, or null when that deload carries no review
  * (one saved before reviews existed).
  */
-export function buildCycleReport(blocks: TrainingBlock[], sessions: Session[], deloadId: number): CycleReport | null {
+export function buildCycleReport(
+  blocks: TrainingBlock[],
+  sessions: Session[],
+  deloadId: number,
+  withSuggestion = true
+): CycleReport | null {
   const sorted = [...blocks].sort((a, b) => a.id - b.id)
   const deload = sorted.find((b) => b.id === deloadId)
   if (!deload || deload.phase !== "deload" || !deload.review) return null
@@ -125,6 +164,17 @@ export function buildCycleReport(blocks: TrainingBlock[], sessions: Session[], d
     ? confirmed.filter((s) => s.type !== "Deload" && chrono(s, cycleStart) < 0 && !cycleSessions.includes(s))
     : []
 
+  const cycleLength = deload.cycleLength ?? "standard"
+  const previous = withSuggestion && previousDeload?.review
+    ? buildCycleReport(blocks, sessions, previousDeload.id, false)
+    : null
+  const suggestion = suggestLength(
+    cycleLength,
+    deload.review.outcome,
+    wentEasy({ outcome: deload.review.outcome, effort }),
+    previous != null && wentEasy(previous)
+  )
+
   return {
     number: sorted.filter((b) => b.phase === "deload" && b.id <= deloadId).length,
     previousPeak: deload.review.previousAnchor,
@@ -138,5 +188,8 @@ export function buildCycleReport(blocks: TrainingBlock[], sessions: Session[], d
     loadShift: realization ? cycleLoadOffset(blocks, confirmed, realization) : 0,
     missedSets: cycleSessions.flatMap((s) => s.sets).filter((x) => !x.isWarmup && x.kg > 0 && x.reps === 0).length,
     sessionsPerWeek: deload.sessionsPerWeek ?? measureSessionsPerWeek(confirmed, deload.endDate),
+    cycleLength,
+    suggestedLength: suggestion.length,
+    lengthReason: suggestion.reason,
   }
 }

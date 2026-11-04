@@ -28,6 +28,10 @@ export const WHATS_NEW: WhatsNewRelease[] = [
         body: "Finish your deload and a cycle report opens: how your peak moved, your best e1RM, sessions and sets by phase, and how the sessions felt against target. Then pick what to peak at next and how many days a week you'll bench, and start the next cycle.",
       },
       {
+        title: "Cycles sized to you",
+        body: "Cycles now run short (about 4 weeks), standard (6) or long (8). The cycle report suggests one: longer after a cycle that didn't raise your peak, shorter after two that went up easily. At four or more days a week, light days keep your heavy days near three a week, and extra Volume sets stop before 20 hard sets a week.",
+      },
+      {
         title: "Log a missed rep",
         body: "Failed a single? Scroll reps up to \"miss\". It never counts as lifted, and a missed peak single holds your peak instead of guessing. Going again lighter? Add a set for the second attempt.",
       },

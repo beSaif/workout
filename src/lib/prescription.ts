@@ -1,4 +1,4 @@
-import { Session, TrainingBlock, BlockPhase, SessionType, RepRange } from "./types"
+import { Session, TrainingBlock, BlockPhase, SessionType, RepRange, CycleLength, TrainingAge } from "./types"
 import { roundToPlate } from "./e1rm"
 
 export interface Prescription {
@@ -144,7 +144,7 @@ function v2Schemes(repRange: RepRange): Record<BlockPhase, SchemeEntry[]> {
 export const SCHEME_VERSION = 2
 
 /** What a block's sessions are planned from, beyond its phase and peak. */
-export type BlockProgram = Partial<Pick<TrainingBlock, "schemeVersion" | "repRange" | "extraSets">>
+export type BlockProgram = Partial<Pick<TrainingBlock, "schemeVersion" | "repRange" | "extraSets" | "cycleLength">>
 
 /** The program a block made today starts on: current schemes, default rep range, no extra volume. */
 const FRESH_PROGRAM: BlockProgram = { schemeVersion: SCHEME_VERSION }
@@ -153,8 +153,14 @@ function schemesFor(program: BlockProgram): Record<BlockPhase, SchemeEntry[]> {
   return (program.schemeVersion ?? 1) >= 2 ? v2Schemes(program.repRange ?? "moderate") : V1_SCHEMES
 }
 
-/** Extra accumulation sets a cycle can build up to. */
+/** Extra accumulation sets per heavy session a cycle can build up to. */
 export const MAX_EXTRA_SETS = 2
+/**
+ * Extra sets never take heavy accumulation days past this many working sets a week: about
+ * the top of the range that still pays off, before fatigue outruns it. Light days don't
+ * count; they aren't hard sets.
+ */
+const WEEKLY_HEAVY_SET_CAP = 20
 /** Cycles in a row without a new peak before accumulation switches rep range. */
 const STALLS_BEFORE_SWITCH = 2
 
@@ -172,17 +178,52 @@ const REACCLIMATION_SETS = 3
 
 /**
  * How long each phase of a new block runs, in weeks, and the fewest sessions it can be
- * squeezed into. A full week of deload replaces the usual single session after a cycle
- * that didn't raise the peak.
+ * squeezed into, for each cycle length. Short cycles suit lifters who still progress
+ * fast, long ones lifters who need more time in volume. A full week of deload replaces
+ * the usual single session after a cycle that didn't raise the peak.
  */
-const PHASE_WEEKS: Record<BlockPhase, { weeks: number; min: number }> = {
-  accumulation: { weeks: 3, min: 6 },
-  transmutation: { weeks: 2, min: 4 },
-  realization: { weeks: 1, min: 3 },
-  deload: { weeks: 1 / 3, min: 1 },
-  reacclimation: { weeks: 0, min: 0 },
+const PHASE_WEEKS: Record<CycleLength, Record<BlockPhase, { weeks: number; min: number }>> = {
+  short: {
+    accumulation: { weeks: 2, min: 4 },
+    transmutation: { weeks: 1, min: 3 },
+    realization: { weeks: 1, min: 3 },
+    deload: { weeks: 1 / 3, min: 1 },
+    reacclimation: { weeks: 0, min: 0 },
+  },
+  standard: {
+    accumulation: { weeks: 3, min: 6 },
+    transmutation: { weeks: 2, min: 4 },
+    realization: { weeks: 1, min: 3 },
+    deload: { weeks: 1 / 3, min: 1 },
+    reacclimation: { weeks: 0, min: 0 },
+  },
+  long: {
+    accumulation: { weeks: 4, min: 8 },
+    transmutation: { weeks: 3, min: 6 },
+    realization: { weeks: 1, min: 3 },
+    deload: { weeks: 1 / 3, min: 1 },
+    reacclimation: { weeks: 0, min: 0 },
+  },
 }
 const DELOAD_WEEK = { weeks: 1, min: 2 }
+
+export const CYCLE_LENGTHS: CycleLength[] = ["short", "standard", "long"]
+export const CYCLE_LENGTH_LABEL: Record<CycleLength, string> = { short: "Short", standard: "Standard", long: "Long" }
+
+/** The cycle length that suits how long someone has been lifting. */
+export function cycleLengthFor(trainingAge: TrainingAge | undefined): CycleLength {
+  return trainingAge === "new" ? "short" : trainingAge === "years" ? "long" : "standard"
+}
+
+/** Planned weeks of a phase in a cycle of the given length. */
+function phaseWeeks(phase: BlockPhase, cycleLength: CycleLength | undefined): number {
+  return PHASE_WEEKS[cycleLength ?? "standard"][phase].weeks
+}
+
+/** Days a week from which some sessions run light. Below it every session is heavy. */
+const LIGHT_REPEAT_FREQUENCY = 3.5
+/** Heavy sessions a week aimed for once light days come in. */
+const HEAVY_DAYS_PER_WEEK = 3
 
 /** Assumed when there isn't enough history to measure, and the pace the schemes are written for. */
 export const DEFAULT_SESSIONS_PER_WEEK = 3
@@ -226,20 +267,16 @@ export function loadStep(anchorWeight: number): number {
   return Math.max(2.5, roundToPlate(anchorWeight * 0.025))
 }
 
-/**
- * Sessions for a new block of a phase at a given benching frequency. A block runs each
- * scheme step at most twice, heavy then light, so light days never come back to back.
- */
+/** Sessions for a new block of a phase at a given benching frequency and cycle length. */
 export function blockLengthFor(
   phase: BlockPhase,
   sessionsPerWeek: number,
-  opts: { deloadWeek?: boolean } = {}
+  opts: { deloadWeek?: boolean; cycleLength?: CycleLength } = {}
 ): number {
-  const { weeks, min } = phase === "deload" && opts.deloadWeek ? DELOAD_WEEK : PHASE_WEEKS[phase]
+  const { weeks, min } =
+    phase === "deload" && opts.deloadWeek ? DELOAD_WEEK : PHASE_WEEKS[opts.cycleLength ?? "standard"][phase]
   const perWeek = Math.min(6, Math.max(2, Math.round(sessionsPerWeek)))
-  const length = Math.max(min, Math.round(weeks * perWeek))
-  const steps = v2Schemes("moderate")[phase].length
-  return steps > 1 ? Math.min(length, 2 * steps - 1) : length
+  return Math.max(min, Math.round(weeks * perWeek))
 }
 
 /**
@@ -265,18 +302,63 @@ export function measureSessionsPerWeek(sessions: Session[], asOf: string | null)
 }
 
 /**
- * Which scheme step a slot trains, and whether it is a light repeat. A block longer
- * than its scheme repeats steps (the repeat runs light, so heavy and light days
- * alternate); a shorter one drops steps. Either way the final slot is always the
- * scheme's last step, so a realization block always ends on the test.
+ * Which scheme step a slot trains, and whether it is a light day. `heavy` of the block's
+ * slots are heavy, spread evenly with the first and last among them; each slot between
+ * repeats the heavy step before it, light. The heavy slots then walk the scheme: fewer
+ * of them than steps drops steps, more repeats them at full load. Either way the final
+ * slot is the scheme's last step, so a realization block always ends on the test.
  */
-function slotEntry(schemeLength: number, blockLength: number, index: number): { step: number; light: boolean } {
-  const last = schemeLength - 1
+function slotEntry(
+  schemeLength: number,
+  blockLength: number,
+  index: number,
+  heavy: number
+): { step: number; light: boolean } {
   const len = Math.max(1, blockLength)
+  const h = Math.min(len, Math.max(1, heavy))
   const i = Math.min(Math.max(0, index), len - 1)
-  const stepAt = (k: number) => (k >= len - 1 ? last : Math.floor((k * last) / (len - 1)))
-  const step = stepAt(i)
-  return { step, light: len > schemeLength && i > 0 && i < len - 1 && stepAt(i - 1) === step }
+  const spread = (k: number, from: number, to: number) => (to <= 1 || k >= from - 1 ? to - 1 : Math.floor((k * (to - 1)) / (from - 1)))
+  const heavyAt = (k: number) => spread(k, len, h)
+  const heavyIndex = heavyAt(i)
+  const light = i > 0 && heavyAt(i - 1) === heavyIndex
+  return { step: spread(heavyIndex, h, schemeLength), light }
+}
+
+/**
+ * How many of a block's slots run heavy. Version 1 blocks repeat steps light once the
+ * block outgrows its scheme. Version 2 blocks keep about three heavy days a week: every
+ * slot at under four sessions a week, and from four up, light days in between so the
+ * heavy ones stay near three, whatever the cycle length.
+ */
+function heavySlots(phase: BlockPhase, schemeLength: number, blockLength: number, program: BlockProgram): number {
+  if ((program.schemeVersion ?? 1) < 2) return Math.min(blockLength, schemeLength)
+  const weeks = phaseWeeks(phase, program.cycleLength)
+  const perWeek = weeks > 0 ? blockLength / weeks : 0
+  if (perWeek < LIGHT_REPEAT_FREQUENCY) return blockLength
+  // At least every other slot heavy, so two light days never fall together.
+  const atLeast = Math.ceil((blockLength + 1) / 2)
+  return Math.min(blockLength, Math.max(atLeast, Math.ceil((blockLength * HEAVY_DAYS_PER_WEEK) / perWeek)))
+}
+
+/**
+ * Extra sets a heavy accumulation day may carry: what the cycle earned, held so heavy
+ * days stay under WEEKLY_HEAVY_SET_CAP working sets a week.
+ */
+function extraSetsAllowed(scheme: SchemeEntry[], blockLength: number, program: BlockProgram): number {
+  const earned = Math.max(0, program.extraSets ?? 0)
+  if (earned === 0) return 0
+  const heavy = heavySlots("accumulation", scheme.length, blockLength, program)
+  let heavyCount = 0
+  let heavySets = 0
+  for (let i = 0; i < blockLength; i++) {
+    const slot = slotEntry(scheme.length, blockLength, i, heavy)
+    if (slot.light) continue
+    heavyCount++
+    heavySets += scheme[slot.step].sets
+  }
+  if (heavyCount === 0) return 0
+  const budget = WEEKLY_HEAVY_SET_CAP * phaseWeeks("accumulation", program.cycleLength) - heavySets
+  return Math.max(0, Math.min(earned, Math.floor(budget / heavyCount)))
 }
 
 /**
@@ -307,14 +389,15 @@ export function prescribeBlockSession(
   const scheme = ownScheme ? schemes[phase] : schemes.accumulation
   const schemePhase: BlockPhase = ownScheme ? phase : "accumulation"
   const type = PHASE_SESSION_TYPE[schemePhase]
-  const slot = slotEntry(scheme.length, blockLength ?? scheme.length, sessionIndexInBlock)
+  const length = blockLength ?? scheme.length
+  const slot = slotEntry(scheme.length, length, sessionIndexInBlock, heavySlots(schemePhase, scheme.length, length, program))
   const step = slot.step
   // A deload is light already: a deload week repeats its one session, never lighter still.
   const light = slot.light && schemePhase !== "deload"
   const entry = scheme[step]
   const base = schemeLoads(scheme, anchorWeight)[step] + loadOffset
   // Volume a cycle has earned goes on the heavy accumulation days; light days stay light.
-  const extra = schemePhase === "accumulation" && !light ? Math.max(0, program.extraSets ?? 0) : 0
+  const extra = schemePhase === "accumulation" && !light ? extraSetsAllowed(scheme, length, program) : 0
   return {
     weight: roundToPlate(light ? base * LIGHT_LOAD : base),
     reps: entry.reps,
@@ -401,6 +484,7 @@ export function programOf(block: BlockProgram): BlockProgram {
     schemeVersion: block.schemeVersion ?? 1,
     repRange: block.repRange,
     extraSets: block.extraSets,
+    cycleLength: block.cycleLength,
   }
 }
 
@@ -584,7 +668,12 @@ export function deriveNextAnchor(completedRealizationBlock: TrainingBlock, sessi
  * The first block of a program: accumulation at `anchorWeight`, sized to how often the
  * user benches, on the current schemes with no extra volume.
  */
-export function createFirstBlock(id: number, anchorWeight: number, sessions: Session[]): TrainingBlock {
+export function createFirstBlock(
+  id: number,
+  anchorWeight: number,
+  sessions: Session[],
+  cycleLength: CycleLength = "standard"
+): TrainingBlock {
   return {
     id,
     phase: "accumulation",
@@ -593,8 +682,9 @@ export function createFirstBlock(id: number, anchorWeight: number, sessions: Ses
     anchorWeight: roundToPlate(anchorWeight),
     startDate: null,
     endDate: null,
-    length: blockLengthFor("accumulation", measureSessionsPerWeek(sessions, null)),
+    length: blockLengthFor("accumulation", measureSessionsPerWeek(sessions, null), { cycleLength }),
     schemeVersion: SCHEME_VERSION,
+    cycleLength,
   }
 }
 
@@ -613,6 +703,7 @@ export function createNextBlock(
 ): TrainingBlock {
   const phase = nextBlockPhase(completedBlock.phase)
   const perWeek = completedBlock.sessionsPerWeek ?? measureSessionsPerWeek(sessions, completedBlock.endDate)
+  const cycleLength = completedBlock.cycleLength ?? "standard"
   let anchor = completedBlock.anchorWeight
   let repRange: RepRange = completedBlock.repRange ?? "moderate"
   let extraSets = completedBlock.extraSets ?? 0
@@ -626,7 +717,10 @@ export function createNextBlock(
     let change: NonNullable<TrainingBlock["review"]>["change"] = null
     if (result.outcome === "raised") {
       stalls = 0
-      if (extraSets < MAX_EXTRA_SETS) {
+      // Another set only where the weekly cap leaves room for it at this cycle's frequency.
+      const accLength = blockLengthFor("accumulation", perWeek, { cycleLength })
+      const program: BlockProgram = { schemeVersion: SCHEME_VERSION, repRange, cycleLength, extraSets: extraSets + 1 }
+      if (extraSets < MAX_EXTRA_SETS && extraSetsAllowed(v2Schemes(repRange).accumulation, accLength, program) > extraSets) {
         extraSets += 1
         change = "volume-up"
       }
@@ -653,12 +747,13 @@ export function createNextBlock(
     anchorWeight: anchor,
     startDate: null,
     endDate: null,
-    length: blockLengthFor(phase, perWeek, { deloadWeek }),
+    length: blockLengthFor(phase, perWeek, { deloadWeek, cycleLength }),
     schemeVersion: SCHEME_VERSION,
     repRange,
     extraSets,
     stalls,
     ...(completedBlock.sessionsPerWeek != null ? { sessionsPerWeek: completedBlock.sessionsPerWeek } : {}),
+    cycleLength,
     ...(review ? { review } : {}),
   }
 }

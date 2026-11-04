@@ -1,21 +1,21 @@
 "use client"
 
 import { useState } from "react"
-import { BlockPhase } from "@/lib/types"
+import { BlockPhase, CycleLength } from "@/lib/types"
 import { CycleReport } from "@/lib/cycleReport"
-import { blockLengthFor, loadStep, PHASE_SESSION_TYPE } from "@/lib/prescription"
+import { blockLengthFor, CYCLE_LENGTHS, CYCLE_LENGTH_LABEL, loadStep, PHASE_SESSION_TYPE } from "@/lib/prescription"
 import { PHASE_THEME } from "@/lib/phaseStyle"
 
 interface CycleReportSheetProps {
   report: CycleReport
   /** Lift name for the copy, e.g. "Bench". */
   liftShort: string
-  /** Start the next cycle at this peak and weekly frequency. */
-  onStart: (peak: number, sessionsPerWeek: number) => void
+  /** Start the next cycle at this peak, weekly frequency and length. */
+  onStart: (peak: number, sessionsPerWeek: number, cycleLength: CycleLength) => void
   /** Close without changing anything: the next cycle keeps its suggested peak. */
   onClose: () => void
   /** What the next cycle is set to now, when the report is reopened after a change. */
-  current?: { peak: number; sessionsPerWeek?: number }
+  current?: { peak: number; sessionsPerWeek?: number; cycleLength?: CycleLength; setUp?: boolean }
 }
 
 const NEXT_PHASES: BlockPhase[] = ["accumulation", "transmutation", "realization", "deload"]
@@ -33,6 +33,11 @@ export default function CycleReportSheet({ report, liftShort, onStart, onClose, 
   const [perWeek, setPerWeek] = useState(
     Math.min(6, Math.max(2, Math.round(current?.sessionsPerWeek ?? report.sessionsPerWeek)))
   )
+  // Reopened after Start, the cycle keeps what was picked; the first time, it offers the suggestion.
+  const [length, setLength] = useState<CycleLength>(
+    current?.setUp && current.cycleLength ? current.cycleLength : report.suggestedLength
+  )
+  const lengthOf = (l: CycleLength) => NEXT_PHASES.reduce((n, phase) => n + blockLengthFor(phase, perWeek, { cycleLength: l }), 0)
 
   const raised = report.nextPeak > report.previousPeak
   const lowered = report.nextPeak < report.previousPeak
@@ -64,7 +69,7 @@ export default function CycleReportSheet({ report, liftShort, onStart, onClose, 
   const skipped = report.phases.reduce((n, p) => n + p.skipped, 0)
   const rated = report.effort.onTarget + report.effort.harder + report.effort.easier
 
-  const nextLength = NEXT_PHASES.reduce((n, phase) => n + blockLengthFor(phase, perWeek), 0)
+  const nextLength = lengthOf(length)
   const nextWeeks = Math.round(nextLength / perWeek)
 
   const peakOptions = [
@@ -145,7 +150,9 @@ export default function CycleReportSheet({ report, liftShort, onStart, onClose, 
             {report.loadShift > 0
               ? `Loads ended ${report.loadShift}kg over plan: sessions kept feeling easy.`
               : report.loadShift < 0
-              ? `Loads ended ${-report.loadShift}kg under plan: sessions ran hard.`
+              ? `Loads ended ${-report.loadShift}kg under plan${
+                  report.missedSets > 0 ? ", after missed reps" : report.effort.harder > 0 ? ": sessions ran hard" : ""
+                }.`
               : "Loads stayed on plan."}
             {report.missedSets > 0 ? ` ${report.missedSets} missed set${report.missedSets === 1 ? "" : "s"}.` : ""}
           </p>
@@ -205,6 +212,25 @@ export default function CycleReportSheet({ report, liftShort, onStart, onClose, 
               </button>
             ))}
           </div>
+
+          <p className="text-sm text-[#555555] mt-5 mb-2">How long should the cycle be?</p>
+          <div className="grid grid-cols-3 gap-2">
+            {CYCLE_LENGTHS.map((l) => (
+              <button
+                key={l}
+                onClick={() => setLength(l)}
+                className={`rounded-xl border px-2 py-2.5 text-center transition-colors ${
+                  length === l ? "border-[#1e3a5f] bg-[#eff6ff]" : "border-[#e8e8e8] bg-white"
+                }`}
+              >
+                <span className="block text-sm font-semibold text-[#111111]">{CYCLE_LENGTH_LABEL[l]}</span>
+                <span className="block text-[11px] text-[#888888]">
+                  ~{Math.round(lengthOf(l) / perWeek)} weeks{l === report.suggestedLength ? " · suggested" : ""}
+                </span>
+              </button>
+            ))}
+          </div>
+          {report.lengthReason && <p className="text-xs text-[#3b5f8a] mt-2">{report.lengthReason}</p>}
           <p className="text-xs text-[#999999] mt-2">
             {nextLength} sessions, about {nextWeeks} weeks
             {perWeek >= 4 ? ", with light days between the heavy ones" : ""}.
@@ -213,7 +239,7 @@ export default function CycleReportSheet({ report, liftShort, onStart, onClose, 
 
         <div className="px-6 pt-5 pb-10">
           <button
-            onClick={() => onStart(peak, perWeek)}
+            onClick={() => onStart(peak, perWeek, length)}
             className="w-full bg-[#1e3a5f] text-white text-sm font-semibold rounded-xl py-3.5 active:bg-[#0f2540] transition-colors"
           >
             Start cycle {report.number + 1} · peak {peak}kg
