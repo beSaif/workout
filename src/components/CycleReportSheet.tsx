@@ -128,7 +128,9 @@ export default function CycleReportSheet({ report, liftShort, onStart, onClose, 
                   <span className="text-sm font-medium text-[#333333]">{PHASE_SESSION_TYPE[p.phase]}</span>
                 </span>
                 <span className="text-xs text-[#888888] tabular-nums">
-                  {p.sessions} session{p.sessions === 1 ? "" : "s"} · {p.sets} set{p.sets === 1 ? "" : "s"}
+                  {p.sessions === 0 && p.skipped > 0
+                    ? "skipped"
+                    : `${p.sessions} session${p.sessions === 1 ? "" : "s"} · ${p.sets} set${p.sets === 1 ? "" : "s"}`}
                 </span>
               </div>
             ))}

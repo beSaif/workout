@@ -33,10 +33,10 @@ import { TrainingDay } from "@/lib/types"
 import SessionCard from "@/components/SessionCard"
 import PreviewSessionRow from "@/components/PreviewSessionRow"
 import CycleReportSheet from "@/components/CycleReportSheet"
-import { buildCycleReport } from "@/lib/cycleReport"
+import { buildCycleReport, cycleReviewFor } from "@/lib/cycleReport"
 import ProgramTimeline from "@/components/ProgramTimeline"
-import StatsGrid from "@/components/StatsGrid"
-import ProgressBar from "@/components/ProgressBar"
+import ProgressCard from "@/components/ProgressCard"
+import { liftProgress } from "@/lib/progress"
 import LogSessionModal from "@/components/LogSessionModal"
 import NavDrawer from "@/components/NavDrawer"
 import InstallGuideModal, { useInstallGuide } from "@/components/InstallGuideModal"
@@ -53,7 +53,7 @@ import WeightCard from "@/components/WeightCard"
 import WeightCheckInSheet from "@/components/WeightCheckInSheet"
 import WeightOptInSheet, { useWeightOptIn } from "@/components/WeightOptInSheet"
 import { bwForSession, dateKey, upsertEntry, weighInDue } from "@/lib/weight"
-import { getBestE1RM, getBestWeight, getLatestBW } from "@/lib/stats"
+import { getBestE1RM, getLatestBW } from "@/lib/stats"
 import { suggestNextDay } from "@/lib/balance"
 import { relativeTime } from "@/lib/time"
 
@@ -741,7 +741,7 @@ export default function Page() {
         // toward, rather than advancing into a fresh phase.
         finalBlocks = closeBlock(currentBlocks, completedBlock, confirmedSessions)
         // The deload was the cycle's last block: recap it and set up the next one.
-        if (completedBlock.phase === "deload" && completedBlock.review) setCycleReportId(completedBlock.id)
+        if (completedBlock.phase === "deload" && cycleReviewFor(currentBlocks, completedBlock)) setCycleReportId(completedBlock.id)
       } else {
         finalBlocks = currentBlocks.map((b) =>
           b.id === activeBlock.id ? { ...b, sessionIds: updatedBlockSessionIds } : b
@@ -882,6 +882,14 @@ export default function Page() {
     setViewingBlockId(null)
     setViewingUpcomingPhase(null)
     setJumpUndo({ before: blocks, after: jumped, upcoming: previous, label })
+    // Jumping past a deload closes the cycle just as logging it would: open its report.
+    const closedDeload = jumped.find(
+      (b) => b.phase === "deload" && b.status === "completed" && blocks.find((o) => o.id === b.id)?.status !== "completed"
+    )
+    // Only when the jump lands on the new cycle's first session, where its answers still apply.
+    const landed = jumped.find((b) => b.status === "active")
+    const atCycleStart = landed?.phase === "accumulation" && blockPosition(landed) === 0
+    if (closedDeload && atCycleStart && cycleReviewFor(jumped, closedDeload)) setCycleReportId(closedDeload.id)
   }
 
   /** Put the program back where it stood before the last jump. */
@@ -1098,9 +1106,9 @@ export default function Page() {
   const showLayoffBanner =
     layoff.tier !== "none" && layoffDismissed !== `${layoff.lastSessionDate}:${layoff.tier}`
 
-  const latestE1RM = getBestE1RM(sessions)
-  const bestWeight = getBestWeight(sessions)
-  const latestBW = getLatestBW(sessions)
+  // The newest weigh-in, else the bodyweight last logged with a session, else the profile's.
+  const latestBodyweight =
+    [...weights].sort((a, b) => b.date.localeCompare(a.date))[0]?.kg ?? getLatestBW(sessions) ?? profile.bw ?? null
 
   const liftLabel = getMainLiftLabel(profile)
   const liftShort = getMainLiftShortLabel(profile)
@@ -1149,7 +1157,7 @@ export default function Page() {
   const reportableDeload = (() => {
     if (!activeBlock || activeBlock.phase !== "accumulation" || blockPosition(activeBlock) > 0) return undefined
     const before = [...blocks].filter((b) => b.id < activeBlock.id).sort((a, b) => b.id - a.id)[0]
-    return before?.phase === "deload" && before.review ? before : undefined
+    return before?.phase === "deload" && cycleReviewFor(blocks, before) ? before : undefined
   })()
   const cycleReport = cycleReportId != null ? buildCycleReport(blocks, confirmed, cycleReportId) : null
   const currentPhaseName = !activeBlock
@@ -1338,16 +1346,12 @@ export default function Page() {
         {/* Lift-focused mode: target progress, stats, program timeline and the block view */}
         {liftFocused && (
         <>
-        {/* Progress Bar */}
-        <ProgressBar current={bestWeight} target={profile.target ?? 0} />
-
-        {/* Stats Grid */}
-        <StatsGrid
-          e1rm={latestE1RM}
-          best={bestWeight}
-          sessions={confirmed.length}
-          bw={latestBW}
+        {/* Where the main lift stands against the goal */}
+        <ProgressCard
+          progress={liftProgress(blocks, sessions, profile.target ?? null)}
           target={profile.target ?? 0}
+          bodyweight={latestBodyweight}
+          liftShort={liftShort}
         />
 
         {/* Program timeline */}

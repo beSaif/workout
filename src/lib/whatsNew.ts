@@ -36,6 +36,10 @@ export const WHATS_NEW: WhatsNewRelease[] = [
         body: "Failed a single? Scroll reps up to \"miss\". It never counts as lifted, and a missed peak single holds your peak instead of guessing. Going again lighter? Add a set for the second attempt.",
       },
       {
+        title: "One card for your progress",
+        body: "The top of Home is now one card: your best e1RM against your goal, your peak marked on the same bar, how far is left and roughly how many cycles that takes, plus your best lift, strength for your bodyweight and sessions logged.",
+      },
+      {
         title: "Anchor is now your peak",
         body: "Your anchor is now called your peak: the single the cycle builds to. It shows once, under the timeline. Tap edit there to change it.",
       },
