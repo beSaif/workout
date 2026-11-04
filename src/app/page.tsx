@@ -35,8 +35,8 @@ import PreviewSessionRow from "@/components/PreviewSessionRow"
 import CycleReportSheet from "@/components/CycleReportSheet"
 import { buildCycleReport, cycleReviewFor } from "@/lib/cycleReport"
 import ProgramTimeline from "@/components/ProgramTimeline"
-import StatsGrid from "@/components/StatsGrid"
-import ProgressBar from "@/components/ProgressBar"
+import ProgressCard from "@/components/ProgressCard"
+import { liftProgress } from "@/lib/progress"
 import LogSessionModal from "@/components/LogSessionModal"
 import NavDrawer from "@/components/NavDrawer"
 import InstallGuideModal, { useInstallGuide } from "@/components/InstallGuideModal"
@@ -53,7 +53,7 @@ import WeightCard from "@/components/WeightCard"
 import WeightCheckInSheet from "@/components/WeightCheckInSheet"
 import WeightOptInSheet, { useWeightOptIn } from "@/components/WeightOptInSheet"
 import { bwForSession, dateKey, upsertEntry, weighInDue } from "@/lib/weight"
-import { getBestE1RM, getBestWeight, getLatestBW } from "@/lib/stats"
+import { getBestE1RM, getLatestBW } from "@/lib/stats"
 import { suggestNextDay } from "@/lib/balance"
 import { relativeTime } from "@/lib/time"
 
@@ -1106,9 +1106,9 @@ export default function Page() {
   const showLayoffBanner =
     layoff.tier !== "none" && layoffDismissed !== `${layoff.lastSessionDate}:${layoff.tier}`
 
-  const latestE1RM = getBestE1RM(sessions)
-  const bestWeight = getBestWeight(sessions)
-  const latestBW = getLatestBW(sessions)
+  // The newest weigh-in, else the bodyweight last logged with a session, else the profile's.
+  const latestBodyweight =
+    [...weights].sort((a, b) => b.date.localeCompare(a.date))[0]?.kg ?? getLatestBW(sessions) ?? profile.bw ?? null
 
   const liftLabel = getMainLiftLabel(profile)
   const liftShort = getMainLiftShortLabel(profile)
@@ -1346,16 +1346,12 @@ export default function Page() {
         {/* Lift-focused mode: target progress, stats, program timeline and the block view */}
         {liftFocused && (
         <>
-        {/* Progress Bar */}
-        <ProgressBar current={bestWeight} target={profile.target ?? 0} />
-
-        {/* Stats Grid */}
-        <StatsGrid
-          e1rm={latestE1RM}
-          best={bestWeight}
-          sessions={confirmed.length}
-          bw={latestBW}
+        {/* Where the main lift stands against the goal */}
+        <ProgressCard
+          progress={liftProgress(blocks, sessions, profile.target ?? null)}
           target={profile.target ?? 0}
+          bodyweight={latestBodyweight}
+          liftShort={liftShort}
         />
 
         {/* Program timeline */}
