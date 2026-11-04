@@ -170,12 +170,12 @@ export default function SessionCard({
           <div className="flex flex-col gap-1">
             {topReps != null && (
               <span className="text-xl font-bold text-[#444444] leading-none">
-                {topReps} reps
+                {topReps} {topReps === 1 ? "rep" : "reps"}
               </span>
             )}
             {setCount > 0 && (
               <span className="text-base font-medium text-[#aaaaaa] leading-none">
-                {setCount} sets
+                {setCount} {setCount === 1 ? "set" : "sets"}
               </span>
             )}
           </div>
@@ -183,7 +183,7 @@ export default function SessionCard({
       )}
 
       {topWeight != null && targetLine && (
-        <p className="text-[11px] font-semibold text-[#3b5f8a] leading-snug mt-2">{targetLine}</p>
+        <p className="text-[11px] font-semibold text-[#3b5f8a] leading-snug mt-2 whitespace-pre-line">{targetLine}</p>
       )}
 
       {/* Main lift sat out: say where its load went, so the block still reads as on track */}
@@ -325,12 +325,12 @@ export default function SessionCard({
           <div className="flex flex-col gap-1">
             {topReps != null && (
               <span className="text-xl font-bold text-[#444444] leading-none">
-                {topReps} reps
+                {topReps} {topReps === 1 ? "rep" : "reps"}
               </span>
             )}
             {setCount > 0 && (
               <span className="text-base font-medium text-[#aaaaaa] leading-none">
-                {setCount} sets
+                {setCount} {setCount === 1 ? "set" : "sets"}
               </span>
             )}
           </div>

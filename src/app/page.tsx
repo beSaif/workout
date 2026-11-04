@@ -1087,20 +1087,27 @@ export default function Page() {
     ? `${upcomingRx.weight}kg × ${upcomingRx.reps} × ${upcomingRx.sets}`
     : undefined
   const upcomingTarget = (() => {
-    if (!upcomingRx || upcomingRx.rpe == null || upcoming?.skippedMainLift) return undefined
+    if (!upcomingRx || upcoming?.skippedMainLift) return undefined
+    if (activeBlock?.phase === "deload") return "Deload · keep every set easy, well short of failure"
+    if (upcomingRx.rpe == null) return undefined
     const isTest = activeBlock?.phase === "realization" && blockPosition(activeBlock) === getBlockLength(activeBlock) - 1
     const effort = isTest
-      ? "Peak single · log its RPE, it sets next cycle's peak"
+      ? `Peak single · aim for RPE ${upcomingRx.rpe}. Log it: it sets next cycle's peak.`
       : `${upcomingRx.light ? "Light day · aim" : "Aim"} for RPE ${upcomingRx.rpe}`
     const adjust =
       activeOffset > 0
-        ? ` · +${activeOffset}kg, recent sessions felt easy`
+        ? `\n+${activeOffset}kg on the plan: recent sessions felt easy`
         : activeOffset < 0
-        ? ` · ${activeOffset}kg, recent sessions ran hard`
+        ? `\n−${-activeOffset}kg off the plan: recent sessions ran hard`
         : ""
     return effort + adjust
   })()
   const firstName = profile.name.split(" ")[0]
+  const currentPhaseName = !activeBlock
+    ? "current block"
+    : activeBlock.phase === "reacclimation"
+    ? PHASE_LABEL.reacclimation
+    : PHASE_SESSION_TYPE[activeBlock.phase]
 
   // Anything already covering the screen. The weight sheets queue behind all of it —
   // slamming a weigh-in prompt over a session the user is mid-way through logging
@@ -1308,6 +1315,7 @@ export default function Page() {
               setViewingBlockId(null)
             }}
             onEditPeak={handleEditAnchor}
+            upcomingLength={(phase) => blockLengthFor(phase, measureSessionsPerWeek(confirmed, null))}
           />
         )}
 
@@ -1330,20 +1338,12 @@ export default function Page() {
               className="w-full text-left text-xs text-muted-light bg-[#f5f5f5] rounded-xl px-4 py-2.5 mb-2 flex items-center gap-2 active:opacity-70"
             >
               <span>←</span>
-              <span>back to current block</span>
+              <span>Back to {currentPhaseName}</span>
             </button>
           )}
 
           {/* Upcoming phase preview */}
           {viewingUpcomingPhase && activeBlock && (() => {
-            const phaseColor: Record<BlockPhase, { bg: string; bar: string; label: string; meta: string }> = {
-              accumulation: { bg: "bg-[#f0f7f0]", bar: "bg-[#2d6a2d]", label: "text-[#2d6a2d]", meta: "text-[#4a8a4a]" },
-              transmutation: { bg: "bg-[#f5f0ff]", bar: "bg-[#5a2d8a]", label: "text-[#5a2d8a]", meta: "text-[#7a4daa]" },
-              realization: { bg: "bg-[#eff6ff]", bar: "bg-[#1e3a5f]", label: "text-[#1e3a5f]", meta: "text-[#3b5f8a]" },
-              deload: { bg: "bg-[#f5f5f5]", bar: "bg-[#888888]", label: "text-[#555555]", meta: "text-[#888888]" },
-              reacclimation: { bg: "bg-[#fdf3e7]", bar: "bg-[#b06a1e]", label: "text-[#8a4d14]", meta: "text-[#b06a1e]" },
-            }
-            const style = phaseColor[viewingUpcomingPhase]
             const total = blockLengthFor(viewingUpcomingPhase, measureSessionsPerWeek(confirmed, null))
             // Blocks still to come are made on the current schemes, carrying the cycle's volume and rep range.
             const previewProgram = {
@@ -1359,33 +1359,22 @@ export default function Page() {
             })
             return (
               <>
-                <div className={`${style.bg} rounded-xl px-4 py-3 mb-2`}>
-                  <div className="flex items-center justify-between mb-2">
-                    <div className="flex items-center gap-2">
-                      <div className={`w-1.5 h-4 rounded-full ${style.bar}`} />
-                      <span className={`text-sm font-semibold ${style.label}`}>
-                        {PHASE_SESSION_TYPE[viewingUpcomingPhase]}
-                      </span>
-                      <span className={`text-xs ${style.meta}`}>· projected</span>
-                    </div>
-                    <span className={`text-xs font-semibold ${style.label} opacity-60`}>{total} session{total === 1 ? "" : "s"}</span>
-                  </div>
-                  <div className="h-1 rounded-full bg-black/10" />
-                </div>
+                <BlockHeader projected={{ phase: viewingUpcomingPhase, total }} />
                 <button
                   onClick={() => setViewingUpcomingPhase(null)}
                   className="w-full text-left text-xs text-muted-light bg-[#f5f5f5] rounded-xl px-4 py-2.5 mb-2 flex items-center gap-2 active:opacity-70"
                 >
                   <span>←</span>
-                  <span>back to current block</span>
+                  <span>Back to {currentPhaseName}</span>
                 </button>
                 {Array.from({ length: total }, (_, i) => {
                   const p = prescribeBlockSession(viewingUpcomingPhase, i, activeBlock.anchorWeight, total, previewOffset, previewProgram)
                   return (
                     <PreviewSessionRow
                       key={i}
-                      label={`Session ${i + 1}${p.light ? " · light" : ""}`}
-                      prescription={`${p.weight}kg × ${p.reps} × ${p.sets}`}
+                      label={`Session ${i + 1}`}
+                      rx={p}
+                      tag={viewingUpcomingPhase === "realization" && i === total - 1 ? "Peak single" : undefined}
                       onJump={upcoming ? () => handleJumpTo({ phase: viewingUpcomingPhase, index: i }) : undefined}
                     />
                   )
@@ -1459,8 +1448,9 @@ export default function Page() {
                       <PreviewSessionRow
                         key={idx}
                         faint
-                        label={`Session ${idx + 1}${p.light ? " · light" : ""}`}
-                        prescription={`${p.weight}kg × ${p.reps} × ${p.sets}`}
+                        label={`Session ${idx + 1}`}
+                        rx={p}
+                        tag={activeBlock.phase === "realization" && idx === getBlockLength(activeBlock) - 1 ? "Peak single" : undefined}
                         onJump={upcoming && idx > position ? () => handleJumpTo({ phase: activeBlock.phase, index: idx }) : undefined}
                       />
                     )
@@ -1476,7 +1466,7 @@ export default function Page() {
                   <PreviewSessionRow
                     faint
                     label={`Next · ${slotLabel(next.phase, nextIdx)}`}
-                    prescription={`${p.weight}kg × ${p.reps} × ${p.sets}`}
+                    rx={p}
                     onJump={() => handleJumpTo({ phase: next.phase, index: nextIdx })}
                   />
                 )

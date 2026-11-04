@@ -1,6 +1,8 @@
 "use client"
 
 import { TrainingBlock, BlockPhase } from "@/lib/types"
+import { blockPosition, getBlockLength } from "@/lib/prescription"
+import { PHASE_THEME } from "@/lib/phaseStyle"
 
 const PHASE_ORDER: BlockPhase[] = ["accumulation", "transmutation", "realization", "deload"]
 
@@ -10,14 +12,6 @@ const PHASE_SHORT: Record<BlockPhase, string> = {
   realization: "Peak",
   deload: "Deload",
   reacclimation: "Rebuild",
-}
-
-const PHASE_COLOR: Record<BlockPhase, string> = {
-  accumulation: "#2d6a2d",
-  transmutation: "#5a2d8a",
-  realization: "#1e3a5f",
-  deload: "#888888",
-  reacclimation: "#b06a1e",
 }
 
 type StepStatus = "completed" | "active" | "upcoming" | "resume"
@@ -36,9 +30,11 @@ interface ProgramTimelineProps {
   onUpcomingPhaseSelect?: (phase: BlockPhase | null) => void
   /** Opens the sheet that edits the cycle's peak. */
   onEditPeak?: () => void
+  /** Sessions a phase still to come will have, for the count under its step. */
+  upcomingLength?: (phase: BlockPhase) => number
 }
 
-export default function ProgramTimeline({ blocks, selectedBlockId, onBlockSelect, selectedUpcomingPhase, onUpcomingPhaseSelect, onEditPeak }: ProgramTimelineProps) {
+export default function ProgramTimeline({ blocks, selectedBlockId, onBlockSelect, selectedUpcomingPhase, onUpcomingPhaseSelect, onEditPeak, upcomingLength }: ProgramTimelineProps) {
   const sorted = [...blocks].sort((a, b) => a.id - b.id)
   const activeBlock = sorted.find((b) => b.status === "active")
   if (!activeBlock) return null
@@ -95,30 +91,48 @@ export default function ProgramTimeline({ blocks, selectedBlockId, onBlockSelect
     }
   }
 
+  /** The small line under a step: where that phase stands. */
+  function stepNote(step: Step): string {
+    if (step.status === "completed") return "done"
+    if (step.status === "resume") return "resume"
+    if (step.status === "active" && step.block) {
+      return `${Math.min(blockPosition(step.block), getBlockLength(step.block))}/${getBlockLength(step.block)}`
+    }
+    const n = upcomingLength?.(step.phase)
+    return n != null ? `${n} session${n === 1 ? "" : "s"}` : ""
+  }
+
+  // Dots sit at the centre of equal columns; the track runs from the first to the last,
+  // filled up to the phase in progress.
+  const edge = 50 / steps.length
+  const nowIdx = steps.findIndex((st) => st.status === "active")
+  const filled = steps.length > 1 ? (Math.max(0, nowIdx) / (steps.length - 1)) * (100 - 2 * edge) : 0
+
   return (
     <div className="mb-4">
-      <div className="flex items-start justify-between px-1">
-        {steps.map((step, i) => (
-          <div key={step.phase} className="flex items-center">
-            <button
-              onClick={() => handleStepClick(step)}
-              className="flex flex-col items-center gap-0.5"
-              style={{ minWidth: 52 }}
-            >
-              <StepDot
-                step={step}
-                isSelected={
-                  step.status === "upcoming"
-                    ? step.phase === selectedUpcomingPhase
-                    : step.block != null && step.block.id === selectedBlockId
-                }
-                isActiveBlock={step.status === "active"}
-              />
-            </button>
-            {i < steps.length - 1 && (
-              <span className="text-[#cccccc] text-xs mx-1 mt-0.5 leading-none">›</span>
-            )}
-          </div>
+      <div className="relative flex">
+        <div className="absolute top-[5px] h-px bg-[#e5e5e5]" style={{ left: `${edge}%`, right: `${edge}%` }} />
+        <div
+          className="absolute top-[5px] h-px transition-all duration-500"
+          style={{ left: `${edge}%`, width: `${filled}%`, backgroundColor: PHASE_THEME[steps[Math.max(0, nowIdx)].phase].color, opacity: 0.35 }}
+        />
+        {steps.map((step) => (
+          <button
+            key={step.phase}
+            onClick={() => handleStepClick(step)}
+            className="relative flex-1 flex flex-col items-center gap-1 active:opacity-70"
+          >
+            <StepDot
+              step={step}
+              note={stepNote(step)}
+              isSelected={
+                step.status === "upcoming"
+                  ? step.phase === selectedUpcomingPhase
+                  : step.block != null && step.block.id === selectedBlockId
+              }
+              isActiveBlock={step.status === "active"}
+            />
+          </button>
         ))}
       </div>
       {/* The peak belongs to the whole cycle, so it is shown once here, not on every phase.
@@ -126,11 +140,11 @@ export default function ProgramTimeline({ blocks, selectedBlockId, onBlockSelect
       <button
         onClick={onEditPeak}
         disabled={!onEditPeak}
-        className="mt-2 w-full text-center text-[11px] text-[#999999] active:opacity-70"
+        className="mt-3 mx-auto flex items-center gap-1.5 rounded-full bg-[#f5f5f5] px-3 py-1 text-[11px] text-[#777777] active:opacity-70"
       >
-        {anchorBlock.phase === "deload" ? "Next cycle peaks at " : "This cycle peaks at "}
-        <span className="font-semibold text-[#555555]">{anchorBlock.anchorWeight}kg</span>
-        {onEditPeak && <span className="underline ml-1">edit</span>}
+        <span>{anchorBlock.phase === "deload" ? "Next cycle peaks at" : "This cycle peaks at"}</span>
+        <span className="font-semibold text-[#111111]">{anchorBlock.anchorWeight}kg</span>
+        {onEditPeak && <span className="font-semibold text-[#1e3a5f]">· Edit</span>}
       </button>
     </div>
   )
@@ -138,49 +152,50 @@ export default function ProgramTimeline({ blocks, selectedBlockId, onBlockSelect
 
 function StepDot({
   step,
+  note,
   isSelected,
   isActiveBlock,
 }: {
   step: Step
+  note: string
   isSelected: boolean
   isActiveBlock: boolean
 }) {
   const { phase, status } = step
-  const color = PHASE_COLOR[phase]
+  const color = PHASE_THEME[phase].color
   const isUpcoming = status === "upcoming"
   const isCompleted = status === "completed"
   const isResume = status === "resume"
 
-  // Only the active ("now") step should read as lit. The resume step is a phase
-  // you'll return to later, so — like upcoming — it renders muted unless the user
-  // taps it to browse that block.
+  // Only the active ("now") step reads as lit. The resume step is a phase you'll return
+  // to later, so, like upcoming, it renders muted unless tapped to browse that block.
   const isDimmed = (isUpcoming || isResume) && !isSelected
-
-  const dotBg = isDimmed ? "#dddddd" : color
-  const dotOpacity = isDimmed ? 0.4 : isCompleted && !isSelected ? 0.55 : 1
-  const textColor = isDimmed ? "#aaaaaa" : isCompleted ? (isSelected ? color : "#999999") : color
 
   return (
     <>
-      <div
-        className="w-2 h-2 rounded-full mb-0.5 transition-all"
+      <span
+        className="relative z-10 w-[11px] h-[11px] rounded-full border-2 bg-white transition-all"
         style={{
-          backgroundColor: dotBg,
-          opacity: dotOpacity,
-          boxShadow: isActiveBlock ? `0 0 0 2px ${color}40` : isSelected ? `0 0 0 2px ${color}80` : "none",
+          borderColor: isDimmed ? "#d4d4d4" : color,
+          backgroundColor: isActiveBlock || isCompleted || isSelected ? color : "#ffffff",
+          opacity: isCompleted && !isSelected ? 0.55 : 1,
+          boxShadow: isActiveBlock ? `0 0 0 3px ${color}26` : "none",
         }}
       />
       <span
-        className="text-[10px] text-center leading-tight transition-colors"
+        className="text-[11px] leading-tight transition-colors"
         style={{
-          color: textColor,
+          color: isDimmed ? "#999999" : isCompleted && !isSelected ? "#888888" : color,
           fontWeight: isActiveBlock || isSelected ? 700 : 500,
-          opacity: isCompleted && !isSelected ? 0.75 : 1,
         }}
       >
-        {isCompleted ? "✓ " : ""}{PHASE_SHORT[phase]}
-        {isActiveBlock && <span className="block text-[8px] opacity-60">now</span>}
-        {isResume && <span className="block text-[8px] opacity-60">resume</span>}
+        {PHASE_SHORT[phase]}
+      </span>
+      <span
+        className="text-[10px] leading-none tabular-nums"
+        style={{ color: isActiveBlock ? color : "#aaaaaa", opacity: isActiveBlock ? 0.75 : 1 }}
+      >
+        {note}
       </span>
     </>
   )
