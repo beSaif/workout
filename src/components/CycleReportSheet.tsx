@@ -21,10 +21,6 @@ interface CycleReportSheetProps {
 const NEXT_PHASES: BlockPhase[] = ["accumulation", "transmutation", "realization", "deload"]
 const DAYS = [2, 3, 4, 5, 6]
 
-function formatTonnes(kg: number): string {
-  return kg >= 1000 ? `${(kg / 1000).toFixed(1)}t` : `${kg}kg`
-}
-
 function pct(from: number, to: number): string {
   const p = ((to - from) / from) * 100
   return `${p >= 0 ? "+" : "−"}${Math.abs(p).toFixed(1)}%`
@@ -66,7 +62,6 @@ export default function CycleReportSheet({ report, liftShort, onStart, onClose, 
 
   const sessions = report.phases.reduce((n, p) => n + p.sessions, 0)
   const skipped = report.phases.reduce((n, p) => n + p.skipped, 0)
-  const tonnage = report.phases.reduce((n, p) => n + p.tonnage, 0)
   const rated = report.effort.onTarget + report.effort.harder + report.effort.easier
 
   const nextLength = NEXT_PHASES.reduce((n, phase) => n + blockLengthFor(phase, perWeek), 0)
@@ -104,7 +99,7 @@ export default function CycleReportSheet({ report, liftShort, onStart, onClose, 
         </div>
 
         {/* Headline numbers */}
-        <div className="grid grid-cols-3 gap-2 px-6">
+        <div className="grid grid-cols-2 gap-2 px-6">
           <Tile
             value={report.e1rm.during != null ? `${Math.round(report.e1rm.during * 10) / 10}` : "—"}
             label="Best e1RM"
@@ -115,7 +110,6 @@ export default function CycleReportSheet({ report, liftShort, onStart, onClose, 
             }
           />
           <Tile value={String(sessions)} label="Sessions" note={skipped > 0 ? `${skipped} skipped` : undefined} />
-          <Tile value={formatTonnes(tonnage)} label="Lifted" />
         </div>
 
         {/* Phase by phase */}
@@ -129,7 +123,7 @@ export default function CycleReportSheet({ report, liftShort, onStart, onClose, 
                   <span className="text-sm font-medium text-[#333333]">{PHASE_SESSION_TYPE[p.phase]}</span>
                 </span>
                 <span className="text-xs text-[#888888] tabular-nums">
-                  {p.sessions} session{p.sessions === 1 ? "" : "s"} · {p.sets} sets · {formatTonnes(p.tonnage)}
+                  {p.sessions} session{p.sessions === 1 ? "" : "s"} · {p.sets} set{p.sets === 1 ? "" : "s"}
                 </span>
               </div>
             ))}

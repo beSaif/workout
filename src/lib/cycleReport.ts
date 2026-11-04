@@ -37,8 +37,6 @@ export interface PhaseLine {
   sessions: number
   skipped: number
   sets: number
-  /** Kilos lifted: weight × reps over working sets. */
-  tonnage: number
 }
 
 const CYCLE_PHASES: BlockPhase[] = ["accumulation", "transmutation", "realization", "deload"]
@@ -82,7 +80,6 @@ export function buildCycleReport(blocks: TrainingBlock[], sessions: Session[], d
       sessions: logged.length,
       skipped: own.reduce((n, b) => n + (b.skippedSlots?.length ?? 0), 0),
       sets: working.length,
-      tonnage: Math.round(working.reduce((sum, x) => sum + x.kg * x.reps, 0)),
     }]
   })
 

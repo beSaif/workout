@@ -79,12 +79,12 @@ first cycle peaks at the 1RM given in onboarding.
 - **After the deload.** Logging the last deload session starts the next cycle's Volume block at
   the new peak, with whatever volume the review earned, and opens the cycle report
   (`src/lib/cycleReport.ts`, `CycleReportSheet`): the peak change and test single, best e1RM
-  against before the cycle, sessions, sets and tonnage by phase, effort against target, how far
+  against before the cycle, sessions and sets by phase, effort against target, how far
   the loads moved, and missed sets, all read from the logs. It then asks what to peak at (the
   suggestion, a step either side, or any value) and how many days a week to bench. Starting the
   cycle sets the Volume block's peak and resizes it, and the chosen frequency (`sessionsPerWeek`
-  on the block) sizes the rest of the cycle. Until the first Volume session is logged, a card on
-  Home reopens the report. Deload weeks repeat one session; they have no light days.
+  on the block) sizes the rest of the cycle. Until the first Volume session is logged, the peak
+  pill's Edit reopens the report. Deload weeks repeat one session; they have no light days.
 - **Versions.** Blocks saved before this carry no `schemeVersion` and run the original, shorter
   schemes until they finish. Every block made after that is version 2.
 

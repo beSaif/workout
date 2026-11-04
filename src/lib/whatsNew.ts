@@ -25,7 +25,7 @@ export const WHATS_NEW: WhatsNewRelease[] = [
       },
       {
         title: "A report at the end of every cycle",
-        body: "Finish your deload and a cycle report opens: how your peak moved, your best e1RM, sessions and kilos lifted by phase, and how the sessions felt against target. Then pick what to peak at next and how many days a week you'll bench, and start the next cycle.",
+        body: "Finish your deload and a cycle report opens: how your peak moved, your best e1RM, sessions and sets by phase, and how the sessions felt against target. Then pick what to peak at next and how many days a week you'll bench, and start the next cycle.",
       },
       {
         title: "Log a missed rep",

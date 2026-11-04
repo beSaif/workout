@@ -31,7 +31,6 @@ import { MuscleGroupConfig, DEFAULT_MUSCLE_GROUPS, DEFAULT_TRAINING_DAYS } from 
 import { TrainingDay } from "@/lib/types"
 import SessionCard from "@/components/SessionCard"
 import PreviewSessionRow from "@/components/PreviewSessionRow"
-import CycleReview from "@/components/CycleReview"
 import CycleReportSheet from "@/components/CycleReportSheet"
 import { buildCycleReport } from "@/lib/cycleReport"
 import ProgramTimeline from "@/components/ProgramTimeline"
@@ -1143,7 +1142,7 @@ export default function Page() {
   const firstName = profile.name.split(" ")[0]
   // Phases still to come are sized from the frequency chosen for this cycle, else the measured one.
   const planPerWeek = activeBlock?.sessionsPerWeek ?? measureSessionsPerWeek(confirmed, null)
-  // A new cycle that hasn't started yet can still open the report of the one before it.
+  // A new cycle that hasn't started yet can still reopen the report of the one before it.
   const reportableDeload = (() => {
     if (!activeBlock || activeBlock.phase !== "accumulation" || blockPosition(activeBlock) > 0) return undefined
     const before = [...blocks].filter((b) => b.id < activeBlock.id).sort((a, b) => b.id - a.id)[0]
@@ -1362,29 +1361,17 @@ export default function Page() {
               setViewingUpcomingPhase(phase)
               setViewingBlockId(null)
             }}
-            onEditPeak={handleEditAnchor}
+            onEditPeak={
+              // Before a new cycle's first session, Edit reopens the cycle report, which sets
+              // the peak and the days a week together. Otherwise it edits the peak alone.
+              reportableDeload ? () => setCycleReportId(reportableDeload.id) : handleEditAnchor
+            }
             upcomingLength={(phase) => blockLengthFor(phase, planPerWeek)}
           />
         )}
 
         {/* Block view */}
         <div className="mb-4">
-          {/* The timeline already names the phase and its progress; only the deload adds a
-              summary of the peak test that closed the cycle. */}
-          {viewingBlock && !viewingUpcomingPhase && <CycleReview block={viewingBlock} />}
-          {viewingBlock === activeBlock && !viewingUpcomingPhase && reportableDeload && (
-            <button
-              onClick={() => setCycleReportId(reportableDeload.id)}
-              className="w-full flex items-center justify-between rounded-xl bg-[#eff6ff] px-4 py-3 mb-3 active:opacity-70"
-            >
-              <span className="text-left">
-                <span className="block text-sm font-semibold text-[#1e3a5f]">New cycle · peak {activeBlock?.anchorWeight}kg</span>
-                <span className="block text-xs text-[#3b5f8a]">See how the last cycle went, or change the peak and days a week</span>
-              </span>
-              <span className="text-[#1e3a5f] text-lg">›</span>
-            </button>
-          )}
-
           {/* Banner when browsing a past block */}
           {viewingBlock !== activeBlock && !viewingUpcomingPhase && (
             <button
