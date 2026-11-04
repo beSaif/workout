@@ -31,7 +31,7 @@ import { MuscleGroupConfig, DEFAULT_MUSCLE_GROUPS, DEFAULT_TRAINING_DAYS } from 
 import { TrainingDay } from "@/lib/types"
 import SessionCard from "@/components/SessionCard"
 import PreviewSessionRow from "@/components/PreviewSessionRow"
-import BlockHeader from "@/components/BlockHeader"
+import CycleReview from "@/components/CycleReview"
 import ProgramTimeline from "@/components/ProgramTimeline"
 import StatsGrid from "@/components/StatsGrid"
 import ProgressBar from "@/components/ProgressBar"
@@ -1321,15 +1321,9 @@ export default function Page() {
 
         {/* Block view */}
         <div className="mb-4">
-          {viewingBlock && !viewingUpcomingPhase && (
-            <BlockHeader
-              block={viewingBlock}
-              confirmedCount={
-                (viewingBlock === activeBlock ? activeBlockSessions.length : viewingBlockSessions.length) +
-                (viewingBlock.skippedSlots?.length ?? 0)
-              }
-            />
-          )}
+          {/* The timeline already names the phase and its progress; only the deload adds a
+              summary of the peak test that closed the cycle. */}
+          {viewingBlock && !viewingUpcomingPhase && <CycleReview block={viewingBlock} />}
 
           {/* Banner when browsing a past block */}
           {viewingBlock !== activeBlock && !viewingUpcomingPhase && (
@@ -1359,7 +1353,6 @@ export default function Page() {
             })
             return (
               <>
-                <BlockHeader projected={{ phase: viewingUpcomingPhase, total }} />
                 <button
                   onClick={() => setViewingUpcomingPhase(null)}
                   className="w-full text-left text-xs text-muted-light bg-[#f5f5f5] rounded-xl px-4 py-2.5 mb-2 flex items-center gap-2 active:opacity-70"

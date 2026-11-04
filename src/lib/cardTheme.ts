@@ -19,7 +19,7 @@ export interface RarityStyle {
 }
 
 /**
- * Shaped like BlockHeader's PHASE_STYLE — a tint, a bar and an ink — so a tier
+ * Shaped like the old phase-header styles — a tint, a bar and an ink — so a tier
  * reads as a category of the same kind a training phase does. The card frame
  * itself stays the app's plain white surface; rarity is an accent, not a frame.
  */
