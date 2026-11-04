@@ -15,6 +15,8 @@ import {
   migrateSessionTypes,
   cycleLoadOffset,
   blockLengthFor,
+  createFirstBlock,
+  SCHEME_VERSION,
   measureSessionsPerWeek,
   PHASE_LABEL,
   PHASE_SESSION_TYPE,
@@ -361,16 +363,7 @@ export default function Page() {
           // Balanced users have no anchor and no blocks)
           if (finalBlocks.length === 0 && isLiftFocused(p)) {
             const confirmed = finalSessions.filter((s) => s.confirmed)
-            const seededBlocks: TrainingBlock[] = [{
-              id: 1,
-              phase: "accumulation",
-              status: "active",
-              sessionIds: [],
-              anchorWeight: roundToPlate(p.anchor ?? 0),
-              startDate: null,
-              endDate: null,
-              length: blockLengthFor("accumulation", measureSessionsPerWeek(confirmed, null)),
-            }]
+            const seededBlocks: TrainingBlock[] = [createFirstBlock(1, p.anchor ?? 0, confirmed)]
             const upcoming = createUpcomingSession(confirmed, seededBlocks, config, p, days)
             finalSessions = sortSessions([...confirmed, upcoming])
             finalBlocks = seededBlocks
@@ -623,16 +616,7 @@ export default function Page() {
         b.id === activeBlock.id ? { ...b, anchorWeight: anchor } : b
       )
     } else {
-      finalBlocks = [{
-        id: 1,
-        phase: "accumulation",
-        status: "active",
-        sessionIds: [],
-        anchorWeight: anchor,
-        startDate: null,
-        endDate: null,
-        length: blockLengthFor("accumulation", measureSessionsPerWeek(confirmed, null)),
-      }]
+      finalBlocks = [createFirstBlock(1, anchor, confirmed)]
     }
 
     // Keep the day and extras already picked on the upcoming card; only the loads change.
@@ -1001,7 +985,7 @@ export default function Page() {
     if (!active) return
     if (
       !confirm(
-        `Restart ${PHASE_LABEL[active.phase]} from session 1 with your anchor eased 5% to ${layoffAnchor(active.anchorWeight)}kg? Your logged sessions stay in history.`
+        `Restart ${PHASE_LABEL[active.phase]} from session 1 with this cycle's peak eased 5% to ${layoffAnchor(active.anchorWeight)}kg? Your logged sessions stay in history.`
       )
     )
       return
@@ -1106,7 +1090,7 @@ export default function Page() {
     if (!upcomingRx || upcomingRx.rpe == null || upcoming?.skippedMainLift) return undefined
     const isTest = activeBlock?.phase === "realization" && blockPosition(activeBlock) === getBlockLength(activeBlock) - 1
     const effort = isTest
-      ? "Max single · log its RPE, it sets your next anchor"
+      ? "Peak single · log its RPE, it sets next cycle's peak"
       : `${upcomingRx.light ? "Light day · aim" : "Aim"} for RPE ${upcomingRx.rpe}`
     const adjust =
       activeOffset > 0
@@ -1323,6 +1307,7 @@ export default function Page() {
               setViewingUpcomingPhase(phase)
               setViewingBlockId(null)
             }}
+            onEditPeak={handleEditAnchor}
           />
         )}
 
@@ -1335,7 +1320,6 @@ export default function Page() {
                 (viewingBlock === activeBlock ? activeBlockSessions.length : viewingBlockSessions.length) +
                 (viewingBlock.skippedSlots?.length ?? 0)
               }
-              onEditAnchor={viewingBlock === activeBlock ? handleEditAnchor : undefined}
             />
           )}
 
@@ -1361,10 +1345,17 @@ export default function Page() {
             }
             const style = phaseColor[viewingUpcomingPhase]
             const total = blockLengthFor(viewingUpcomingPhase, measureSessionsPerWeek(confirmed, null))
+            // Blocks still to come are made on the current schemes, carrying the cycle's volume and rep range.
+            const previewProgram = {
+              schemeVersion: SCHEME_VERSION,
+              repRange: activeBlock.repRange,
+              extraSets: activeBlock.extraSets,
+            }
             const previewOffset = cycleLoadOffset(blocks, confirmed, {
               id: Number.MAX_SAFE_INTEGER,
               phase: viewingUpcomingPhase,
               anchorWeight: activeBlock.anchorWeight,
+              ...previewProgram,
             })
             return (
               <>
@@ -1389,7 +1380,7 @@ export default function Page() {
                   <span>back to current block</span>
                 </button>
                 {Array.from({ length: total }, (_, i) => {
-                  const p = prescribeBlockSession(viewingUpcomingPhase, i, activeBlock.anchorWeight, total, previewOffset)
+                  const p = prescribeBlockSession(viewingUpcomingPhase, i, activeBlock.anchorWeight, total, previewOffset, previewProgram)
                   return (
                     <PreviewSessionRow
                       key={i}
@@ -1573,16 +1564,16 @@ export default function Page() {
         </div>
       )}
 
-      {/* Anchor weight setup / edit */}
+      {/* Cycle peak setup / edit (stored as the block's anchorWeight) */}
       {anchorPrompt && (
         <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40">
           <div className="bg-white w-full max-w-[393px] rounded-t-2xl px-6 pt-6 pb-10 max-h-[90dvh] overflow-y-auto">
-            <p className="text-base font-semibold text-[#111111] mb-1">Set your anchor weight</p>
+            <p className="text-base font-semibold text-[#111111] mb-1">Set this cycle&apos;s peak</p>
             <p className="text-sm text-[#777777] mb-6">
-              Your anchor is the 1RM this cycle is built around. Every load is a percentage of it, nudged by how your logged RPEs compare with the targets.
+              The single this cycle builds to, tested at the end of Peak. Every session is a percentage of it, nudged by how your logged RPEs compare with the targets. When the cycle ends, what your single showed sets the next one.
             </p>
             <label className="block text-[10px] font-semibold uppercase tracking-widest text-[#aaaaaa] mb-2">
-              Current 1RM (kg)
+              Peak (kg)
             </label>
             <input
               type="number"
@@ -1597,7 +1588,7 @@ export default function Page() {
               disabled={isNaN(parseFloat(anchorInput)) || parseFloat(anchorInput) <= 0}
               className="w-full bg-[#1e3a5f] text-white text-sm font-semibold rounded-xl py-3.5 hover:bg-[#16304f] active:bg-[#0f2540] transition-colors disabled:opacity-40"
             >
-              {getActiveBlock(blocks) ? "Update anchor" : "Start Block 1: Accumulation"}
+              {getActiveBlock(blocks) ? "Update peak" : "Start Block 1: Accumulation"}
             </button>
           </div>
         </div>

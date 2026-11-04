@@ -39,12 +39,33 @@ const PHASE_STYLE: Record<BlockPhase, { bar: string; label: string; meta: string
 interface BlockHeaderProps {
   block: TrainingBlock
   confirmedCount: number
-  onEditAnchor?: () => void
 }
 
-export default function BlockHeader({ block, confirmedCount, onEditAnchor }: BlockHeaderProps) {
+/** What the cycle just finished showed, and what the next one does about it. Deload blocks only. */
+function reviewText(block: TrainingBlock): string | null {
+  const review = block.review
+  if (!review) return null
+  const peak = block.anchorWeight
+  const change =
+    review.change === "volume-up"
+      ? " Volume days get a set more next cycle."
+      : review.change === "volume-reset"
+      ? " Volume days go back to their base sets."
+      : review.change === "rep-range"
+      ? block.repRange === "heavy"
+        ? " Two cycles without a new peak, so Volume switches to heavier sixes to fours."
+        : " Two cycles without a new peak, so Volume goes back to eights to sixes."
+      : ""
+  if (review.outcome === "untested") return `Cycle done without the peak single. The peak stays ${peak}kg.`
+  if (review.outcome === "raised") return `Cycle done: peak ${review.previousAnchor} → ${peak}kg.${change}`
+  const held = peak === review.previousAnchor ? `peak holds at ${peak}kg` : `peak ${review.previousAnchor} → ${peak}kg`
+  return `Cycle done: ${held}. A full deload week first.${change}`
+}
+
+export default function BlockHeader({ block, confirmedCount }: BlockHeaderProps) {
   const style = PHASE_STYLE[block.phase] ?? PHASE_STYLE.accumulation
   const total = getBlockLength(block)
+  const review = reviewText(block)
   // Re-acclimation has no session-type equivalent — show its phase name so the
   // banner reads "Re-acclimation", not the "Volume" its sessions log as.
   const label =
@@ -58,21 +79,13 @@ export default function BlockHeader({ block, confirmedCount, onEditAnchor }: Blo
           <span className={`text-sm font-semibold ${style.label}`}>
             {block.status === "completed" ? "✓ " : ""}{label}
           </span>
-          {block.status === "completed" ? (
-            <span className={`text-xs ${style.meta}`}>· {block.anchorWeight}kg anchor</span>
-          ) : (
-            <button
-              onClick={onEditAnchor}
-              className={`text-xs ${style.meta} hover:underline`}
-            >
-              · {block.anchorWeight}kg anchor
-            </button>
-          )}
         </div>
         <span className={`text-xs font-semibold ${style.label} opacity-60`}>
           {confirmedCount}/{total}
         </span>
       </div>
+
+      {review && <p className={`text-xs ${style.meta} mb-2`}>{review}</p>}
 
       {/* Progress bar */}
       <div className="h-1 rounded-full bg-black/10 overflow-hidden">

@@ -45,7 +45,7 @@ export default function LayoffBanner({
               <>
                 That long off costs real strength — the loads left in this block were
                 planned for the you of {weeksText(days)} ago. Restart {phaseLabel} from
-                session 1 at the same {anchorWeight}kg anchor and climb back through it.
+                session 1 with the cycle&apos;s {anchorWeight}kg peak eased 5%, and climb back through it.
                 Your logged sessions stay in history.
               </>
             ) : tier === "restart" ? (

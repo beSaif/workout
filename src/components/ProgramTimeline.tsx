@@ -34,9 +34,11 @@ interface ProgramTimelineProps {
   onBlockSelect: (block: TrainingBlock | null) => void
   selectedUpcomingPhase?: BlockPhase | null
   onUpcomingPhaseSelect?: (phase: BlockPhase | null) => void
+  /** Opens the sheet that edits the cycle's peak. */
+  onEditPeak?: () => void
 }
 
-export default function ProgramTimeline({ blocks, selectedBlockId, onBlockSelect, selectedUpcomingPhase, onUpcomingPhaseSelect }: ProgramTimelineProps) {
+export default function ProgramTimeline({ blocks, selectedBlockId, onBlockSelect, selectedUpcomingPhase, onUpcomingPhaseSelect, onEditPeak }: ProgramTimelineProps) {
   const sorted = [...blocks].sort((a, b) => a.id - b.id)
   const activeBlock = sorted.find((b) => b.status === "active")
   if (!activeBlock) return null
@@ -119,6 +121,17 @@ export default function ProgramTimeline({ blocks, selectedBlockId, onBlockSelect
           </div>
         ))}
       </div>
+      {/* The peak belongs to the whole cycle, so it is shown once here, not on every phase.
+          By the deload the next cycle's peak is already set. */}
+      <button
+        onClick={onEditPeak}
+        disabled={!onEditPeak}
+        className="mt-2 w-full text-center text-[11px] text-[#999999] active:opacity-70"
+      >
+        {anchorBlock.phase === "deload" ? "Next cycle peaks at " : "This cycle peaks at "}
+        <span className="font-semibold text-[#555555]">{anchorBlock.anchorWeight}kg</span>
+        {onEditPeak && <span className="underline ml-1">edit</span>}
+      </button>
     </div>
   )
 }

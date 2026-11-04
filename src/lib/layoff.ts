@@ -1,6 +1,6 @@
 import { Session, TrainingBlock } from "./types"
 import { roundToPlate } from "./e1rm"
-import { blockLengthFor, measureSessionsPerWeek } from "./prescription"
+import { createFirstBlock } from "./prescription"
 
 /** Days off after which the bar starts feeling heavy — worth a heads-up, nothing more. */
 export const LAYOFF_NUDGE_DAYS = 7
@@ -104,16 +104,7 @@ export function resetToFirstBlock(
   const anchor =
     active?.anchorWeight ?? blocks[blocks.length - 1]?.anchorWeight ?? 60
 
-  const firstBlock: TrainingBlock = {
-    id: 1,
-    phase: "accumulation",
-    status: "active",
-    sessionIds: [],
-    anchorWeight: anchor,
-    startDate: null,
-    endDate: null,
-    length: blockLengthFor("accumulation", measureSessionsPerWeek(sessions, null)),
-  }
+  const firstBlock = createFirstBlock(1, anchor, sessions)
 
   const confirmed = sessions.filter((s) => s.confirmed)
   const newSessions = confirmed.map((s) =>

@@ -46,6 +46,33 @@ previous routine is kept on the device for a week so the switch can be undone.
   Dot, in `src/lib/planPrompt.ts`) for the user's own chatbot, and reads the reply pasted back,
   prose, code fences and curly quotes included.
 
+## Main-lift program
+
+`src/lib/prescription.ts` plans the main lift in four-phase cycles: accumulation (Volume),
+transmutation (Intensity), realization (Peak) and a deload. Every load is a percentage of the
+cycle's **peak**, the single realization ends on (stored as a block's `anchorWeight`). The
+first cycle peaks at the 1RM given in onboarding.
+
+- **Length.** At three sessions a week a cycle is 9 + 6 + 3 + 1 sessions, one scheme step per
+  session. New blocks are sized from the last four weeks of benching (3 a week until there are
+  two weeks to measure). At four or more a week, scheme steps repeat as light days, never
+  two in a row; at two a week, steps are dropped.
+- **Within a cycle.** Each logged session can move the loads still to come by one step (2.5%
+  of the peak, at least 2.5kg), up to 7.5% either way. They come down on missed reps or a top
+  set a full RPE over target (from RPE 8). They go up on a top set 1.5 RPE under target (sets of
+  six and up) or 1 under (five and fewer), or on every set beating its reps by two. Peak-block
+  sessions also cap the single at what their effort-adjusted e1RM says an RPE 9.5 single is.
+  The offset is replayed from the logs, so editing a session corrects it.
+- **Between cycles.** The next peak is the best effort-adjusted e1RM from the realization
+  block. If the single was made at the peak or above at RPE 9.5 or easier (an unlogged RPE
+  counts as 9.5), the next peak is at least one step over it. Changes are capped at 5% and
+  rounded down to 2.5kg. A cycle that raises the peak adds a set to heavy accumulation days
+  (up to two). One that doesn't drops those sets and gets a full deload week. Two in a row
+  switch accumulation between eights-to-sixes and sixes-to-fours. A jumped-over test changes
+  nothing. The deload's header says what happened.
+- **Versions.** Blocks saved before this carry no `schemeVersion` and run the original, shorter
+  schemes until they finish. Every block made after that is version 2.
+
 ## Estimated one-rep max
 
 e1RM uses Brzycki: `weight × 36 / (37 − reps)`. It's what the progress charts and the

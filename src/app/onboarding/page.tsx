@@ -491,10 +491,10 @@ export default function OnboardingPage() {
 }
 
 const PHASES = [
-  { color: "#2d6a2d", name: "volume",    desc: "more reps, lighter. build the base. about 2 weeks." },
-  { color: "#5a2d8a", name: "intensity", desc: "fewer reps, heavier. about 1½ weeks." },
+  { color: "#2d6a2d", name: "volume",    desc: "more reps, lighter. build the base. about 3 weeks." },
+  { color: "#5a2d8a", name: "intensity", desc: "fewer reps, heavier. about 2 weeks." },
   { color: "#1e3a5f", name: "peak",      desc: "taper, then test a new max. about 1 week." },
-  { color: "#888888", name: "deload",    desc: "back off. let it sink in. a session or two." },
+  { color: "#888888", name: "deload",    desc: "back off. let it sink in. a session, or a week if the cycle stalled." },
 ] as const
 
 function PhasesReveal({ started, onComplete }: { started: boolean; onComplete?: () => void }) {
