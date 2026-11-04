@@ -32,6 +32,8 @@ import { TrainingDay } from "@/lib/types"
 import SessionCard from "@/components/SessionCard"
 import PreviewSessionRow from "@/components/PreviewSessionRow"
 import CycleReview from "@/components/CycleReview"
+import CycleReportSheet from "@/components/CycleReportSheet"
+import { buildCycleReport } from "@/lib/cycleReport"
 import ProgramTimeline from "@/components/ProgramTimeline"
 import StatsGrid from "@/components/StatsGrid"
 import ProgressBar from "@/components/ProgressBar"
@@ -206,6 +208,8 @@ export default function Page() {
   const [friendLastActive, setFriendLastActive] = useState<Record<string, string>>(() => loadFriendLastActiveLocal())
   const [friendProfiles, setFriendProfiles] = useState<UserProfile[]>([])
   const [showHypePanel, setShowHypePanel] = useState(false)
+  /** The deload whose cycle report is open: shown once that cycle's last session is logged. */
+  const [cycleReportId, setCycleReportId] = useState<number | null>(null)
   const [lastConfirmed, setLastConfirmed] = useState<Session | null>(null)
   const [lastPR, setLastPR] = useState<{ e1rm: number; previous: number } | null>(null)
   const [shareSession, setShareSession] = useState<Session | null>(null)
@@ -602,6 +606,38 @@ export default function Page() {
     setAnchorPrompt(true)
   }
 
+  /**
+   * Start the next cycle from the report's answers: the Volume block that opens it takes
+   * the chosen peak and is resized to the chosen frequency, which the rest of the cycle
+   * carries. Only before its first session, so no logged load is re-planned.
+   */
+  function handleStartCycle(peak: number, sessionsPerWeek: number) {
+    setCycleReportId(null)
+    if (!profile) return
+    const active = getActiveBlock(blocks)
+    if (!active || active.phase !== "accumulation" || blockPosition(active) > 0) return
+    const confirmed = sessions.filter((s) => s.confirmed)
+    const finalBlocks = blocks.map((b) =>
+      b.id === active.id
+        ? {
+            ...b,
+            anchorWeight: roundToPlate(peak),
+            sessionsPerWeek,
+            length: blockLengthFor("accumulation", sessionsPerWeek),
+          }
+        : b
+    )
+    const previous = sessions.find((s) => !s.confirmed)
+    const regenerated = createUpcomingSession(confirmed, finalBlocks, exerciseConfig, profile, trainingDays)
+    const upcoming: Session = previous
+      ? { ...regenerated, selectedTrainingDayId: previous.selectedTrainingDayId, selectedMuscleGroups: previous.selectedMuscleGroups }
+      : regenerated
+    const finalSessions = sortSessions([...confirmed, upcoming])
+    saveAll(finalSessions, finalBlocks)
+    setSessions(finalSessions)
+    setBlocks(finalBlocks)
+  }
+
   function handleConfirmAnchor() {
     if (!profile) return
     const parsed = parseFloat(anchorInput)
@@ -702,6 +738,8 @@ export default function Page() {
         // Re-acclimation finishes by resuming the interrupted block it was rebuilding
         // toward, rather than advancing into a fresh phase.
         finalBlocks = closeBlock(currentBlocks, completedBlock, confirmedSessions)
+        // The deload was the cycle's last block: recap it and set up the next one.
+        if (completedBlock.phase === "deload" && completedBlock.review) setCycleReportId(completedBlock.id)
       } else {
         finalBlocks = currentBlocks.map((b) =>
           b.id === activeBlock.id ? { ...b, sessionIds: updatedBlockSessionIds } : b
@@ -1103,6 +1141,15 @@ export default function Page() {
     return effort + adjust
   })()
   const firstName = profile.name.split(" ")[0]
+  // Phases still to come are sized from the frequency chosen for this cycle, else the measured one.
+  const planPerWeek = activeBlock?.sessionsPerWeek ?? measureSessionsPerWeek(confirmed, null)
+  // A new cycle that hasn't started yet can still open the report of the one before it.
+  const reportableDeload = (() => {
+    if (!activeBlock || activeBlock.phase !== "accumulation" || blockPosition(activeBlock) > 0) return undefined
+    const before = [...blocks].filter((b) => b.id < activeBlock.id).sort((a, b) => b.id - a.id)[0]
+    return before?.phase === "deload" && before.review ? before : undefined
+  })()
+  const cycleReport = cycleReportId != null ? buildCycleReport(blocks, confirmed, cycleReportId) : null
   const currentPhaseName = !activeBlock
     ? "current block"
     : activeBlock.phase === "reacclimation"
@@ -1118,6 +1165,7 @@ export default function Page() {
     draftPrompt != null ||
     anchorPrompt ||
     showHypePanel ||
+    cycleReport != null ||
     shareSession != null ||
     msgPopupFriend != null
 
@@ -1315,7 +1363,7 @@ export default function Page() {
               setViewingBlockId(null)
             }}
             onEditPeak={handleEditAnchor}
-            upcomingLength={(phase) => blockLengthFor(phase, measureSessionsPerWeek(confirmed, null))}
+            upcomingLength={(phase) => blockLengthFor(phase, planPerWeek)}
           />
         )}
 
@@ -1324,6 +1372,18 @@ export default function Page() {
           {/* The timeline already names the phase and its progress; only the deload adds a
               summary of the peak test that closed the cycle. */}
           {viewingBlock && !viewingUpcomingPhase && <CycleReview block={viewingBlock} />}
+          {viewingBlock === activeBlock && !viewingUpcomingPhase && reportableDeload && (
+            <button
+              onClick={() => setCycleReportId(reportableDeload.id)}
+              className="w-full flex items-center justify-between rounded-xl bg-[#eff6ff] px-4 py-3 mb-3 active:opacity-70"
+            >
+              <span className="text-left">
+                <span className="block text-sm font-semibold text-[#1e3a5f]">New cycle · peak {activeBlock?.anchorWeight}kg</span>
+                <span className="block text-xs text-[#3b5f8a]">See how the last cycle went, or change the peak and days a week</span>
+              </span>
+              <span className="text-[#1e3a5f] text-lg">›</span>
+            </button>
+          )}
 
           {/* Banner when browsing a past block */}
           {viewingBlock !== activeBlock && !viewingUpcomingPhase && (
@@ -1338,7 +1398,7 @@ export default function Page() {
 
           {/* Upcoming phase preview */}
           {viewingUpcomingPhase && activeBlock && (() => {
-            const total = blockLengthFor(viewingUpcomingPhase, measureSessionsPerWeek(confirmed, null))
+            const total = blockLengthFor(viewingUpcomingPhase, planPerWeek)
             // Blocks still to come are made on the current schemes, carrying the cycle's volume and rep range.
             const previewProgram = {
               schemeVersion: SCHEME_VERSION,
@@ -1575,6 +1635,21 @@ export default function Page() {
             </button>
           </div>
         </div>
+      )}
+
+      {/* Cycle report: after the deload that closes a cycle, before the next one starts */}
+      {cycleReport && !showHypePanel && (
+        <CycleReportSheet
+          report={cycleReport}
+          liftShort={liftShort}
+          onStart={handleStartCycle}
+          onClose={() => setCycleReportId(null)}
+          current={
+            activeBlock?.phase === "accumulation"
+              ? { peak: activeBlock.anchorWeight, sessionsPerWeek: activeBlock.sessionsPerWeek }
+              : undefined
+          }
+        />
       )}
 
       {/* Hype panel after session confirm */}

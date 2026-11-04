@@ -612,7 +612,7 @@ export function createNextBlock(
   newId: number
 ): TrainingBlock {
   const phase = nextBlockPhase(completedBlock.phase)
-  const perWeek = measureSessionsPerWeek(sessions, completedBlock.endDate)
+  const perWeek = completedBlock.sessionsPerWeek ?? measureSessionsPerWeek(sessions, completedBlock.endDate)
   let anchor = completedBlock.anchorWeight
   let repRange: RepRange = completedBlock.repRange ?? "moderate"
   let extraSets = completedBlock.extraSets ?? 0
@@ -658,6 +658,7 @@ export function createNextBlock(
     repRange,
     extraSets,
     stalls,
+    ...(completedBlock.sessionsPerWeek != null ? { sessionsPerWeek: completedBlock.sessionsPerWeek } : {}),
     ...(review ? { review } : {}),
   }
 }

@@ -76,6 +76,11 @@ export interface TrainingBlock {
   extraSets?: number
   /** Version 2: cycles in a row that ended without raising the peak. */
   stalls?: number
+  /**
+   * Bench days a week the user chose for this cycle (asked by the cycle report). Blocks
+   * are sized from it instead of the measured frequency, and carry it to the next block.
+   */
+  sessionsPerWeek?: number
   /** Set on the deload that closes a cycle: how the cycle's peak test went and what changes for the next one. */
   review?: {
     previousAnchor: number

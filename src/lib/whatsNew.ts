@@ -24,6 +24,10 @@ export const WHATS_NEW: WhatsNewRelease[] = [
         body: "New cycles run about six weeks: three of volume, two of intensity, one to peak. Make your peak single at RPE 9.5 or easier and the next cycle aims at least a step higher. A cycle that raises your peak adds a set to your volume days. One that doesn't gets a deload week, and two in a row switch your rep range. The block you're in finishes on its old plan.",
       },
       {
+        title: "A report at the end of every cycle",
+        body: "Finish your deload and a cycle report opens: how your peak moved, your best e1RM, sessions and kilos lifted by phase, and how the sessions felt against target. Then pick what to peak at next and how many days a week you'll bench, and start the next cycle.",
+      },
+      {
         title: "Log a missed rep",
         body: "Failed a single? Scroll reps up to \"miss\". It never counts as lifted, and a missed peak single holds your peak instead of guessing. Going again lighter? Add a set for the second attempt.",
       },
