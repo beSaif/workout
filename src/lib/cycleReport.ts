@@ -88,9 +88,35 @@ function bestE1RM(sessions: Session[]): number | null {
   return valid.length > 0 ? Math.max(...valid) : null
 }
 
+type Review = NonNullable<TrainingBlock["review"]>
+
 /**
- * The report for the cycle a deload closed, or null when that deload carries no review
- * (one saved before reviews existed).
+ * How the peak test that a deload follows went. Deloads made since reviews existed carry
+ * it. Older ones are read off the cycle itself: the realization block before the deload
+ * held the old peak and the deload the one the test produced, and a final slot that was
+ * jumped over, or never logged, means there was no test. Null when no realization block
+ * precedes the deload in its cycle (a program reset, say).
+ */
+export function cycleReviewFor(blocks: TrainingBlock[], deload: TrainingBlock): Review | null {
+  if (deload.phase !== "deload") return null
+  if (deload.review) return deload.review
+  const before = [...blocks].filter((b) => b.id < deload.id).sort((a, b) => b.id - a.id)[0]
+  if (!before || before.phase !== "realization") return null
+  const finalSlot = getBlockLength(before) - 1
+  const tested =
+    !(before.skippedSlots ?? []).includes(finalSlot) &&
+    before.sessionIds.length + (before.skippedSlots?.length ?? 0) > finalSlot
+  const outcome: Review["outcome"] = !tested
+    ? "untested"
+    : deload.anchorWeight > before.anchorWeight
+    ? "raised"
+    : "stalled"
+  return { previousAnchor: before.anchorWeight, outcome, change: null }
+}
+
+/**
+ * The report for the cycle a deload closed, or null when there's no peak test to report
+ * on (see cycleReviewFor).
  */
 export function buildCycleReport(
   blocks: TrainingBlock[],
@@ -100,7 +126,8 @@ export function buildCycleReport(
 ): CycleReport | null {
   const sorted = [...blocks].sort((a, b) => a.id - b.id)
   const deload = sorted.find((b) => b.id === deloadId)
-  if (!deload || deload.phase !== "deload" || !deload.review) return null
+  const review = deload ? cycleReviewFor(sorted, deload) : null
+  if (!deload || !review) return null
 
   const previousDeload = sorted.filter((b) => b.phase === "deload" && b.id < deloadId).pop()
   const cycleBlocks = sorted.filter((b) => b.id > (previousDeload?.id ?? 0) && b.id <= deloadId)
@@ -165,22 +192,22 @@ export function buildCycleReport(
     : []
 
   const cycleLength = deload.cycleLength ?? "standard"
-  const previous = withSuggestion && previousDeload?.review
+  const previous = withSuggestion && previousDeload && cycleReviewFor(sorted, previousDeload)
     ? buildCycleReport(blocks, sessions, previousDeload.id, false)
     : null
   const suggestion = suggestLength(
     cycleLength,
-    deload.review.outcome,
-    wentEasy({ outcome: deload.review.outcome, effort }),
+    review.outcome,
+    wentEasy({ outcome: review.outcome, effort }),
     previous != null && wentEasy(previous)
   )
 
   return {
     number: sorted.filter((b) => b.phase === "deload" && b.id <= deloadId).length,
-    previousPeak: deload.review.previousAnchor,
+    previousPeak: review.previousAnchor,
     nextPeak: deload.anchorWeight,
-    outcome: deload.review.outcome,
-    change: deload.review.change,
+    outcome: review.outcome,
+    change: review.change,
     test,
     e1rm: { before: bestE1RM(before), during: bestE1RM(cycleSessions) },
     phases,

@@ -83,7 +83,8 @@ first cycle peaks at the 1RM given in onboarding.
   that was only missed sets the next peak a step under the missed weight, never above the old
   peak: missing 102.5 on a 100 peak holds 100, missing 100 drops it to 97.5. A miss followed by
   a made single (add a set for the second attempt) is judged on the made one.
-- **After the deload.** Logging the last deload session starts the next cycle's Volume block at
+- **After the deload.** Logging the last deload session, or jumping past the deload onto the next
+  cycle's first session, starts the next cycle's Volume block at
   the new peak, with whatever volume the review earned, and opens the cycle report
   (`src/lib/cycleReport.ts`, `CycleReportSheet`): the peak change and test single, best e1RM
   against before the cycle, sessions and sets by phase, effort against target, how far
@@ -92,7 +93,9 @@ first cycle peaks at the 1RM given in onboarding.
   the cycle should be. It suggests a length: one step longer after a cycle that didn't raise the
   peak, one step shorter after two cycles in a row that raised it with almost nothing harder
   than target. Starting the cycle sets the Volume block's peak, length and frequency
-  (`sessionsPerWeek`, `cycleLength`), which the rest of the cycle carries. Until the first Volume session is logged, the peak
+  (`sessionsPerWeek`, `cycleLength`), which the rest of the cycle carries. Deloads saved before
+  reviews existed get one read off the cycle (`cycleReviewFor`): the realization block's peak
+  against the deload's, untested when its final slot was jumped over. Until the first Volume session is logged, the peak
   pill's Edit reopens the report. Deload weeks repeat one session; they have no light days.
 - **Versions.** Blocks saved before this carry no `schemeVersion` and run the original, shorter
   schemes until they finish. Every block made after that is version 2.
