@@ -60,8 +60,9 @@ first cycle peaks at the 1RM given in onboarding.
 - **Within a cycle.** Each logged session can move the loads still to come by one step (2.5%
   of the peak, at least 2.5kg), up to 7.5% either way. They come down on missed reps or a top
   set a full RPE over target (from RPE 8). They go up on a top set 1.5 RPE under target (sets of
-  six and up) or 1 under (five and fewer), or on every set beating its reps by two. Peak-block
-  sessions also cap the single at what their effort-adjusted e1RM says an RPE 9.5 single is.
+  six and up) or 1 under (five and fewer), or on every set beating its reps by two. A Peak-block
+  session that came in harder than planned (effort-adjusted e1RM against the plan's) scales
+  the single down by as much.
   The offset is replayed from the logs, so editing a session corrects it.
 - **Between cycles.** The next peak is the best effort-adjusted e1RM from the realization
   block. If the single was made at the peak or above at RPE 9.5 or easier (an unlogged RPE

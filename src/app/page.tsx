@@ -1368,7 +1368,7 @@ export default function Page() {
                       </span>
                       <span className={`text-xs ${style.meta}`}>· projected</span>
                     </div>
-                    <span className={`text-xs font-semibold ${style.label} opacity-60`}>{total} sessions</span>
+                    <span className={`text-xs font-semibold ${style.label} opacity-60`}>{total} session{total === 1 ? "" : "s"}</span>
                   </div>
                   <div className="h-1 rounded-full bg-black/10" />
                 </div>

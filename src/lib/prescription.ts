@@ -413,8 +413,8 @@ const PEAK_SINGLE_RPE = 9.5
  * a top set only counts as too hard from RPE 8 up. Light days move the load only on
  * missed reps.
  *
- * Peak-block sessions also cap what the single can be: never more than their
- * effort-adjusted e1RM says an RPE 9.5 single is, so a cycle that ran easy in its
+ * Peak-block sessions also cap what the single can be: a double or opener that came in
+ * harder than planned scales the peak down by as much, so a cycle that ran easy in its
  * eights can't send the lifter to a single the openers already showed isn't there.
  */
 function adjustOffset(offset: number, rx: Prescription, session: Session, anchorWeight: number, plannedReps: number | null): number {
@@ -437,20 +437,19 @@ function adjustOffset(offset: number, rx: Prescription, session: Session, anchor
     else if (easyByRpe || easyByReps) next += step
   }
   if (rx.sessionType === "Peak") {
+    // Measured against what the plan expected of this session, not as an absolute max:
+    // Brzycki reads low on singles and doubles next to the effort chart the targets come
+    // from, and the bias cancels when both sides use it. A session on target caps nothing.
     const rated = working.filter((s) => s.rpe != null)
     if (rated.length > 0) {
-      const e1 = Math.max(...rated.map((s) => effortE1RM(s.kg, s.reps, s.rpe!)))
-      const single = roundToPlate(e1 / singleFactor())
-      next = Math.min(next, single - anchorWeight)
+      const shown = Math.max(...rated.map((s) => effortE1RM(s.kg, s.reps, s.rpe!)))
+      const expected = effortE1RM(rx.weight, rx.reps, rx.rpe)
+      const peak = roundToPlate(((anchorWeight + offset) * shown) / expected)
+      next = Math.min(next, peak - anchorWeight)
     }
   }
   const limit = roundToPlate(anchorWeight * MAX_OFFSET_PCT)
   return Math.min(limit, Math.max(-limit, next))
-}
-
-/** e1RM over load for a single at the planned peak effort (RPE 9.5 ≈ 1.4% under max). */
-function singleFactor(): number {
-  return 36 / (37 - (1 + (10 - PEAK_SINGLE_RPE)))
 }
 
 /**
