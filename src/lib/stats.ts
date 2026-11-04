@@ -12,7 +12,7 @@ export function getBestE1RM(sessions: Session[]): number | null {
 export function getBestWeight(sessions: Session[]): number | null {
   const all = sessions
     .filter((s) => s.confirmed)
-    .flatMap((s) => s.sets.filter((set) => !set.isWarmup))
+    .flatMap((s) => s.sets.filter((set) => !set.isWarmup && set.reps > 0))
     .map((s) => s.kg)
     .filter((v): v is number => v != null)
   return all.length > 0 ? Math.max(...all) : null
@@ -70,10 +70,10 @@ export function sessionWork(session: Session, mainLiftLabel = "Main Lift"): Work
   let exercises = working.length > 0 ? 1 : 0
   let sets = working.length
   let volume = working.reduce((sum, s) => sum + s.kg * s.reps, 0)
+  // A missed attempt (0 reps) was never lifted, so it can't be the top set.
+  const made = working.filter((s) => s.reps > 0)
   let topSet: { kg: number; reps: number } | null =
-    working.length > 0
-      ? working.reduce((best, s) => (s.kg > best.kg ? s : best), working[0])
-      : null
+    made.length > 0 ? made.reduce((best, s) => (s.kg > best.kg ? s : best), made[0]) : null
   let topSetLabel = mainLiftLabel
 
   let cardioMinutes = 0

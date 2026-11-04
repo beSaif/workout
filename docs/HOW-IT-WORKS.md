@@ -71,6 +71,14 @@ first cycle peaks at the 1RM given in onboarding.
   (up to two). One that doesn't drops those sets and gets a full deload week. Two in a row
   switch accumulation between eights-to-sixes and sixes-to-fours. A jumped-over test changes
   nothing. The deload's header says what happened.
+- **Missed sets.** The reps picker starts at "miss" (0 reps). A missed set never counts as
+  lifted in stats or records. Mid-cycle it takes a step off like any missed rep. A peak single
+  that was only missed sets the next peak a step under the missed weight, never above the old
+  peak: missing 102.5 on a 100 peak holds 100, missing 100 drops it to 97.5. A miss followed by
+  a made single (add a set for the second attempt) is judged on the made one.
+- **After the deload.** Logging the last deload session starts the next cycle's Volume block at
+  the new peak, with whatever volume the review earned. Deload weeks repeat one session; they
+  have no light days.
 - **Versions.** Blocks saved before this carry no `schemeVersion` and run the original, shorter
   schemes until they finish. Every block made after that is version 2.
 

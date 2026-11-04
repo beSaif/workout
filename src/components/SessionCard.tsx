@@ -170,7 +170,7 @@ export default function SessionCard({
           <div className="flex flex-col gap-1">
             {topReps != null && (
               <span className="text-xl font-bold text-[#444444] leading-none">
-                {topReps} {topReps === 1 ? "rep" : "reps"}
+                {topReps === 0 ? "missed" : `${topReps} ${topReps === 1 ? "rep" : "reps"}`}
               </span>
             )}
             {setCount > 0 && (
@@ -325,7 +325,7 @@ export default function SessionCard({
           <div className="flex flex-col gap-1">
             {topReps != null && (
               <span className="text-xl font-bold text-[#444444] leading-none">
-                {topReps} {topReps === 1 ? "rep" : "reps"}
+                {topReps === 0 ? "missed" : `${topReps} ${topReps === 1 ? "rep" : "reps"}`}
               </span>
             )}
             {setCount > 0 && (

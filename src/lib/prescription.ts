@@ -198,8 +198,14 @@ const MAX_ANCHOR_CHANGE = 0.05
 /** Effort assumed for a realization set logged without an RPE: on target, so skipping the RPE is never the faster way up. */
 const ASSUMED_PEAK_RPE = 9.5
 
+/** Working sets that were lifted: at least one rep. */
 function getWorkingSets(session: Session) {
   return session.sets.filter((s) => !s.isWarmup && s.kg > 0 && s.reps > 0)
+}
+
+/** Every working set attempted, missed ones (logged at 0 reps) included. */
+function getAttemptedSets(session: Session) {
+  return session.sets.filter((s) => !s.isWarmup && s.kg > 0)
 }
 
 function chrono(a: Session, b: Session): number {
@@ -241,7 +247,7 @@ export function blockLengthFor(
  * `asOf`. With under two weeks of history there is nothing to measure yet.
  */
 export function measureSessionsPerWeek(sessions: Session[], asOf: string | null): number {
-  const dated = sessions.filter((s) => s.confirmed && s.date && getWorkingSets(s).length > 0)
+  const dated = sessions.filter((s) => s.confirmed && s.date && getAttemptedSets(s).length > 0)
   if (dated.length === 0) return DEFAULT_SESSIONS_PER_WEEK
   const end = asOf
     ? new Date(asOf).getTime()
@@ -301,7 +307,10 @@ export function prescribeBlockSession(
   const scheme = ownScheme ? schemes[phase] : schemes.accumulation
   const schemePhase: BlockPhase = ownScheme ? phase : "accumulation"
   const type = PHASE_SESSION_TYPE[schemePhase]
-  const { step, light } = slotEntry(scheme.length, blockLength ?? scheme.length, sessionIndexInBlock)
+  const slot = slotEntry(scheme.length, blockLength ?? scheme.length, sessionIndexInBlock)
+  const step = slot.step
+  // A deload is light already: a deload week repeats its one session, never lighter still.
+  const light = slot.light && schemePhase !== "deload"
   const entry = scheme[step]
   const base = schemeLoads(scheme, anchorWeight)[step] + loadOffset
   // Volume a cycle has earned goes on the heavy accumulation days; light days stay light.
@@ -419,10 +428,12 @@ const PEAK_SINGLE_RPE = 9.5
  */
 function adjustOffset(offset: number, rx: Prescription, session: Session, anchorWeight: number, plannedReps: number | null): number {
   if (rx.rpe === null) return offset
-  const working = getWorkingSets(session)
-  if (working.length === 0) return offset
-  const target = plannedReps ?? Math.max(...working.map((s) => s.reps))
-  const missed = working.some((s) => s.reps < target)
+  const attempted = getAttemptedSets(session)
+  if (attempted.length === 0) return offset
+  const working = attempted.filter((s) => s.reps > 0)
+  const target = plannedReps ?? Math.max(1, ...working.map((s) => s.reps))
+  // A set logged at 0 reps is a miss, the clearest one there is.
+  const missed = attempted.some((s) => s.reps < target)
   const rpes = working.map((s) => s.rpe).filter((r): r is number => r != null)
   const top = rpes.length > 0 ? Math.max(...rpes) : null
   const step = loadStep(anchorWeight)
@@ -432,7 +443,8 @@ function adjustOffset(offset: number, rx: Prescription, session: Session, anchor
     const margin = rx.reps >= HIGH_REPS ? EASY_RPE_MARGIN.highReps : EASY_RPE_MARGIN.lowReps
     const tooHard = top !== null && top - Math.max(rx.rpe, 7) >= 1
     const easyByRpe = top !== null && rx.rpe - top >= margin
-    const easyByReps = plannedReps !== null && working.every((s) => s.reps >= plannedReps + EXTRA_REPS_EASY)
+    const easyByReps =
+      plannedReps !== null && working.length > 0 && working.every((s) => s.reps >= plannedReps + EXTRA_REPS_EASY)
     if (tooHard) next -= step
     else if (easyByRpe || easyByReps) next += step
   }
@@ -523,8 +535,10 @@ export interface CycleReview {
  * After a realization block, the peak for the next cycle: the best effort-adjusted e1RM
  * the block showed, and at least one load step over the single when that was made at
  * the planned peak or above, no harder than RPE 9.5. So a cycle that goes exactly to
- * plan raises the peak a step, a fast single raises it by what it showed, a grinder
- * holds it and a miss lowers it. Sets logged without an RPE count as on target. The
+ * plan raises the peak a step, a fast single raises it by what it showed and a grinder
+ * holds it. A single that was only missed (logged at 0 reps) sets the peak a step under
+ * the missed weight, never above the old peak: missing 102.5 on a 100 peak holds 100,
+ * missing 100 drops it to 97.5. Sets logged without an RPE count as on target. The
  * change is held to 5% either way per cycle, rounded down to the plate.
  */
 export function reviewCycle(completedRealizationBlock: TrainingBlock, sessions: Session[]): CycleReview {
@@ -534,14 +548,14 @@ export function reviewCycle(completedRealizationBlock: TrainingBlock, sessions: 
     .filter((s) => s.confirmed && block.sessionIds.includes(s.id))
     .sort(chrono)
   const sets = logged.flatMap(getWorkingSets)
-  if (sets.length === 0) return { anchor, outcome: "untested" }
+  if (logged.flatMap(getAttemptedSets).length === 0) return { anchor, outcome: "untested" }
 
   const finalSlot = getBlockLength(block) - 1
   const slots = blockSlotNumbers(block, logged.map((s) => s.id))
   const test = logged.find((s) => slots.get(s.id) === finalSlot + 1)
   const testSkipped = block.skippedSlots?.includes(finalSlot) ?? false
 
-  let best = Math.max(...sets.map((s) => effortE1RM(s.kg, s.reps, s.rpe ?? ASSUMED_PEAK_RPE)))
+  let best = sets.length > 0 ? Math.max(...sets.map((s) => effortE1RM(s.kg, s.reps, s.rpe ?? ASSUMED_PEAK_RPE))) : anchor
   const made = test
     ? getWorkingSets(test).filter((s) => s.kg >= anchor && (s.rpe ?? ASSUMED_PEAK_RPE) <= PEAK_SINGLE_RPE)
     : []
@@ -549,6 +563,10 @@ export function reviewCycle(completedRealizationBlock: TrainingBlock, sessions: 
   // but taper work is no grounds for cutting it.
   if (!test || testSkipped) best = Math.max(best, anchor)
   else if (made.length > 0) best = Math.max(best, Math.max(...made.map((s) => s.kg)) + loadStep(anchor))
+  else if (getWorkingSets(test).length === 0) {
+    const missedKg = getAttemptedSets(test).map((s) => s.kg)
+    if (missedKg.length > 0) best = Math.min(anchor, Math.max(...missedKg) - loadStep(anchor))
+  }
 
   const capped = Math.min(anchor * (1 + MAX_ANCHOR_CHANGE), Math.max(anchor * (1 - MAX_ANCHOR_CHANGE), best))
   // Down to the plate, never up: a peak is earned, not rounded into.
