@@ -20,10 +20,6 @@ export const WHATS_NEW: WhatsNewRelease[] = [
     version: 13,
     items: [
       {
-        title: "Dark mode",
-        body: "The app now follows your phone's light or dark setting.",
-      },
-      {
         title: "A shorter Home",
         body: "Log Session is one big button. The sessions still to come sit right under it, and logged sessions are one line each: tap one for Details, Share, Edit and Unlog.",
       },

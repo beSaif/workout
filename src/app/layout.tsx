@@ -8,10 +8,7 @@ export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   // Pinch-zoom stays available: people who need larger text must be able to get it.
-  themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#1e3a5f" },
-    { media: "(prefers-color-scheme: dark)", color: "#0f1113" },
-  ],
+  themeColor: "#1e3a5f",
   viewportFit: "cover",
 }
 
@@ -33,7 +30,7 @@ export default function RootLayout({
   return (
     <html lang="en">
       <head>
-        <meta name="color-scheme" content="light dark" />
+        <meta name="color-scheme" content="light" />
         <script dangerouslySetInnerHTML={{ __html: `try{var p=screen.orientation.lock('portrait');if(p&&p.catch)p.catch(function(){})}catch(_){}` }} />
         {/*
           Chrome fires beforeinstallprompt once, often before React has hydrated, and the

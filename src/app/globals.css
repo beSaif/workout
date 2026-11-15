@@ -92,9 +92,11 @@
   --color-phase-rebuild-muted: #b06a1e;
 }
 
-/* Dark follows the phone's setting. Only the token values change; no component knows. */
-@media (prefers-color-scheme: dark) {
-  :root {
+/* The dark palette. Switched off for now: nothing sets data-theme, so the app is always
+   light. To turn it on, follow the phone's setting by wrapping this block's contents in
+   `@media (prefers-color-scheme: dark) { :root { … } }`, and set color-scheme (below and
+   in layout.tsx) back to "light dark". Only the token values change; no component knows. */
+:root[data-theme="dark"] {
     --color-surface: #0f1113;
     --color-raised: #191d21;
     --color-surface-pop: #3a4249;
@@ -179,7 +181,6 @@
     --color-amber-600: #f5b041;
     --color-amber-700: #f7c063;
     --color-amber-900: #fbd38d;
-  }
 }
 
 @theme inline {
@@ -214,7 +215,7 @@
 }
 
 html {
-  color-scheme: light dark;
+  color-scheme: light;
 }
 
 /* Native feel: the page never drifts sideways and never stretches past its top or
@@ -299,9 +300,7 @@ body {
   --dot-ink: #ffffff;
 }
 .dot-body-dark { background: #ffffff; --dot-ink: #1e3a5f; }
-@media (prefers-color-scheme: dark) {
-  .dot-shadow { background: rgba(0, 0, 0, 0.4); }
-}
+:root[data-theme="dark"] .dot-shadow { background: rgba(0, 0, 0, 0.4); }
 .dot-eye {
   position: absolute; background: var(--dot-ink); border-radius: 3px;
   animation: dot-blink 5.2s infinite;
