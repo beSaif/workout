@@ -49,7 +49,7 @@ import BalancedHome from "@/components/balanced/BalancedHome"
 import LayoffBanner from "@/components/LayoffBanner"
 import DotBuddy from "@/components/buddy/DotBuddy"
 import { buildDotCue } from "@/lib/buddy"
-import WeightCard from "@/components/WeightCard"
+import WeightChip from "@/components/WeightChip"
 import WeightCheckInSheet from "@/components/WeightCheckInSheet"
 import WeightOptInSheet, { useWeightOptIn } from "@/components/WeightOptInSheet"
 import { bwForSession, dateKey, upsertEntry, weighInDue } from "@/lib/weight"
@@ -1254,6 +1254,13 @@ export default function Page() {
           >
             hello, {firstName}
           </h1>
+          {/* Bodyweight lives in the header's spare space, so it serves both modes
+              without costing home a row. ml-auto parks it beside the menu. */}
+          {profile.weighInDaily && (
+            <div className="ml-auto mr-3 flex">
+              <WeightChip entries={weights} loading={!weightsReady} onLog={openManualWeighIn} />
+            </div>
+          )}
           {/* Padding with a matching negative margin: a 40px touch target in a 24px row. */}
           <button
             onClick={() => setDrawerOpen(true)}
@@ -1315,12 +1322,6 @@ export default function Page() {
             onRestart={handleRestartBlock}
             onDismiss={dismissLayoffBanner}
           />
-        )}
-
-        {/* Bodyweight trend. Above the mode split so one insertion serves both modes —
-            bodyweight is not a lift-focused or Balanced concern, it's just yours. */}
-        {profile.weighInDaily && (
-          <WeightCard entries={weights} loading={!weightsReady} onLog={openManualWeighIn} />
         )}
 
         {/* Balanced mode: the next session, how balanced the training is, recent ones */}
