@@ -3,42 +3,44 @@
 import Link from "next/link"
 import { GymbroMessage, UserPresence } from "@/lib/types"
 import { relativeDate } from "@/lib/time"
+import PixelAvatar from "@/components/PixelAvatar"
 
-function initials(name: string): string {
-  return name
-    .split(" ")
-    .slice(0, 2)
-    .map((w) => w[0]?.toUpperCase() ?? "")
-    .join("")
-}
+/** A gymbro who has not trained for this many days fades back in the rail. */
+const QUIET_AFTER_DAYS = 7
 
-const TRACK_WIDTH_PX = 360
-const AVATAR_PX = 40
-const MIN_GAP_PX = 44
-const THIRTY_DAYS_HOURS = 720
+type Status = "live" | "today" | "recent" | "quiet"
 
-const CHECKPOINTS: { hours: number; label: string }[] = [
-  { hours: 0, label: "now" },
-  { hours: 336, label: "2w+" },
-]
-
-function hoursAgo(dateStr: string | null | undefined): number {
+/** Whole calendar days since `dateStr`, or Infinity for someone who never trained. */
+function daysSince(dateStr: string | null): number {
   if (!dateStr) return Infinity
-  return Math.max(0, (Date.now() - new Date(dateStr).getTime()) / 3_600_000)
+  const now = new Date()
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime()
+  const d = new Date(dateStr)
+  const day = new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime()
+  return Math.max(0, Math.round((today - day) / 86_400_000))
 }
 
-function positionPct(h: number, maxH: number): number {
-  if (!isFinite(h)) return 100
-  return (Math.log(h + 1) / Math.log(maxH + 1)) * 100
+function minutesIn(startedAt: string | null | undefined): number | null {
+  if (!startedAt) return null
+  const mins = Math.floor((Date.now() - new Date(startedAt).getTime()) / 60_000)
+  return mins >= 0 ? mins : null
+}
+
+/** The ring is the status: green while lifting, navy once trained today, hairline otherwise. */
+const RING: Record<Status, string> = {
+  live: "ring-2 ring-green-500 ring-offset-2 ring-offset-white",
+  today: "ring-2 ring-[#1e3a5f] ring-offset-2 ring-offset-white",
+  recent: "ring-1 ring-[#dddddd] ring-offset-2 ring-offset-white",
+  quiet: "ring-1 ring-[#dddddd] ring-offset-2 ring-offset-white opacity-45",
 }
 
 interface Entry {
   key: string
   presence: UserPresence
   isMe: boolean
-  lastLiftDate: string | null
-  hours: number
-  posPct: number
+  status: Status
+  days: number
+  timeLabel: string
   msgCount: number
 }
 
@@ -53,6 +55,10 @@ interface Props {
   onAvatarClick?: (presence: UserPresence) => void
 }
 
+/**
+ * The gymbros as a rail of faces. Order carries recency and the ring carries
+ * status, so the row needs no axis and holds any number of people: it scrolls.
+ */
 export default function GymbrosTimeline({
   friendPresences,
   currentUserEmail,
@@ -63,201 +69,133 @@ export default function GymbrosTimeline({
   messagesByFriend,
   onAvatarClick,
 }: Props) {
-  const friends = friendPresences.filter((p) => p.email !== currentUserEmail)
-
-  const mePresence: UserPresence = {
-    email: currentUserEmail,
-    name: currentUserName,
-    inSession: currentUserInSession,
-    startedAt: null,
-  }
-
-  const meEntry = {
-    presence: mePresence,
-    isMe: true,
-    lastLiftDate: currentUserLastSessionDate,
-  }
-
-  const friendEntries = friends.map((p) => {
-    const k = p.email.trim().toLowerCase()
+  function toEntry(presence: UserPresence, isMe: boolean, lastLiftDate: string | null): Entry {
+    const key = presence.email.trim().toLowerCase()
+    const days = daysSince(lastLiftDate)
+    const live = presence.inSession
+    const status: Status = live
+      ? "live"
+      : days === 0
+        ? "today"
+        : days < QUIET_AFTER_DAYS
+          ? "recent"
+          : "quiet"
+    const mins = live ? minutesIn(presence.startedAt) : null
+    const timeLabel = live
+      ? mins != null && mins > 0
+        ? `${mins} min in`
+        : "lifting now"
+      : lastLiftDate
+        ? relativeDate(lastLiftDate)
+        : "never"
     return {
-      presence: p,
-      isMe: false,
-      lastLiftDate: friendLastActive?.[k] ?? null,
+      key,
+      presence,
+      isMe,
+      status,
+      days,
+      timeLabel,
+      msgCount: isMe ? 0 : messagesByFriend?.[key]?.length ?? 0,
     }
-  })
-
-  const allRaw = [meEntry, ...friendEntries]
-
-  const finiteHours = allRaw
-    .map((e) => hoursAgo(e.lastLiftDate))
-    .filter((h) => isFinite(h))
-  const maxH = Math.max(THIRTY_DAYS_HOURS, ...finiteHours)
-
-  const entryHours = allRaw.map((e) => {
-    if (e.isMe && currentUserInSession) return 0
-    if (!e.isMe && e.presence.inSession && e.presence.startedAt) return hoursAgo(e.presence.startedAt)
-    return hoursAgo(e.lastLiftDate)
-  })
-  const finiteEntryHours = entryHours.filter((h) => isFinite(h))
-  const minFiniteH = finiteEntryHours.length > 0 ? Math.min(...finiteEntryHours) : 0
-
-  const entries: Entry[] = allRaw
-    .map((e, i) => {
-      const h = entryHours[i]
-      const shifted = isFinite(h) ? Math.max(0, h - minFiniteH) : h
-      const k = e.presence.email.trim().toLowerCase()
-      return {
-        key: k,
-        presence: e.presence,
-        isMe: e.isMe,
-        lastLiftDate: e.lastLiftDate,
-        hours: h,
-        posPct: positionPct(shifted, maxH),
-        msgCount: e.isMe ? 0 : messagesByFriend?.[k]?.length ?? 0,
-      }
-    })
-    .sort((a, b) => a.posPct - b.posPct)
-
-  // Collision avoidance: push items right if they'd overlap.
-  let lastPx = -Infinity
-  const usableWidth = TRACK_WIDTH_PX - AVATAR_PX
-  for (const e of entries) {
-    let px = (e.posPct / 100) * usableWidth + AVATAR_PX / 2
-    if (px - lastPx < MIN_GAP_PX) px = lastPx + MIN_GAP_PX
-    e.posPct = Math.min(100, (px / TRACK_WIDTH_PX) * 100)
-    lastPx = px
   }
+
+  const me = toEntry(
+    { email: currentUserEmail, name: currentUserName, inSession: currentUserInSession, startedAt: null },
+    true,
+    currentUserLastSessionDate
+  )
+
+  // Unread messages first, then whoever is lifting, then most recent session.
+  const friends = friendPresences
+    .filter((p) => p.email !== currentUserEmail)
+    .map((p) => toEntry(p, false, friendLastActive?.[p.email.trim().toLowerCase()] ?? null))
+    .sort(
+      (a, b) =>
+        Number(b.msgCount > 0) - Number(a.msgCount > 0) ||
+        Number(b.status === "live") - Number(a.status === "live") ||
+        a.days - b.days ||
+        a.presence.name.localeCompare(b.presence.name)
+    )
+
+  const itemClass =
+    "shrink-0 w-[58px] snap-start flex flex-col items-center text-center active:opacity-70 transition-opacity"
 
   return (
     <div className="mb-4">
       <p className="text-[10px] uppercase tracking-widest font-medium text-[#aaaaaa] mb-2">gymbros</p>
 
-      {/* Tall enough for an avatar (40px) and its two label lines, and no more. */}
-      <div className="relative h-[68px] w-full">
-        {/* Rail */}
-        <div className="absolute left-0 right-0 top-[20px] h-px bg-[#e8e8e8]" />
-
-        {/* Checkpoint ticks + bottom-axis labels */}
-        {CHECKPOINTS.map((cp, i) => {
-          const pct = positionPct(cp.hours, maxH)
-          const isFirst = i === 0
-          const isLast = i === CHECKPOINTS.length - 1
-          const labelTransform = isFirst
-            ? "translateX(0)"
-            : isLast
-              ? "translateX(-100%)"
-              : "translateX(-50%)"
-          return (
-            <span
-              key={cp.label}
-              className="absolute text-[9px] text-[#bbbbbb] font-medium whitespace-nowrap bg-white px-1 leading-none"
-              style={{ left: `${pct}%`, top: "20px", transform: `${labelTransform} translateY(-50%)` }}
-            >
-              {cp.label}
-            </span>
-          )
-        })}
-
-        {entries.map((e) => {
-          const timeLabel = (e.isMe ? currentUserInSession : e.presence.inSession)
-            ? "lifting now"
-            : e.lastLiftDate
-              ? relativeDate(e.lastLiftDate)
-              : "never"
-          const displayName = e.isMe ? "me" : e.presence.name.split(" ")[0]
-
-          const avatar = (
-            <div className="relative">
-              <div
-                className={`w-10 h-10 rounded-full bg-[#f0f0f0] flex items-center justify-center text-xs font-bold text-[#555555] select-none active:opacity-70 transition-opacity ${
-                  e.isMe ? "ring-2 ring-[#1e3a5f]/40" : ""
-                }`}
-              >
-                {initials(e.presence.name)}
-              </div>
-              {e.presence.inSession && (
-                <span className="absolute bottom-0 right-0 w-3 h-3 rounded-full bg-green-500 border-2 border-white">
-                  <span className="absolute inset-0 rounded-full bg-green-500 animate-ping opacity-75" />
-                </span>
-              )}
-              {e.msgCount > 0 && (
-                <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-0.5 bg-red-500 rounded-full text-white text-[9px] font-bold flex items-center justify-center border-2 border-white leading-none">
-                  {e.msgCount > 9 ? "9+" : e.msgCount}
-                </span>
-              )}
-            </div>
-          )
-
-          const labelBlock = (
-            <div className="flex flex-col items-center gap-0.5 mt-1 leading-none">
-              <span className="text-[10px] text-[#aaaaaa] font-medium">{displayName}</span>
-              <span className="text-[9px] text-[#cccccc]">{timeLabel}</span>
-            </div>
-          )
+      {/* Bleeds to the screen edge so a face slides off the side, not into a margin. */}
+      <ul
+        className="flex gap-3.5 -mx-4 px-4 pt-1.5 pb-0.5 overflow-x-auto snap-x snap-proximity scroll-px-4
+                   [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+      >
+        {[me, ...friends].map((e) => {
+          const name = e.isMe ? "me" : e.presence.name.split(" ")[0]
+          const label = e.isMe
+            ? `Your card, ${e.timeLabel}`
+            : `${e.presence.name}, ${e.timeLabel}${e.msgCount > 0 ? `, ${e.msgCount} new message${e.msgCount === 1 ? "" : "s"}` : ""}`
 
           const inner = (
             <>
-              {avatar}
-              {labelBlock}
+              <span className="relative">
+                <span
+                  className={`w-[50px] h-[50px] rounded-full bg-[#eef1f5] flex items-center justify-center ${RING[e.status]}`}
+                >
+                  <PixelAvatar seed={e.presence.email} colour="#1e3a5f" className="w-[30px] h-[30px]" />
+                </span>
+                {e.msgCount > 0 && (
+                  <span className="absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] px-0.5 bg-red-500 rounded-full text-white text-[9px] font-bold flex items-center justify-center border-2 border-white leading-none">
+                    {e.msgCount > 9 ? "9+" : e.msgCount}
+                  </span>
+                )}
+              </span>
+              <span className="mt-2 max-w-full truncate text-[11px] font-semibold text-[#111111] leading-tight">
+                {name}
+              </span>
+              <span
+                className={`text-[10px] leading-tight whitespace-nowrap ${
+                  e.status === "live" ? "font-semibold text-green-700" : "text-[#aaaaaa]"
+                }`}
+              >
+                {e.timeLabel}
+              </span>
             </>
           )
 
-          const wrapperClass = "absolute top-0 flex flex-col items-center"
-          const style = { left: `${e.posPct}%`, transform: "translateX(-50%)", transition: "left 0.6s cubic-bezier(0.32, 0.72, 0, 1)" }
-
-          if (e.isMe) {
-            // Your own avatar opens your card, not a friend page: the friend route
-            // is keyed by a gymbro you have, and you are not your own gymbro.
-            return (
-              <Link key={e.key} href="/me" className={wrapperClass} style={style}>
-                {inner}
-              </Link>
-            )
-          }
-
-          if (e.msgCount > 0) {
-            return (
-              <button
-                key={e.key}
-                onClick={() => onAvatarClick?.(e.presence)}
-                className={wrapperClass}
-                style={style}
-              >
-                {inner}
-              </button>
-            )
-          }
-
           return (
-            <Link
-              key={e.key}
-              href={`/friends/${encodeURIComponent(e.presence.email)}`}
-              className={wrapperClass}
-              style={style}
-            >
-              {inner}
-            </Link>
+            <li key={e.key} className="shrink-0">
+              {e.isMe ? (
+                // Your own face opens your card, not a friend page: the friend route
+                // is keyed by a gymbro you have, and you are not your own gymbro.
+                <Link href="/me" className={itemClass} aria-label={label}>
+                  {inner}
+                </Link>
+              ) : e.msgCount > 0 ? (
+                <button onClick={() => onAvatarClick?.(e.presence)} className={itemClass} aria-label={label}>
+                  {inner}
+                </button>
+              ) : (
+                <Link
+                  href={`/friends/${encodeURIComponent(e.presence.email)}`}
+                  className={itemClass}
+                  aria-label={label}
+                >
+                  {inner}
+                </Link>
+              )}
+            </li>
           )
         })}
 
-        {friends.length === 0 && (
-          <Link
-            href="/gymbros"
-            className="absolute top-0 flex flex-col items-center"
-            style={{ left: "55%", transform: "translateX(-50%)" }}
-          >
-            <div className="w-10 h-10 rounded-full border-2 border-dashed border-[#cccccc] flex items-center justify-center text-[#aaaaaa] text-lg font-light active:opacity-70 transition-opacity">
+        <li className="shrink-0">
+          <Link href="/gymbros" className={itemClass} aria-label="Add a gymbro">
+            <span className="w-[50px] h-[50px] rounded-full border-[1.5px] border-dashed border-[#cccccc] flex items-center justify-center text-[#aaaaaa] text-xl font-light">
               +
-            </div>
-            <div className="flex flex-col items-center gap-0.5 mt-1 leading-none">
-              <span className="text-[10px] text-[#aaaaaa] font-medium">add gymbro</span>
-              <span className="text-[9px] text-[#cccccc]">&nbsp;</span>
-            </div>
+            </span>
+            <span className="mt-2 text-[11px] font-medium text-[#aaaaaa] leading-tight">add</span>
           </Link>
-        )}
-      </div>
-
+        </li>
+      </ul>
     </div>
   )
 }

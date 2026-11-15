@@ -1239,35 +1239,33 @@ export default function Page() {
         />
       )}
 
-      <main className="mx-auto w-full max-w-[393px] px-4 pt-[calc(1.5rem+env(safe-area-inset-top))] pb-[calc(4rem+env(safe-area-inset-bottom))]">
-        {/* Header */}
-        <header className="mb-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-xs text-[#bbbbbb] lowercase mb-0.5">best workout tracker.</p>
-              <h1
-                className="text-2xl font-semibold text-[#111111] tracking-tight select-none cursor-pointer"
-                onPointerDown={handleTitlePointerDown}
-                onPointerUp={handleTitlePointerUp}
-                onPointerLeave={handleTitlePointerCancel}
-                role="button"
-                aria-label="Open profile"
-              >
-                hello, {firstName}
-              </h1>
-            </div>
-            <button
-              onClick={() => setDrawerOpen(true)}
-              className="p-1 -mr-1 text-[#555555] hover:text-[#111111] transition-colors shrink-0"
-              aria-label="Open menu"
-            >
-              <svg width="20" height="14" viewBox="0 0 20 14" fill="currentColor" aria-hidden="true">
-                <rect y="0" width="20" height="2" rx="1" />
-                <rect y="6" width="20" height="2" rx="1" />
-                <rect y="12" width="20" height="2" rx="1" />
-              </svg>
-            </button>
-          </div>
+      <main className="mx-auto w-full max-w-[393px] px-4 pt-[calc(1rem+env(safe-area-inset-top))] pb-[calc(4rem+env(safe-area-inset-bottom))]">
+        {/* Header: one slim line. The menu is the only way to History, Exercise Selection,
+            the Dot/Haptics switches and Sign out, so it stays; the greeting stays small
+            because it is also the tap target for the profile (long-press: dev tools). */}
+        <header className="mb-3 flex h-6 items-center justify-between">
+          <h1
+            className="text-base font-semibold text-[#111111] tracking-tight select-none cursor-pointer"
+            onPointerDown={handleTitlePointerDown}
+            onPointerUp={handleTitlePointerUp}
+            onPointerLeave={handleTitlePointerCancel}
+            role="button"
+            aria-label="Open profile"
+          >
+            hello, {firstName}
+          </h1>
+          {/* Padding with a matching negative margin: a 40px touch target in a 24px row. */}
+          <button
+            onClick={() => setDrawerOpen(true)}
+            className="p-2.5 -m-2.5 text-[#555555] hover:text-[#111111] transition-colors shrink-0"
+            aria-label="Open menu"
+          >
+            <svg width="20" height="14" viewBox="0 0 20 14" fill="currentColor" aria-hidden="true">
+              <rect y="0" width="20" height="2" rx="1" />
+              <rect y="6" width="20" height="2" rx="1" />
+              <rect y="12" width="20" height="2" rx="1" />
+            </svg>
+          </button>
         </header>
 
         {/* Gymbros timeline */}
