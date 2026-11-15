@@ -252,8 +252,7 @@ export default function Page() {
   const longPressFired = useRef(false)
   const sessionsRef = useRef<Session[]>([])
 
-  // A tap on the menu opens the drawer; a long-press (800ms) opens dev tools.
-  function handleMenuPointerDown() {
+  function handleTitlePointerDown() {
     longPressFired.current = false
     longPressTimer.current = setTimeout(() => {
       longPressFired.current = true
@@ -261,8 +260,17 @@ export default function Page() {
     }, 800)
   }
 
-  // Released or slid off before the long-press landed: the click handler takes it from here.
-  function handleMenuPointerCancel() {
+  // Short tap on the title opens the profile; long-press (800ms) opens dev tools.
+  function handleTitlePointerUp() {
+    if (longPressTimer.current) {
+      clearTimeout(longPressTimer.current)
+      longPressTimer.current = null
+      if (!longPressFired.current) router.push("/profile")
+    }
+  }
+
+  // Pointer left the title before release — cancel without navigating.
+  function handleTitlePointerCancel() {
     if (longPressTimer.current) {
       clearTimeout(longPressTimer.current)
       longPressTimer.current = null
@@ -1142,6 +1150,7 @@ export default function Page() {
         : ""
     return effort + adjust
   })()
+  const firstName = profile.name.split(" ")[0]
   // Phases still to come are sized from the frequency chosen for this cycle, else the measured one.
   const planPerWeek = activeBlock?.sessionsPerWeek ?? measureSessionsPerWeek(confirmed, null)
   // A new cycle that hasn't started yet can still reopen the report of the one before it.
@@ -1231,9 +1240,33 @@ export default function Page() {
       )}
 
       <main className="mx-auto w-full max-w-[393px] px-4 pt-[calc(1rem+env(safe-area-inset-top))] pb-[calc(4rem+env(safe-area-inset-bottom))]">
-        {/* No header row: the gymbros label line carries the menu, which is the only
-            way to History, Exercise Selection, Profile and Sign out. */}
-        <h1 className="sr-only">Home</h1>
+        {/* Header: one slim line. The menu is the only way to History, Exercise Selection,
+            the Dot/Haptics switches and Sign out, so it stays; the greeting stays small
+            because it is also the tap target for the profile (long-press: dev tools). */}
+        <header className="mb-3 flex h-6 items-center justify-between">
+          <h1
+            className="text-base font-semibold text-[#111111] tracking-tight select-none cursor-pointer"
+            onPointerDown={handleTitlePointerDown}
+            onPointerUp={handleTitlePointerUp}
+            onPointerLeave={handleTitlePointerCancel}
+            role="button"
+            aria-label="Open profile"
+          >
+            hello, {firstName}
+          </h1>
+          {/* Padding with a matching negative margin: a 40px touch target in a 24px row. */}
+          <button
+            onClick={() => setDrawerOpen(true)}
+            className="p-2.5 -m-2.5 text-[#555555] hover:text-[#111111] transition-colors shrink-0"
+            aria-label="Open menu"
+          >
+            <svg width="20" height="14" viewBox="0 0 20 14" fill="currentColor" aria-hidden="true">
+              <rect y="0" width="20" height="2" rx="1" />
+              <rect y="6" width="20" height="2" rx="1" />
+              <rect y="12" width="20" height="2" rx="1" />
+            </svg>
+          </button>
+        </header>
 
         {/* Gymbros timeline */}
         <GymbrosTimeline
@@ -1245,25 +1278,6 @@ export default function Page() {
           friendLastActive={friendLastActive}
           messagesByFriend={messagesByFriend}
           onAvatarClick={handleAvatarClick}
-          labelAction={
-            // Padding with a matching negative margin: a 40px touch target on a 20px line.
-            <button
-              onClick={() => {
-                if (!longPressFired.current) setDrawerOpen(true)
-              }}
-              onPointerDown={handleMenuPointerDown}
-              onPointerUp={handleMenuPointerCancel}
-              onPointerLeave={handleMenuPointerCancel}
-              className="p-2.5 -m-2.5 text-[#555555] hover:text-[#111111] transition-colors shrink-0 select-none"
-              aria-label="Open menu"
-            >
-              <svg width="20" height="14" viewBox="0 0 20 14" fill="currentColor" aria-hidden="true">
-                <rect y="0" width="20" height="2" rx="1" />
-                <rect y="6" width="20" height="2" rx="1" />
-                <rect y="12" width="20" height="2" rx="1" />
-              </svg>
-            </button>
-          }
         />
 
         {/* Notification opt-in banner (needed on iOS PWA where auto-subscribe is blocked) */}
