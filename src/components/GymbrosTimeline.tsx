@@ -53,6 +53,8 @@ interface Props {
   friendLastActive?: Record<string, string>
   messagesByFriend?: Record<string, GymbroMessage[]>
   onAvatarClick?: (presence: UserPresence) => void
+  /** Sits at the right end of the label line. Home puts its menu button here. */
+  labelAction?: React.ReactNode
 }
 
 /**
@@ -68,6 +70,7 @@ export default function GymbrosTimeline({
   friendLastActive,
   messagesByFriend,
   onAvatarClick,
+  labelAction,
 }: Props) {
   function toEntry(presence: UserPresence, isMe: boolean, lastLiftDate: string | null): Entry {
     const key = presence.email.trim().toLowerCase()
@@ -122,7 +125,10 @@ export default function GymbrosTimeline({
 
   return (
     <div className="mb-4">
-      <p className="text-[10px] uppercase tracking-widest font-medium text-[#aaaaaa] mb-2">gymbros</p>
+      <div className="flex items-center justify-between h-5 mb-2">
+        <p className="text-[10px] uppercase tracking-widest font-medium text-[#aaaaaa]">gymbros</p>
+        {labelAction}
+      </div>
 
       {/* Bleeds to the screen edge so a face slides off the side, not into a margin. */}
       <ul
