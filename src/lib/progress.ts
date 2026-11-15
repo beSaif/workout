@@ -7,20 +7,20 @@ import { cycleReviewFor } from "./cycleReport"
 const PACE_CYCLES = 4
 
 /**
- * What the progress card on Home shows: where the main lift stands against the goal,
+ * What the progress card on Home shows: where the heaviest lift stands against the goal,
  * read from the logs and the program. Every number here is derived, none stored.
  */
 export interface LiftProgress {
   /** Best e1RM from any working set outside deloads. */
   e1rm: number | null
-  /** How far the best e1RM has moved since the current cycle began; 0 when it hasn't. */
+  /** How far the heaviest lift has moved since the current cycle began; 0 when it hasn't. */
   cycleGain: number
   /** The peak the program is building to: this cycle's, or the next one's during a deload. */
   peak: number | null
   peakIsNext: boolean
-  /** Heaviest working set lifted, with the most reps done at that weight. */
+  /** Heaviest working set lifted, with the most reps done at that weight: the card's headline. */
   bestLift: { kg: number; reps: number } | null
-  /** Cycles to the goal at the recent rate of peak gains; null when there's no rate to go on. */
+  /** Cycles from the heaviest lift to the goal at the recent rate of peak gains; null when there's no rate to go on. */
   cyclesToGoal: number | null
   sessions: number
 }
@@ -28,6 +28,12 @@ export interface LiftProgress {
 function chrono(a: Session, b: Session): number {
   const t = (s: Session) => (s.date ? new Date(s.date).getTime() : 0)
   return t(a) - t(b) || a.id - b.id
+}
+
+/** Heaviest working set across the sessions, deloads included: it is a weight actually lifted. */
+function bestWeight(sessions: Session[]): number | null {
+  const values = sessions.flatMap((s) => s.sets.filter((x) => !x.isWarmup && x.reps > 0 && x.kg > 0).map((x) => x.kg))
+  return values.length > 0 ? Math.max(...values) : null
 }
 
 function bestE1RM(sessions: Session[]): number | null {
@@ -68,25 +74,25 @@ export function liftProgress(blocks: TrainingBlock[], sessions: Session[], targe
   const confirmed = sessions.filter((s) => s.confirmed).sort(chrono)
   const e1rm = bestE1RM(confirmed)
 
-  const active = blocks.find((b) => b.status === "active")
-  let cycleGain = 0
-  if (active && e1rm != null) {
-    const ids = new Set(currentCycle(blocks, active).flatMap((b) => b.sessionIds))
-    const first = confirmed.find((s) => ids.has(s.id))
-    const before = first ? bestE1RM(confirmed.filter((s) => chrono(s, first) < 0)) : null
-    if (before != null && e1rm > before) cycleGain = Math.round((e1rm - before) * 10) / 10
-  }
-
   const working = confirmed.flatMap((s) => s.sets.filter((x) => !x.isWarmup && x.reps > 0 && x.kg > 0))
-  const topKg = working.length > 0 ? Math.max(...working.map((x) => x.kg)) : null
+  const topKg = bestWeight(confirmed)
   const bestLift =
     topKg != null ? { kg: topKg, reps: Math.max(...working.filter((x) => x.kg === topKg).map((x) => x.reps)) } : null
 
+  const active = blocks.find((b) => b.status === "active")
+  let cycleGain = 0
+  if (active && topKg != null) {
+    const ids = new Set(currentCycle(blocks, active).flatMap((b) => b.sessionIds))
+    const first = confirmed.find((s) => ids.has(s.id))
+    const before = first ? bestWeight(confirmed.filter((s) => chrono(s, first) < 0)) : null
+    if (before != null && topKg > before) cycleGain = Math.round((topKg - before) * 10) / 10
+  }
+
   const peak = active?.phase === "reacclimation" ? null : active?.anchorWeight ?? null
   let cyclesToGoal: number | null = null
-  if (target && e1rm != null && e1rm < target && peak != null) {
+  if (target && topKg != null && topKg < target && peak != null) {
     const pace = pacePerCycle(blocks, peak)
-    if (pace) cyclesToGoal = Math.max(1, Math.ceil((target - e1rm) / pace))
+    if (pace) cyclesToGoal = Math.max(1, Math.ceil((target - topKg) / pace))
   }
 
   return {
