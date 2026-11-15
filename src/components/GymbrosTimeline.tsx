@@ -29,9 +29,9 @@ function minutesIn(startedAt: string | null | undefined): number | null {
 /** The ring is the status: green while lifting, navy once trained today, hairline otherwise. */
 const RING: Record<Status, string> = {
   live: "ring-2 ring-green-500 ring-offset-2 ring-offset-white",
-  today: "ring-2 ring-[#1e3a5f] ring-offset-2 ring-offset-white",
-  recent: "ring-1 ring-[#dddddd] ring-offset-2 ring-offset-white",
-  quiet: "ring-1 ring-[#dddddd] ring-offset-2 ring-offset-white opacity-45",
+  today: "ring-2 ring-brand-line ring-offset-2 ring-offset-white",
+  recent: "ring-1 ring-line-strong ring-offset-2 ring-offset-white",
+  quiet: "ring-1 ring-line-strong ring-offset-2 ring-offset-white opacity-45",
 }
 
 interface Entry {
@@ -122,7 +122,7 @@ export default function GymbrosTimeline({
 
   return (
     <div className="mb-4">
-      <p className="text-[10px] uppercase tracking-widest font-medium text-[#aaaaaa] mb-2">gymbros</p>
+      <p className="text-[10px] uppercase tracking-widest font-medium text-ink-6 mb-2">gymbros</p>
 
       {/* Bleeds to the screen edge so a face slides off the side, not into a margin. */}
       <ul
@@ -144,17 +144,17 @@ export default function GymbrosTimeline({
                   <PixelAvatar seed={e.presence.email} colour="#1e3a5f" className="w-[30px] h-[30px]" />
                 </span>
                 {e.msgCount > 0 && (
-                  <span className="absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] px-0.5 bg-red-500 rounded-full text-white text-[9px] font-bold flex items-center justify-center border-2 border-white leading-none">
+                  <span className="absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] px-0.5 bg-red-500 rounded-full text-white text-[10px] font-bold flex items-center justify-center border-2 border-surface leading-none">
                     {e.msgCount > 9 ? "9+" : e.msgCount}
                   </span>
                 )}
               </span>
-              <span className="mt-2 max-w-full truncate text-[11px] font-semibold text-[#111111] leading-tight">
+              <span className="mt-2 max-w-full truncate text-[11px] font-semibold text-ink leading-tight">
                 {name}
               </span>
               <span
                 className={`text-[10px] leading-tight whitespace-nowrap ${
-                  e.status === "live" ? "font-semibold text-green-700" : "text-[#aaaaaa]"
+                  e.status === "live" ? "font-semibold text-green-700" : "text-ink-6"
                 }`}
               >
                 {e.timeLabel}
@@ -189,10 +189,10 @@ export default function GymbrosTimeline({
 
         <li className="shrink-0">
           <Link href="/gymbros" className={itemClass} aria-label="Add a gymbro">
-            <span className="w-[50px] h-[50px] rounded-full border-[1.5px] border-dashed border-[#cccccc] flex items-center justify-center text-[#aaaaaa] text-xl font-light">
+            <span className="w-[50px] h-[50px] rounded-full border-[1.5px] border-dashed border-line-strong flex items-center justify-center text-ink-6 text-xl font-light">
               +
             </span>
-            <span className="mt-2 text-[11px] font-medium text-[#aaaaaa] leading-tight">add</span>
+            <span className="mt-2 text-[11px] font-medium text-ink-6 leading-tight">add</span>
           </Link>
         </li>
       </ul>

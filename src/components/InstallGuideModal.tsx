@@ -3,6 +3,7 @@
 import { useState } from "react"
 
 import { useNativeInstallPrompt } from "@/lib/installPrompt"
+import EscapeKey from "@/components/EscapeKey"
 
 const STORAGE_KEY = "installGuideDismissed"
 
@@ -183,15 +184,16 @@ export default function InstallGuideModal({ onDismiss }: InstallGuideModalProps)
   if (platform === "other") {
     // Desktop or unsupported — just skip
     return (
-      <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40">
-        <div className="w-full max-w-[430px] bg-white rounded-t-2xl px-6 pt-6 pb-10 shadow-2xl max-h-[90dvh] overflow-y-auto">
-          <p className="text-lg font-semibold text-[#111111] mb-2">open this on your phone</p>
-          <p className="text-sm text-[#777777] mb-6">
+      <div role="dialog" aria-modal="true" className="fixed inset-0 z-50 flex items-end justify-center bg-black/40">
+        <EscapeKey onEscape={dismiss} />
+        <div className="w-full max-w-[430px] bg-raised rounded-t-2xl px-6 pt-6 pb-10 shadow-2xl max-h-[90dvh] overflow-y-auto">
+          <p className="text-lg font-semibold text-ink mb-2">open this on your phone</p>
+          <p className="text-sm text-ink-5 mb-6">
             for the best experience — and so you can log sets in the gym — visit this on your phone and add it to your home screen.
           </p>
           <button
             onClick={dismiss}
-            className="w-full bg-[#1e3a5f] text-white text-sm font-semibold rounded-xl py-3.5"
+            className="w-full bg-brand-fill text-white text-sm font-semibold rounded-xl py-3.5"
           >
             got it
           </button>
@@ -201,14 +203,15 @@ export default function InstallGuideModal({ onDismiss }: InstallGuideModalProps)
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40">
-      <div className="w-full max-w-[430px] bg-white rounded-t-2xl px-6 pt-6 pb-10 shadow-2xl max-h-[90dvh] overflow-y-auto">
+    <div role="dialog" aria-modal="true" className="fixed inset-0 z-50 flex items-end justify-center bg-black/40">
+      <EscapeKey onEscape={dismiss} />
+      <div className="w-full max-w-[430px] bg-raised rounded-t-2xl px-6 pt-6 pb-10 shadow-2xl max-h-[90dvh] overflow-y-auto">
         {/* Header */}
         <div className="mb-6">
-          <p className="text-lg font-semibold text-[#111111] leading-snug mb-1">
+          <p className="text-lg font-semibold text-ink leading-snug mb-1">
             add this to your home screen
           </p>
-          <p className="text-sm text-[#777777]">
+          <p className="text-sm text-ink-5">
             takes 5 seconds. opens like a real app — no browser bar, no distractions. way better for tracking in the gym.
           </p>
         </div>
@@ -221,16 +224,16 @@ export default function InstallGuideModal({ onDismiss }: InstallGuideModalProps)
                 <div key={i} className="flex items-start gap-4">
                   <div className="w-11 h-11 shrink-0">{step.icon}</div>
                   <div className="flex-1 pt-0.5">
-                    <p className="text-sm font-semibold text-[#111111] mb-0.5">
+                    <p className="text-sm font-semibold text-ink mb-0.5">
                       {i + 1}. {step.title}
                     </p>
-                    <p className="text-sm text-[#777777] leading-snug">{step.desc}</p>
+                    <p className="text-sm text-ink-5 leading-snug">{step.desc}</p>
                   </div>
                 </div>
               ))}
             </div>
 
-            <p className="text-xs text-[#aaaaaa] text-center mb-4">
+            <p className="text-xs text-ink-6 text-center mb-4">
               open in {platformLabel} if you&apos;re not already
             </p>
           </>
@@ -241,21 +244,21 @@ export default function InstallGuideModal({ onDismiss }: InstallGuideModalProps)
           <button
             onClick={install}
             disabled={installing}
-            className="w-full bg-[#1e3a5f] text-white text-sm font-semibold rounded-xl py-3.5 active:bg-[#0f2540] transition-colors disabled:opacity-60"
+            className="w-full bg-brand-fill text-white text-sm font-semibold rounded-xl py-3.5 active:bg-brand-fill-3 transition-colors disabled:opacity-60"
           >
             {installing ? "installing…" : "install app"}
           </button>
         ) : (
           <button
             onClick={dismiss}
-            className="w-full bg-[#1e3a5f] text-white text-sm font-semibold rounded-xl py-3.5 active:bg-[#0f2540] transition-colors"
+            className="w-full bg-brand-fill text-white text-sm font-semibold rounded-xl py-3.5 active:bg-brand-fill-3 transition-colors"
           >
             on it
           </button>
         )}
         <button
           onClick={dismiss}
-          className="w-full text-sm text-[#aaaaaa] py-3 mt-1"
+          className="w-full text-sm text-ink-6 py-3 mt-1"
         >
           maybe later
         </button>

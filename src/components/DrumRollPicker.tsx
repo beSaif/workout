@@ -85,7 +85,7 @@ export function DrumRollPicker({
       className="flex flex-col items-center flex-1"
       style={{ opacity: disabled ? 0.4 : 1, pointerEvents: disabled ? "none" : "auto" }}
     >
-      <span className="text-[10px] text-[#aaaaaa] uppercase tracking-wide mb-2">{label}</span>
+      <span className="text-[10px] text-ink-6 uppercase tracking-wide mb-2">{label}</span>
       <div
         className="relative w-full"
         style={{ height: VISIBLE * ITEM_H, touchAction: "none" }}
@@ -125,7 +125,7 @@ export function DrumRollPicker({
       >
         {/* Selection highlight — behind scroll content */}
         <div
-          className="absolute inset-x-1 rounded-xl bg-[#f0f0f0]"
+          className="absolute inset-x-1 rounded-xl bg-surface-3"
           style={{ top: PAD * ITEM_H, height: ITEM_H }}
         />
         {/* Scroll list — overflow:hidden so it is not a competing scroll container */}
@@ -143,7 +143,7 @@ export function DrumRollPicker({
             >
               <span
                 ref={(el) => { spanRefs.current[i] = el }}
-                className="text-xl font-semibold text-[#111111] select-none leading-none"
+                className="text-xl font-semibold text-ink select-none leading-none"
                 style={{ willChange: "transform, opacity", transformOrigin: "center" }}
               >
                 {fmt(v)}

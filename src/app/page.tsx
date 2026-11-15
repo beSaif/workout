@@ -56,6 +56,7 @@ import { bwForSession, dateKey, upsertEntry, weighInDue } from "@/lib/weight"
 import { getBestE1RM, getLatestBW } from "@/lib/stats"
 import { suggestNextDay } from "@/lib/balance"
 import { relativeTime } from "@/lib/time"
+import { useConfirm } from "@/components/ConfirmSheet"
 
 const DRAFT_MAX_AGE_MS = 24 * 60 * 60 * 1000
 /** Days away after which Dot is found asleep when the app opens. */
@@ -189,6 +190,7 @@ function sortSessions(sessions: Session[]): Session[] {
 }
 
 export default function Page() {
+  const { confirm, confirmSheet } = useConfirm()
   const router = useRouter()
   const [profile, setProfile] = useState<UserProfile | null>(null)
   const [sessions, setSessions] = useState<Session[]>([])
@@ -788,13 +790,17 @@ export default function Page() {
    * Train today without the main lift. The session drops to accessories only and stays
    * outside the block, so the load it was going to carry opens the next session instead.
    */
-  function handleSkipMainLift(session: Session) {
+  async function handleSkipMainLift(session: Session) {
     const liftShort = getMainLiftShortLabel(profile)
     const held = describePrescription(session)
-    const ask = held
-      ? `Skip ${liftShort} today? ${held} stays on deck — it opens your next session.`
-      : `Skip ${liftShort} today? Its prescribed load moves to your next session.`
-    if (!window.confirm(ask)) return
+    const yes = await confirm({
+      title: `Skip ${liftShort} today?`,
+      body: held
+        ? `${held} stays on deck and opens your next session.`
+        : "Its prescribed load moves to your next session.",
+      confirmLabel: `Skip ${liftShort}`,
+    })
+    if (!yes) return
 
     const skipped: Session = {
       ...session,
@@ -839,7 +845,7 @@ export default function Page() {
    * Move the program straight to a later session (e.g. from Volume 2 to Intensity 3),
    * leaving everything in between unlogged. Blocks run past are closed as they stand.
    */
-  function handleJumpTo(target: JumpTarget) {
+  async function handleJumpTo(target: JumpTarget) {
     if (!profile) return
     const previous = sessions.find((s) => !s.confirmed)
     if (!previous) return
@@ -855,11 +861,15 @@ export default function Page() {
     const jumpKg = fromKg != null && toKg != null ? toKg - fromKg : 0
     const skipped = countSkippedSlots(jumped) - countSkippedSlots(blocks)
 
-    const ask =
-      `Jump to ${label}${to ? ` — ${to}` : ""}? ` +
-      `${skipped} session${skipped === 1 ? "" : "s"} in between ${skipped === 1 ? "is" : "are"} skipped and won't count as trained.` +
-      (jumpKg > 0 ? ` That's +${jumpKg}kg on today's ${fromKg}kg.` : "")
-    if (!window.confirm(ask)) return
+    const yes = await confirm({
+      title: `Jump to ${label}?`,
+      body:
+        (to ? `${to}. ` : "") +
+        `${skipped} session${skipped === 1 ? "" : "s"} in between ${skipped === 1 ? "is" : "are"} skipped and won't count as trained.` +
+        (jumpKg > 0 ? ` That's +${jumpKg}kg on today's ${fromKg}kg.` : ""),
+      confirmLabel: "Jump",
+    })
+    if (!yes) return
 
     // A bigger load than the body has been prepared for: the first working set decides.
     const caution =
@@ -984,9 +994,15 @@ export default function Page() {
     })
   }
 
-  function handleUnlogSession(session: Session) {
+  async function handleUnlogSession(session: Session) {
     if (!profile) return
-    if (!window.confirm(`Unlog Session ${String(session.id).padStart(2, "0")}? This will remove it from your history.`)) return
+    const yes = await confirm({
+      title: `Unlog Session ${String(session.id).padStart(2, "0")}?`,
+      body: "This removes it from your history.",
+      confirmLabel: "Unlog",
+      destructive: true,
+    })
+    if (!yes) return
 
     const remaining = sessions.filter((s) => s.confirmed && s.id !== session.id)
 
@@ -1027,16 +1043,16 @@ export default function Page() {
    * stay put; the sessions logged before the break stay in history, just unlinked
    * from the block so it re-prescribes from the start.
    */
-  function handleRestartBlock() {
+  async function handleRestartBlock() {
     if (!profile) return
     const active = getActiveBlock(blocks)
     if (!active) return
-    if (
-      !confirm(
-        `Restart ${PHASE_LABEL[active.phase]} from session 1 with this cycle's peak eased 5% to ${layoffAnchor(active.anchorWeight)}kg? Your logged sessions stay in history.`
-      )
-    )
-      return
+    const yes = await confirm({
+      title: `Restart ${PHASE_LABEL[active.phase]} from session 1?`,
+      body: `This cycle's peak eases 5% to ${layoffAnchor(active.anchorWeight)}kg. Your logged sessions stay in history.`,
+      confirmLabel: "Restart block",
+    })
+    if (!yes) return
 
     const { sessions: restartedSessions, blocks: newBlocks } = restartActiveBlock(sessions, blocks)
     const newUpcoming = createUpcomingSession(restartedSessions, newBlocks, exerciseConfig, profile, trainingDays)
@@ -1059,10 +1075,10 @@ export default function Page() {
   if (!mounted || !profile) {
     return (
       <main className="mx-auto w-full max-w-[393px] px-4 pt-[calc(1.5rem+env(safe-area-inset-top))] pb-[calc(4rem+env(safe-area-inset-bottom))]">
-        <div className="h-3 w-32 bg-[#e8e8e8] rounded animate-pulse mb-1" />
-        <div className="h-8 w-40 bg-[#e8e8e8] rounded animate-pulse mb-6" />
-        <div className="h-[2px] w-full bg-[#e8e8e8] rounded mb-6" />
-        <div className="grid grid-cols-2 border border-[#e8e8e8] rounded-[10px] overflow-hidden mb-6 h-24" />
+        <div className="h-3 w-32 bg-surface-4 rounded animate-pulse mb-1" />
+        <div className="h-8 w-40 bg-surface-4 rounded animate-pulse mb-6" />
+        <div className="h-[2px] w-full bg-surface-4 rounded mb-6" />
+        <div className="grid grid-cols-2 border border-line rounded-[10px] overflow-hidden mb-6 h-24" />
       </main>
     )
   }
@@ -1198,6 +1214,7 @@ export default function Page() {
   return (
     <>
       <NavDrawer open={drawerOpen} onClose={() => setDrawerOpen(false)} />
+      {confirmSheet}
       <DotBuddy
         cue={dotCue}
         startAsleep={layoff.lastSessionDate != null && layoff.days >= DOT_ASLEEP_AFTER_DAYS}
@@ -1245,7 +1262,7 @@ export default function Page() {
             because it is also the tap target for the profile (long-press: dev tools). */}
         <header className="mb-3 flex h-6 items-center justify-between">
           <h1
-            className="text-base font-semibold text-[#111111] tracking-tight select-none cursor-pointer"
+            className="text-base font-semibold text-ink tracking-tight select-none cursor-pointer"
             onPointerDown={handleTitlePointerDown}
             onPointerUp={handleTitlePointerUp}
             onPointerLeave={handleTitlePointerCancel}
@@ -1264,7 +1281,7 @@ export default function Page() {
           {/* Padding with a matching negative margin: a 40px touch target in a 24px row. */}
           <button
             onClick={() => setDrawerOpen(true)}
-            className="p-2.5 -m-2.5 text-[#555555] hover:text-[#111111] transition-colors shrink-0"
+            className="p-2.5 -m-2.5 text-ink-4 hover:text-ink transition-colors shrink-0"
             aria-label="Open menu"
           >
             <svg width="20" height="14" viewBox="0 0 20 14" fill="currentColor" aria-hidden="true">
@@ -1289,18 +1306,18 @@ export default function Page() {
 
         {/* Notification opt-in banner (needed on iOS PWA where auto-subscribe is blocked) */}
         {showNotifBanner && (
-          <div className="flex items-center justify-between gap-3 mb-4 px-3 py-2.5 rounded-xl bg-[#f5f5f5] border border-[#e8e8e8]">
-            <span className="text-sm text-[#444444]">Enable notifications for friend requests</span>
+          <div className="flex items-center justify-between gap-3 mb-4 px-3 py-2.5 rounded-xl bg-surface-2 border border-line">
+            <span className="text-sm text-ink-3">Enable notifications for friend requests</span>
             <div className="flex items-center gap-2 shrink-0">
               <button
                 onClick={handleEnableNotifications}
-                className="text-sm font-medium text-[#111111] bg-white border border-[#d0d0d0] rounded-lg px-3 py-1 active:opacity-70"
+                className="text-sm font-medium text-ink bg-surface border border-line-strong rounded-lg px-3 py-1 active:opacity-70"
               >
                 Enable
               </button>
               <button
                 onClick={() => setShowNotifBanner(false)}
-                className="text-[#999999] active:opacity-70"
+                className="text-ink-6 active:opacity-70"
                 aria-label="Dismiss"
               >
                 <svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor" aria-hidden="true">
@@ -1382,7 +1399,7 @@ export default function Page() {
           {viewingBlock !== activeBlock && !viewingUpcomingPhase && (
             <button
               onClick={() => setViewingBlockId(null)}
-              className="w-full text-left text-xs text-muted-light bg-[#f5f5f5] rounded-xl px-4 py-2.5 mb-2 flex items-center gap-2 active:opacity-70"
+              className="w-full text-left text-xs text-muted-light bg-surface-2 rounded-xl px-4 py-2.5 mb-2 flex items-center gap-2 active:opacity-70"
             >
               <span>←</span>
               <span>Back to {currentPhaseName}</span>
@@ -1409,7 +1426,7 @@ export default function Page() {
               <>
                 <button
                   onClick={() => setViewingUpcomingPhase(null)}
-                  className="w-full text-left text-xs text-muted-light bg-[#f5f5f5] rounded-xl px-4 py-2.5 mb-2 flex items-center gap-2 active:opacity-70"
+                  className="w-full text-left text-xs text-muted-light bg-surface-2 rounded-xl px-4 py-2.5 mb-2 flex items-center gap-2 active:opacity-70"
                 >
                   <span>←</span>
                   <span>Back to {currentPhaseName}</span>
@@ -1434,11 +1451,11 @@ export default function Page() {
           {viewingBlock === activeBlock && !viewingUpcomingPhase && (
             <>
               {jumpUndo && jumpUndo.after === blocks && (
-                <div className="flex items-center justify-between rounded-xl bg-[#eff6ff] px-4 py-2.5 mb-2">
-                  <span className="text-xs font-semibold text-[#1e3a5f]">Jumped to {jumpUndo.label}</span>
+                <div className="flex items-center justify-between rounded-xl bg-brand-tint px-4 py-2.5 mb-2">
+                  <span className="text-xs font-semibold text-brand">Jumped to {jumpUndo.label}</span>
                   <button
                     onClick={handleUndoJump}
-                    className="text-xs font-semibold text-[#1e3a5f] underline active:opacity-70"
+                    className="text-xs font-semibold text-brand underline active:opacity-70"
                   >
                     Undo
                   </button>
@@ -1461,27 +1478,6 @@ export default function Page() {
                   skipNudge={skipNudge}
                 />
               )}
-              {activeStretchSessions.map((s) => (
-                <SessionCard
-                  key={s.id}
-                  session={s}
-                  blockIndex={blockIndexMap.get(s.id)}
-                  onEdit={handleEditSession}
-                  onUnlog={handleUnlogSession}
-                  onShare={setShareSession}
-                  exerciseConfig={exerciseConfig}
-                  trainingDays={trainingDays}
-                  mainLiftShortLabel={liftShort}
-                />
-              ))}
-              {/* Slots jumped over: no session behind them, but they still count in the block */}
-              {activeBlock && (activeBlock.skippedSlots?.length ?? 0) > 0 && (
-                <div className="px-4 py-2.5 rounded-xl border border-dashed border-[#e8e8e8] mb-2">
-                  <span className="text-xs text-[#aaaaaa]">
-                    Skipped · Session {[...activeBlock.skippedSlots!].sort((a, b) => a - b).map((i) => i + 1).join(", ")}
-                  </span>
-                </div>
-              )}
               {/* Previews for sessions not yet generated. Tapping one jumps straight to it. */}
               {activeBlock && (() => {
                 const position = blockPosition(activeBlock)
@@ -1494,7 +1490,6 @@ export default function Page() {
                     return (
                       <PreviewSessionRow
                         key={idx}
-                        faint
                         label={`Session ${idx + 1}`}
                         rx={p}
                         tag={activeBlock.phase === "realization" && idx === getBlockLength(activeBlock) - 1 ? "Peak single" : undefined}
@@ -1511,13 +1506,38 @@ export default function Page() {
                 const p = prescribeForBlock(next, nextIdx, cycleLoadOffset(blocks, confirmed, next))
                 return (
                   <PreviewSessionRow
-                    faint
                     label={`Next · ${slotLabel(next.phase, nextIdx)}`}
                     rx={p}
                     onJump={() => handleJumpTo({ phase: next.phase, index: nextIdx })}
                   />
                 )
               })()}
+              {activeStretchSessions.length > 0 && (
+                <p className="text-[10px] font-semibold uppercase tracking-widest text-ink-5 mt-5 mb-2">
+                  Logged this block
+                </p>
+              )}
+              {activeStretchSessions.map((s) => (
+                <SessionCard
+                  key={s.id}
+                  session={s}
+                  blockIndex={blockIndexMap.get(s.id)}
+                  onEdit={handleEditSession}
+                  onUnlog={handleUnlogSession}
+                  onShare={setShareSession}
+                  exerciseConfig={exerciseConfig}
+                  trainingDays={trainingDays}
+                  mainLiftShortLabel={liftShort}
+                />
+              ))}
+              {/* Slots jumped over: no session behind them, but they still count in the block */}
+              {activeBlock && (activeBlock.skippedSlots?.length ?? 0) > 0 && (
+                <div className="px-4 py-2.5 rounded-xl border border-dashed border-line mb-2">
+                  <span className="text-xs text-ink-6">
+                    Skipped · Session {[...activeBlock.skippedSlots!].sort((a, b) => a - b).map((i) => i + 1).join(", ")}
+                  </span>
+                </div>
+              )}
             </>
           )}
 
@@ -1551,6 +1571,7 @@ export default function Page() {
           initialDraft={activeDraft ?? undefined}
           exerciseConfig={exerciseConfig}
           mainLiftLabel={liftLabel}
+          mainLiftTarget={upcomingTarget?.split("\n")[0]}
         />
       )}
 
@@ -1569,10 +1590,10 @@ export default function Page() {
 
       {/* Draft resume prompt */}
       {draftPrompt && (
-        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40">
-          <div className="bg-white w-full max-w-[393px] rounded-t-2xl px-6 pt-6 pb-10 max-h-[90dvh] overflow-y-auto">
-            <p className="text-base font-semibold text-[#111111] mb-1">Resume session?</p>
-            <p className="text-sm text-[#777777] mb-6">
+        <div role="dialog" aria-modal="true" className="fixed inset-0 z-50 flex items-end justify-center bg-black/40">
+          <div className="bg-raised w-full max-w-[393px] rounded-t-2xl px-6 pt-6 pb-10 max-h-[90dvh] overflow-y-auto">
+            <p className="text-base font-semibold text-ink mb-1">Resume session?</p>
+            <p className="text-sm text-ink-5 mb-6">
               Draft saved {relativeTime(draftPrompt.draft.savedAt)} · {draftPrompt.draft.completedSets.length} set{draftPrompt.draft.completedSets.length !== 1 ? "s" : ""} done
             </p>
             <button
@@ -1582,7 +1603,7 @@ export default function Page() {
                 setDraftPrompt(null)
                 scheduleIncompleteSessionReminder()
               }}
-              className="w-full bg-[#1e3a5f] text-white text-sm font-semibold rounded-xl py-3.5 mb-3 hover:bg-[#16304f] active:bg-[#0f2540] transition-colors"
+              className="w-full bg-brand-fill text-white text-sm font-semibold rounded-xl py-3.5 mb-3 hover:bg-brand-fill-2 active:bg-brand-fill-3 transition-colors"
             >
               Continue
             </button>
@@ -1593,7 +1614,7 @@ export default function Page() {
                 setDraftPrompt(null)
                 scheduleIncompleteSessionReminder()
               }}
-              className="w-full text-xs text-[#aaaaaa] hover:text-[#555555] active:text-[#333333] transition-colors pt-1"
+              className="w-full text-xs text-ink-6 hover:text-ink-4 active:text-ink-2 transition-colors pt-1"
             >
               Start fresh
             </button>
@@ -1603,13 +1624,13 @@ export default function Page() {
 
       {/* Cycle peak setup / edit (stored as the block's anchorWeight) */}
       {anchorPrompt && (
-        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40">
-          <div className="bg-white w-full max-w-[393px] rounded-t-2xl px-6 pt-6 pb-10 max-h-[90dvh] overflow-y-auto">
-            <p className="text-base font-semibold text-[#111111] mb-1">Set this cycle&apos;s peak</p>
-            <p className="text-sm text-[#777777] mb-6">
+        <div role="dialog" aria-modal="true" className="fixed inset-0 z-50 flex items-end justify-center bg-black/40">
+          <div className="bg-raised w-full max-w-[393px] rounded-t-2xl px-6 pt-6 pb-10 max-h-[90dvh] overflow-y-auto">
+            <p className="text-base font-semibold text-ink mb-1">Set this cycle&apos;s peak</p>
+            <p className="text-sm text-ink-5 mb-6">
               The single this cycle builds to, tested at the end of Peak. Every session is a percentage of it, nudged by how your logged RPEs compare with the targets. When the cycle ends, what your single showed sets the next one.
             </p>
-            <label className="block text-[10px] font-semibold uppercase tracking-widest text-[#aaaaaa] mb-2">
+            <label className="block text-[10px] font-semibold uppercase tracking-widest text-ink-6 mb-2">
               Peak (kg)
             </label>
             <input
@@ -1617,13 +1638,13 @@ export default function Page() {
               inputMode="decimal"
               value={anchorInput}
               onChange={(e) => setAnchorInput(e.target.value)}
-              className="w-full border border-[#e8e8e8] rounded-xl px-4 py-3 text-xl font-semibold text-[#111111] mb-6 focus:outline-none focus:border-[#1e3a5f]"
+              className="w-full border border-line rounded-xl px-4 py-3 text-xl font-semibold text-ink mb-6 focus:outline-none focus:border-brand-line"
               placeholder="100"
             />
             <button
               onClick={handleConfirmAnchor}
               disabled={isNaN(parseFloat(anchorInput)) || parseFloat(anchorInput) <= 0}
-              className="w-full bg-[#1e3a5f] text-white text-sm font-semibold rounded-xl py-3.5 hover:bg-[#16304f] active:bg-[#0f2540] transition-colors disabled:opacity-40"
+              className="w-full bg-brand-fill text-white text-sm font-semibold rounded-xl py-3.5 hover:bg-brand-fill-2 active:bg-brand-fill-3 transition-colors disabled:opacity-40"
             >
               {getActiveBlock(blocks) ? "Update peak" : "Start Block 1: Accumulation"}
             </button>
@@ -1697,7 +1718,7 @@ export default function Page() {
           {toasts.map((toast) => (
             <div
               key={toast.id}
-              className="flex items-center gap-2 bg-white border border-[#e8e8e8] rounded-full px-4 py-2 shadow-md text-sm text-[#333333]"
+              className="flex items-center gap-2 bg-raised border border-line rounded-full px-4 py-2 shadow-md text-sm text-ink-2"
             >
               <span className="relative flex h-2 w-2 shrink-0">
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-500 opacity-75" />

@@ -6,7 +6,8 @@ import { sessionSummary, WorkSummary } from "@/lib/stats"
 
 export interface ShareCardProps {
   session: Session
-  bestWeight: number | null
+  /** Best e1RM across working sets: the figure every progress bar in the app measures. */
+  bestE1RM: number | null
   bodyweight: number | null
   /** null for Balanced-mode users, who have no goal weight. */
   target: number | null
@@ -65,7 +66,7 @@ function formatDate(iso: string): string {
 const ShareCard = forwardRef<HTMLDivElement, ShareCardProps>(function ShareCard(
   {
     session,
-    bestWeight,
+    bestE1RM,
     bodyweight,
     target,
     date,
@@ -106,8 +107,8 @@ const ShareCard = forwardRef<HTMLDivElement, ShareCardProps>(function ShareCard(
       }))
 
   const progressPct =
-    bestWeight != null && target != null && target > 0
-      ? Math.min(100, Math.round((bestWeight / target) * 100))
+    bestE1RM != null && target != null && target > 0
+      ? Math.min(100, Math.round((bestE1RM / target) * 100))
       : null
 
   return (
@@ -292,8 +293,8 @@ const ShareCard = forwardRef<HTMLDivElement, ShareCardProps>(function ShareCard(
               ]
             : [
                 {
-                  label: "Current Best",
-                  value: bestWeight != null ? `${bestWeight}kg` : "—",
+                  label: "Est. 1RM",
+                  value: bestE1RM != null ? `${bestE1RM}kg` : "—",
                   accent: true,
                 },
                 { label: "Goal", value: target != null ? `${target}kg` : "—", accent: false },

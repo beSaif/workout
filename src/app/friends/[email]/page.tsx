@@ -11,6 +11,9 @@ import MessageComposer from "@/components/MessageComposer"
 import ProfileTabs, { ProfileTab } from "@/components/ProfileTabs"
 import ProfileHeader, { PRIMARY_ACTION, SECONDARY_ACTION } from "@/components/ProfileHeader"
 import RoutinePreview from "@/components/RoutinePreview"
+import BackButton from "@/components/BackButton"
+import { useConfirm } from "@/components/ConfirmSheet"
+import EscapeKey from "@/components/EscapeKey"
 
 interface ProfileData {
   /** The full profile for a gymbro; only the card's fields for anyone else. */
@@ -31,6 +34,7 @@ type Coaching = "idle" | "confirming" | "busy"
  * gymbros only.
  */
 export default function FriendProfilePage() {
+  const { confirm, confirmSheet } = useConfirm()
   const params = useParams()
   const router = useRouter()
   const email = decodeURIComponent(params.email as string)
@@ -91,7 +95,12 @@ export default function FriendProfilePage() {
 
   async function stopTraining() {
     if (!data) return
-    if (!window.confirm("Stop training under them? Their routine, as it is now, stays yours to edit.")) return
+    const yes = await confirm({
+      title: "Stop training under them?",
+      body: "Their routine, as it is now, stays yours to edit.",
+      confirmLabel: "Stop training under them",
+    })
+    if (!yes) return
     setCoaching("busy")
     const ok = await stopTrainingUnderCoach()
     if (ok) {
@@ -142,22 +151,14 @@ export default function FriendProfilePage() {
   }
 
   const backButton = (
-    <button
-      onClick={() => router.back()}
-      className="mb-6 p-1 -ml-1 text-[#555555] hover:text-[#111111] transition-colors"
-      aria-label="Go back"
-    >
-      <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-        <polyline points="11,4 6,9 11,14" />
-      </svg>
-    </button>
+    <BackButton onClick={() => router.back()} label="Go back" className="mb-4" />
   )
 
   if (loading) {
     return (
       <main className="mx-auto w-full max-w-[393px] px-5 pt-[calc(1.5rem+env(safe-area-inset-top))] pb-8">
         {backButton}
-        <div className="rounded-2xl bg-[#f5f5f5] animate-pulse h-[520px]" />
+        <div className="rounded-2xl bg-surface-2 animate-pulse h-[520px]" />
       </main>
     )
   }
@@ -166,7 +167,7 @@ export default function FriendProfilePage() {
     return (
       <main className="mx-auto w-full max-w-[393px] px-5 pt-[calc(1.5rem+env(safe-area-inset-top))] pb-8">
         {backButton}
-        <p className="text-sm text-[#aaaaaa] text-center mt-20">No profile found</p>
+        <p className="text-sm text-ink-6 text-center mt-20">No profile found</p>
       </main>
     )
   }
@@ -219,6 +220,7 @@ export default function FriendProfilePage() {
 
   return (
     <main className="mx-auto w-full max-w-[393px] px-5 pt-[calc(1.5rem+env(safe-area-inset-top))] pb-[calc(2rem+env(safe-area-inset-bottom))]">
+      {confirmSheet}
       {backButton}
 
       <ProfileHeader profile={profile} card={card} social={social} isLive={isLive}>
@@ -239,13 +241,13 @@ export default function FriendProfilePage() {
             onReactPR={canMessage ? reactToPR : undefined}
           />
           {canMessage && card.records.length > 0 && (
-            <p className="text-center text-[10px] text-[#bbbbbb] mt-3">tap a record to hype it</p>
+            <p className="text-center text-[10px] text-ink-7 mt-3">tap a record to hype it</p>
           )}
         </>
       ) : (
         <>
           {social.isMyCoach && (
-            <p className="text-xs text-[#999999] mb-4">
+            <p className="text-xs text-ink-6 mb-4">
               You train under {firstName}, so this is your routine too. When they change it,
               yours changes with it.
             </p>
@@ -257,14 +259,15 @@ export default function FriendProfilePage() {
       {/* Train-under confirmation */}
       {coaching !== "idle" && !social.isMyCoach && (
         <div
-          className="fixed inset-0 z-50 flex items-end justify-center bg-black/40"
+          role="dialog" aria-modal="true" className="fixed inset-0 z-50 flex items-end justify-center bg-black/40"
           onClick={() => coaching !== "busy" && setCoaching("idle")}
         >
+          <EscapeKey onEscape={() => coaching !== "busy" && setCoaching("idle")} />
           <div
-            className="bg-white w-full max-w-[393px] rounded-t-2xl px-6 pt-6 pb-[calc(2.5rem+env(safe-area-inset-bottom))] max-h-[90dvh] overflow-y-auto"
+            className="bg-raised w-full max-w-[393px] rounded-t-2xl px-6 pt-6 pb-[calc(2.5rem+env(safe-area-inset-bottom))] max-h-[90dvh] overflow-y-auto"
             onClick={(e) => e.stopPropagation()}
           >
-            <p className="text-base font-semibold text-[#111111] mb-3">Train under {firstName}?</p>
+            <p className="text-base font-semibold text-ink mb-3">Train under {firstName}?</p>
             {/* The cost comes first and loud: this overwrites the viewer's own routine. */}
             <div role="alert" className="flex gap-3 rounded-xl border border-amber-300 bg-amber-50 p-3.5 mb-3">
               <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 mt-0.5 text-amber-600" aria-hidden="true">
@@ -286,7 +289,7 @@ export default function FriendProfilePage() {
                 </ul>
               </div>
             </div>
-            <p className="text-xs text-[#777777] mb-6">
+            <p className="text-xs text-ink-5 mb-6">
               Your logged sessions, main lift, targets and cardio stay yours. Stop any time
               and keep the routine.
             </p>
@@ -294,14 +297,14 @@ export default function FriendProfilePage() {
             <button
               onClick={confirmTrainUnder}
               disabled={coaching === "busy"}
-              className="w-full bg-[#1e3a5f] text-white text-sm font-semibold rounded-xl py-3.5 hover:bg-[#16304f] transition-colors mb-3 disabled:opacity-60"
+              className="w-full bg-brand-fill text-white text-sm font-semibold rounded-xl py-3.5 hover:bg-brand-fill-2 transition-colors mb-3 disabled:opacity-60"
             >
               {coaching === "busy" ? "Switching…" : `Train under ${firstName}`}
             </button>
             <button
               onClick={() => setCoaching("idle")}
               disabled={coaching === "busy"}
-              className="w-full border border-[#e8e8e8] rounded-xl py-3 text-sm font-semibold text-[#111111] hover:bg-[#fafafa] transition-colors"
+              className="w-full border border-line rounded-xl py-3 text-sm font-semibold text-ink hover:bg-surface-1 transition-colors"
             >
               Cancel
             </button>
@@ -310,7 +313,8 @@ export default function FriendProfilePage() {
       )}
 
       {showComposer && (
-        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40" onClick={() => setShowComposer(false)}>
+        <div role="dialog" aria-modal="true" className="fixed inset-0 z-50 flex items-end justify-center bg-black/40" onClick={() => setShowComposer(false)}>
+          <EscapeKey onEscape={() => setShowComposer(false)} />
           <div
             className="w-full max-w-md rounded-t-2xl bg-zinc-900 px-5 pt-5 pb-8 max-h-[90dvh] overflow-y-auto"
             onClick={(e) => e.stopPropagation()}

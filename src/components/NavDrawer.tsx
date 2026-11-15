@@ -9,6 +9,7 @@ import { useNativeInstallPrompt } from "@/lib/installPrompt"
 import { DOT_CHANGE_EVENT, loadDotEnabled, saveDotEnabled } from "@/lib/buddy"
 import { HAPTICS_CHANGE_EVENT, haptic, loadHapticsEnabled, saveHapticsEnabled } from "@/lib/haptics"
 import HapticTap from "@/components/HapticTap"
+import EscapeKey from "@/components/EscapeKey"
 
 interface NavDrawerProps {
   open: boolean
@@ -72,13 +73,19 @@ export default function NavDrawer({ open, onClose }: NavDrawerProps) {
       />
 
       {/* Drawer panel */}
+      {open && <EscapeKey onEscape={onClose} />}
       <div
-        className={`fixed top-0 left-0 bottom-0 z-50 w-64 bg-white shadow-2xl transform transition-transform duration-200 ease-out ${
+        role="dialog"
+        aria-modal="true"
+        aria-label="Menu"
+        // Closed, the drawer is only translated off-screen: inert keeps Tab and screen readers out of it.
+        inert={!open}
+        className={`fixed top-0 left-0 bottom-0 z-50 w-64 bg-raised shadow-2xl transform transition-transform duration-200 ease-out ${
           open ? "translate-x-0" : "-translate-x-full"
         }`}
       >
         <div className="pt-14 px-5">
-          <p className="text-[10px] font-semibold uppercase tracking-widest text-[#aaaaaa] mb-4">
+          <p className="text-[10px] font-semibold uppercase tracking-widest text-ink-6 mb-4">
             Menu
           </p>
           <nav className="space-y-1">
@@ -87,8 +94,8 @@ export default function NavDrawer({ open, onClose }: NavDrawerProps) {
               onClick={onClose}
               className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors ${
                 pathname === "/"
-                  ? "bg-[#eff6ff] text-[#1e3a5f]"
-                  : "text-[#333333] hover:bg-[#f5f5f5]"
+                  ? "bg-brand-tint text-brand"
+                  : "text-ink-2 hover:bg-surface-2"
               }`}
             >
               <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
@@ -102,8 +109,8 @@ export default function NavDrawer({ open, onClose }: NavDrawerProps) {
               onClick={onClose}
               className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors ${
                 pathname === "/exercises"
-                  ? "bg-[#eff6ff] text-[#1e3a5f]"
-                  : "text-[#333333] hover:bg-[#f5f5f5]"
+                  ? "bg-brand-tint text-brand"
+                  : "text-ink-2 hover:bg-surface-2"
               }`}
             >
               <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" aria-hidden="true">
@@ -121,8 +128,8 @@ export default function NavDrawer({ open, onClose }: NavDrawerProps) {
               onClick={onClose}
               className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors ${
                 pathname === "/history"
-                  ? "bg-[#eff6ff] text-[#1e3a5f]"
-                  : "text-[#333333] hover:bg-[#f5f5f5]"
+                  ? "bg-brand-tint text-brand"
+                  : "text-ink-2 hover:bg-surface-2"
               }`}
             >
               <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -138,8 +145,8 @@ export default function NavDrawer({ open, onClose }: NavDrawerProps) {
                 onClick={onClose}
                 className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors ${
                   pathname === "/weight"
-                    ? "bg-[#eff6ff] text-[#1e3a5f]"
-                    : "text-[#333333] hover:bg-[#f5f5f5]"
+                    ? "bg-brand-tint text-brand"
+                    : "text-ink-2 hover:bg-surface-2"
                 }`}
               >
                 <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -155,8 +162,8 @@ export default function NavDrawer({ open, onClose }: NavDrawerProps) {
               onClick={onClose}
               className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors ${
                 pathname === "/gymbros"
-                  ? "bg-[#eff6ff] text-[#1e3a5f]"
-                  : "text-[#333333] hover:bg-[#f5f5f5]"
+                  ? "bg-brand-tint text-brand"
+                  : "text-ink-2 hover:bg-surface-2"
               }`}
             >
               <span className="relative">
@@ -167,7 +174,7 @@ export default function NavDrawer({ open, onClose }: NavDrawerProps) {
                   <path d="M10.5 9.5c2 0 4 1 4 4" />
                 </svg>
                 {pendingCount > 0 && (
-                  <span className="absolute -top-1.5 -right-1.5 bg-red-500 text-white text-[8px] font-bold rounded-full min-w-[14px] h-[14px] flex items-center justify-center px-0.5 leading-none">
+                  <span className="absolute -top-1.5 -right-1.5 bg-red-500 text-white text-[10px] font-bold rounded-full min-w-[14px] h-[14px] flex items-center justify-center px-0.5 leading-none">
                     {pendingCount > 9 ? "9+" : pendingCount}
                   </span>
                 )}
@@ -180,8 +187,8 @@ export default function NavDrawer({ open, onClose }: NavDrawerProps) {
               onClick={onClose}
               className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors ${
                 pathname === "/profile"
-                  ? "bg-[#eff6ff] text-[#1e3a5f]"
-                  : "text-[#333333] hover:bg-[#f5f5f5]"
+                  ? "bg-brand-tint text-brand"
+                  : "text-ink-2 hover:bg-surface-2"
               }`}
             >
               <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -192,8 +199,8 @@ export default function NavDrawer({ open, onClose }: NavDrawerProps) {
             </Link>
           </nav>
 
-          <div className="mt-8 pt-4 border-t border-[#f0f0f0]">
-            <p className="text-[10px] font-semibold uppercase tracking-widest text-[#aaaaaa] mb-1 px-3">
+          <div className="mt-8 pt-4 border-t border-line-soft">
+            <p className="text-[10px] font-semibold uppercase tracking-widest text-ink-6 mb-1 px-3">
               Dot
             </p>
             <SwitchRow
@@ -213,11 +220,11 @@ export default function NavDrawer({ open, onClose }: NavDrawerProps) {
             />
           </div>
 
-          <div className="mt-4 pt-4 border-t border-[#f0f0f0]">
+          <div className="mt-4 pt-4 border-t border-line-soft">
             {canInstall && (
               <button
                 onClick={() => { promptInstall().then((accepted) => { if (accepted) onClose() }) }}
-                className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-[#333333] hover:bg-[#f5f5f5] transition-colors"
+                className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-ink-2 hover:bg-surface-2 transition-colors"
               >
                 <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                   <path d="M8 2v8" />
@@ -230,7 +237,7 @@ export default function NavDrawer({ open, onClose }: NavDrawerProps) {
 
             <button
               onClick={handleSignOut}
-              className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-[#777777] hover:bg-[#f5f5f5] transition-colors"
+              className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-ink-5 hover:bg-surface-2 transition-colors"
             >
               <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                 <path d="M6 14H3a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1h3" />
@@ -264,13 +271,13 @@ function SwitchRow({
       role="switch"
       aria-checked={checked}
       onClick={() => onChange(!checked)}
-      className="relative w-full flex items-center justify-between gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-[#333333] hover:bg-[#f5f5f5] transition-colors"
+      className="relative w-full flex items-center justify-between gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-ink-2 hover:bg-surface-2 transition-colors"
     >
       {label}
       <span
         aria-hidden="true"
         className={`relative w-9 h-5 rounded-full shrink-0 transition-colors duration-200 ${
-          checked ? "bg-[#1e3a5f]" : "bg-[#d4d4d4]"
+          checked ? "bg-brand-fill" : "bg-surface-5"
         }`}
       >
         <span

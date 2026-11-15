@@ -34,13 +34,13 @@ export default function LayoffBanner({
   const canRestart = tier === "restart" && sessionsIntoBlock > 0
 
   return (
-    <div className="mb-4 rounded-xl bg-[#fdf3e7] border border-[#f0dcc0] px-4 py-3">
+    <div className="mb-4 rounded-xl bg-warn-tint border border-warn-line px-4 py-3">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <p className="text-sm font-semibold text-[#8a4d14]">
+          <p className="text-sm font-semibold text-warn">
             {weeksText(days)} since your last session
           </p>
-          <p className="mt-1 text-xs leading-relaxed text-[#b06a1e]">
+          <p className="mt-1 text-xs leading-relaxed text-warn-2">
             {canRestart ? (
               <>
                 That long off costs real strength — the loads left in this block were
@@ -67,7 +67,7 @@ export default function LayoffBanner({
         {!canRestart && (
           <button
             onClick={onDismiss}
-            className="shrink-0 text-[#c9a06a] active:opacity-70 pt-0.5"
+            className="shrink-0 text-warn-3 active:opacity-70 pt-0.5"
             aria-label="Dismiss"
           >
             <svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor" aria-hidden="true">
@@ -81,13 +81,13 @@ export default function LayoffBanner({
         <div className="mt-3 flex items-center gap-2">
           <button
             onClick={onRestart}
-            className="flex-1 py-2.5 rounded-lg bg-[#b06a1e] text-sm font-semibold text-white active:opacity-80"
+            className="flex-1 py-2.5 rounded-lg bg-warn-fill text-sm font-semibold text-white active:opacity-80"
           >
             Restart {phaseLabel}
           </button>
           <button
             onClick={onDismiss}
-            className="flex-1 py-2.5 rounded-lg bg-white border border-[#f0dcc0] text-sm font-medium text-[#8a4d14] active:opacity-70"
+            className="flex-1 py-2.5 rounded-lg bg-surface border border-warn-line text-sm font-medium text-warn active:opacity-70"
           >
             Keep going
           </button>

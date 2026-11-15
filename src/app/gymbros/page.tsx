@@ -8,6 +8,8 @@ import { relativeDate } from "@/lib/time"
 import { PersonSummary } from "@/lib/routines"
 import { useOnboardingGuard } from "@/lib/useOnboardingGuard"
 import { PersonRow } from "@/components/ProfileHeader"
+import BackButton from "@/components/BackButton"
+import EscapeKey from "@/components/EscapeKey"
 
 function initials(name: string): string {
   return name
@@ -19,14 +21,14 @@ function initials(name: string): string {
 
 function LiftBadge({ profile }: { profile: UserProfile }) {
   const colours: Record<MainLift, string> = {
-    bench: "bg-[#eff6ff] text-[#1e3a5f]",
-    squat: "bg-[#f0f5ff] text-[#1e3a7a]",
-    deadlift: "bg-[#f2fdf0] text-[#1e5c1a]",
+    bench: "bg-brand-tint text-brand",
+    squat: "bg-brand-tint text-brand",
+    deadlift: "bg-good-tint text-good",
   }
   // A Balanced gymbro has no main lift; badge their mode instead.
   const lift = isLiftFocused(profile) ? profile.mainLift : undefined
   return (
-    <span className={`text-[10px] font-semibold uppercase tracking-widest px-2 py-0.5 rounded-full ${lift ? colours[lift] : "bg-[#f5f5f5] text-[#555555]"}`}>
+    <span className={`text-[10px] font-semibold uppercase tracking-widest px-2 py-0.5 rounded-full ${lift ? colours[lift] : "bg-surface-2 text-ink-4"}`}>
       {lift ? MAIN_LIFT_LABEL[lift] : TRAINING_MODE_LABEL.balanced}
     </span>
   )
@@ -44,7 +46,6 @@ export default function GymBrosPage() {
   const [requests, setRequests] = useState<FriendRequest[]>([])
   const [pendingCount, setPendingCount] = useState(0)
   const [requestsOpen, setRequestsOpen] = useState(false)
-  const [addEmail, setAddEmail] = useState("")
   const [addState, setAddState] = useState<AddState>("idle")
   const [loading, setLoading] = useState(true)
   const [removingEmail, setRemovingEmail] = useState<string | null>(null)
@@ -60,7 +61,8 @@ export default function GymBrosPage() {
   // or train under them.
   useEffect(() => {
     const q = query.trim()
-    if (q.length < 2) return
+    // An email is an invitation, not a name to look up.
+    if (q.length < 2 || q.includes("@")) return
     const timer = setTimeout(() => {
       fetch(`/api/users/search?q=${encodeURIComponent(q)}`)
         .then((r) => (r.ok ? r.json() : []))
@@ -69,7 +71,9 @@ export default function GymBrosPage() {
     }, 250)
     return () => clearTimeout(timer)
   }, [query])
-  const shownResults = query.trim().length >= 2 ? results : null
+  // One field does both jobs: a name searches, an email address adds.
+  const isEmail = query.includes("@")
+  const shownResults = !isEmail && query.trim().length >= 2 ? results : null
 
   function fetchAll() {
     Promise.all([
@@ -117,8 +121,8 @@ export default function GymBrosPage() {
 
   async function handleAddFriend(e: React.FormEvent) {
     e.preventDefault()
-    const email = addEmail.trim().toLowerCase()
-    if (!email) return
+    const email = query.trim().toLowerCase()
+    if (!email || !isEmail) return
     if (addFeedbackTimer.current) clearTimeout(addFeedbackTimer.current)
     setAddState("sending")
     try {
@@ -131,7 +135,7 @@ export default function GymBrosPage() {
         // They had already asked us, so the server made it mutual on the spot.
         const body = await res.json().catch(() => null)
         setAddState(body?.accepted ? "accepted" : "sent")
-        setAddEmail("")
+        setQuery("")
         if (body?.accepted) fetchAll()
       } else {
         const body = await res.json()
@@ -193,21 +197,13 @@ export default function GymBrosPage() {
     <main className="mx-auto w-full max-w-[393px] px-4 pt-[calc(1.5rem+env(safe-area-inset-top))] pb-6">
       <header className="mb-6">
         <div className="flex items-center justify-between mb-1">
-          <div className="flex items-center gap-3">
-            <Link
-              href="/"
-              className="p-1 -ml-1 text-[#555555] hover:text-[#111111] transition-colors"
-              aria-label="Back to home"
-            >
-              <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                <polyline points="11,4 6,9 11,14" />
-              </svg>
-            </Link>
-            <h1 className="text-2xl font-semibold text-[#111111] tracking-tight">Gymbros</h1>
+          <div className="flex items-center gap-2">
+            <BackButton href="/" label="Back to home" />
+            <h1 className="text-2xl font-semibold text-ink tracking-tight">Gymbros</h1>
           </div>
           <button
             onClick={() => setRequestsOpen((o) => !o)}
-            className="relative p-1.5 text-[#555555] hover:text-[#111111] transition-colors"
+            className="relative p-1.5 text-ink-4 hover:text-ink transition-colors"
             aria-label="Friend requests"
           >
             <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -215,14 +211,14 @@ export default function GymBrosPage() {
               <line x1="10" y1="17" x2="10" y2="19" />
             </svg>
             {pendingCount > 0 && (
-              <span className="absolute top-0 right-0 bg-red-500 text-white text-[8px] font-bold rounded-full min-w-[15px] h-[15px] flex items-center justify-center px-0.5 leading-none">
+              <span className="absolute top-0 right-0 bg-red-500 text-white text-[10px] font-bold rounded-full min-w-[15px] h-[15px] flex items-center justify-center px-0.5 leading-none">
                 {pendingCount > 9 ? "9+" : pendingCount}
               </span>
             )}
           </button>
         </div>
         {!loading && (
-          <p className="text-sm text-[#777777] ml-8">
+          <p className="text-sm text-ink-5 ml-[2.375rem]">
             {friends.length} gymbro{friends.length !== 1 ? "s" : ""}
           </p>
         )}
@@ -262,30 +258,30 @@ export default function GymBrosPage() {
 
       {/* Requests panel */}
       {requestsOpen && (
-        <div className="mb-5 bg-white border border-[#eeeeee] rounded-xl shadow-sm overflow-hidden">
-          <div className="px-4 py-3 border-b border-[#f5f5f5]">
-            <p className="text-xs font-semibold uppercase tracking-widest text-[#aaaaaa]">Pending requests</p>
+        <div className="mb-5 bg-surface border border-line-soft rounded-xl shadow-sm overflow-hidden">
+          <div className="px-4 py-3 border-b border-line-soft">
+            <p className="text-xs font-semibold uppercase tracking-widest text-ink-6">Pending requests</p>
           </div>
           {requests.length === 0 ? (
-            <p className="px-4 py-3 text-sm text-[#aaaaaa]">No pending requests</p>
+            <p className="px-4 py-3 text-sm text-ink-6">No pending requests</p>
           ) : (
-            <ul className="divide-y divide-[#f5f5f5]">
+            <ul className="divide-y divide-line-soft">
               {requests.map((req) => (
                 <li key={req.email} className="flex items-center justify-between px-4 py-3 gap-3">
                   <div className="min-w-0">
-                    <p className="text-sm font-semibold text-[#111111] truncate">{req.name}</p>
-                    <p className="text-[11px] text-[#aaaaaa] truncate">{req.email}</p>
+                    <p className="text-sm font-semibold text-ink truncate">{req.name}</p>
+                    <p className="text-[11px] text-ink-6 truncate">{req.email}</p>
                   </div>
                   <div className="flex gap-2 shrink-0">
                     <button
                       onClick={() => handleAccept(req.email)}
-                      className="text-[11px] font-semibold px-3 py-1.5 rounded-lg bg-[#111111] text-white hover:bg-[#333333] transition-colors"
+                      className="text-[11px] font-semibold px-3 py-1.5 rounded-lg bg-brand-fill text-white hover:bg-brand-fill-2 transition-colors"
                     >
                       Accept
                     </button>
                     <button
                       onClick={() => handleReject(req.email)}
-                      className="text-[11px] font-semibold px-3 py-1.5 rounded-lg bg-[#f5f5f5] text-[#555555] hover:bg-[#eeeeee] transition-colors"
+                      className="text-[11px] font-semibold px-3 py-1.5 rounded-lg bg-surface-2 text-ink-4 hover:bg-surface-3 transition-colors"
                     >
                       Reject
                     </button>
@@ -297,21 +293,43 @@ export default function GymBrosPage() {
         </div>
       )}
 
-      {/* Find people */}
-      <div className="mb-3">
-        <input
-          type="search"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder="Search people by name"
-          className="w-full text-sm px-3 py-2.5 border border-[#dddddd] rounded-xl bg-white text-[#111111] placeholder-[#bbbbbb] focus:outline-none focus:border-[#111111] transition-colors"
-        />
+      {/* Find or add people: a name searches, an email sends a request */}
+      <form onSubmit={handleAddFriend} className="mb-5">
+        <div className="flex gap-2">
+          <input
+            ref={addInputRef}
+            type="text"
+            inputMode="email"
+            autoCapitalize="none"
+            autoCorrect="off"
+            enterKeyHint={isEmail ? "send" : "search"}
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search by name or add by email"
+            aria-label="Search by name or add by email"
+            className="flex-1 min-w-0 text-sm px-3 py-2.5 border border-line-strong rounded-xl bg-surface text-ink placeholder-ink-7 focus:outline-none focus:border-brand-line transition-colors"
+          />
+          {isEmail && (
+            <button
+              type="submit"
+              disabled={addState === "sending" || !query.trim()}
+              className="text-sm font-semibold px-4 py-2.5 rounded-xl bg-brand-fill text-white disabled:opacity-40 hover:bg-brand-fill-2 transition-colors shrink-0 animate-fade-in"
+            >
+              {addState === "sending" ? "…" : "Add"}
+            </button>
+          )}
+        </div>
+        {addState !== "idle" && addState !== "sending" && (
+          <p className={`mt-1.5 text-[12px] ml-1 ${addState === "sent" || addState === "accepted" ? "text-green-600" : "text-red-500"}`}>
+            {addFeedback[addState]}
+          </p>
+        )}
         {shownResults !== null && (
-          <div className="mt-2 bg-white border border-[#eeeeee] rounded-xl px-4 shadow-sm">
+          <div className="mt-2 bg-surface border border-line-soft rounded-xl px-4 shadow-sm">
             {shownResults.length === 0 ? (
-              <p className="py-3 text-sm text-[#aaaaaa]">Nobody by that name</p>
+              <p className="py-3 text-sm text-ink-5">Nobody by that name. Know their email? Type it to add them.</p>
             ) : (
-              <ul className="divide-y divide-[#f5f5f5]">
+              <ul className="divide-y divide-line-soft">
                 {shownResults.map((p) => (
                   <li key={p.email}>
                     <PersonRow person={p} />
@@ -321,43 +339,17 @@ export default function GymBrosPage() {
             )}
           </div>
         )}
-      </div>
-
-      {/* Add friend */}
-      <form onSubmit={handleAddFriend} className="mb-5">
-        <div className="flex gap-2">
-          <input
-            ref={addInputRef}
-            type="email"
-            value={addEmail}
-            onChange={(e) => setAddEmail(e.target.value)}
-            placeholder="Add gymbro by email"
-            className="flex-1 text-sm px-3 py-2.5 border border-[#dddddd] rounded-xl bg-white text-[#111111] placeholder-[#bbbbbb] focus:outline-none focus:border-[#111111] transition-colors"
-          />
-          <button
-            type="submit"
-            disabled={addState === "sending" || !addEmail.trim()}
-            className="text-sm font-semibold px-4 py-2.5 rounded-xl bg-[#111111] text-white disabled:opacity-40 hover:bg-[#333333] transition-colors shrink-0"
-          >
-            {addState === "sending" ? "…" : "Add"}
-          </button>
-        </div>
-        {addState !== "idle" && addState !== "sending" && (
-          <p className={`mt-1.5 text-[12px] ml-1 ${addState === "sent" || addState === "accepted" ? "text-green-600" : "text-red-500"}`}>
-            {addFeedback[addState]}
-          </p>
-        )}
       </form>
 
       {/* Friends list */}
       {loading ? (
         <div className="space-y-3">
           {[...Array(3)].map((_, i) => (
-            <div key={i} className="h-20 bg-[#e8e8e8] rounded-xl animate-pulse" />
+            <div key={i} className="h-20 bg-surface-4 rounded-xl animate-pulse" />
           ))}
         </div>
       ) : friends.length === 0 ? (
-        <p className="text-sm text-[#aaaaaa] text-center mt-16">No gymbros yet — add one by email above</p>
+        <p className="text-sm text-ink-6 text-center mt-16">No gymbros yet. Search a name or type an email above.</p>
       ) : (
         <ul className="space-y-3">
           {friends.map((bro) => {
@@ -367,40 +359,45 @@ export default function GymBrosPage() {
             return (
               <li
                 key={bro.email}
-                className={`bg-white border rounded-xl px-4 py-3.5 shadow-sm transition-colors ${
-                  isLive ? "border-green-300 bg-green-50/30" : "border-[#eeeeee]"
+                className={`bg-surface border rounded-xl px-4 py-3.5 shadow-sm transition-colors ${
+                  isLive ? "border-green-300 bg-green-50/30" : "border-line-soft"
                 } ${isRemoving ? "opacity-50" : ""}`}
               >
-                <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center justify-between gap-3 mb-2.5">
                   <Link
                     href={`/friends/${encodeURIComponent(bro.email)}`}
                     className="flex items-center gap-2.5 min-w-0 active:opacity-70 transition-opacity"
                   >
                     <div className="relative shrink-0">
-                      <div className="w-9 h-9 rounded-full bg-[#f0f0f0] flex items-center justify-center text-xs font-bold text-[#555555] select-none">
+                      <div className="w-9 h-9 rounded-full bg-surface-3 flex items-center justify-center text-xs font-bold text-ink-4 select-none">
                         {initials(bro.name)}
                       </div>
                       {isLive && (
-                        <span className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-green-500 border-2 border-white" />
+                        <span className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-green-500 border-2 border-surface" />
                       )}
                     </div>
-                    <span className="text-sm font-semibold text-[#111111] truncate">{bro.name}</span>
-                    {isLive && (
-                      <span className="flex items-center gap-1 text-[10px] font-semibold uppercase tracking-widest text-green-600 bg-green-100 px-2 py-0.5 rounded-full shrink-0">
-                        <span className="relative flex h-1.5 w-1.5">
-                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-500 opacity-75" />
-                          <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-green-500" />
-                        </span>
-                        In session
+                    {/* Name on its own line, badges under it: the badges used to squeeze it to "Omar …" */}
+                    <span className="flex flex-col gap-1 min-w-0">
+                      <span className="text-sm font-semibold text-ink truncate">{bro.name}</span>
+                      <span className="flex items-center gap-1.5">
+                        {isLive && (
+                          <span className="flex items-center gap-1 text-[10px] font-semibold uppercase tracking-widest text-green-700 bg-green-100 px-2 py-0.5 rounded-full shrink-0">
+                            <span className="relative flex h-1.5 w-1.5">
+                              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-500 opacity-75" />
+                              <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-green-500" />
+                            </span>
+                            In session
+                          </span>
+                        )}
+                        <LiftBadge profile={bro} />
                       </span>
-                    )}
+                    </span>
                   </Link>
-                  <div className="flex items-center gap-2 shrink-0">
-                    <LiftBadge profile={bro} />
+                  <div className="flex items-center gap-2 shrink-0 self-start">
                     <button
                       onClick={() => setPendingRemove(bro)}
                       disabled={isRemoving}
-                      className="text-[#cccccc] hover:text-red-400 transition-colors p-0.5"
+                      className="text-ink-6 hover:text-red-500 transition-colors p-2 -m-1.5"
                       aria-label={`Remove ${bro.name}`}
                     >
                       <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" aria-hidden="true">
@@ -412,25 +409,25 @@ export default function GymBrosPage() {
                 </div>
                 <div className="flex gap-4">
                   <div>
-                    <p className="text-[10px] uppercase tracking-widest text-[#aaaaaa] font-semibold">BW</p>
-                    <p className="text-sm font-medium text-[#333333]">{bro.bw} kg</p>
+                    <p className="text-[10px] uppercase tracking-widest text-ink-6 font-semibold">BW</p>
+                    <p className="text-sm font-medium text-ink-2">{bro.bw} kg</p>
                   </div>
                   {isLiftFocused(bro) ? (
                     <>
                       <div>
-                        <p className="text-[10px] uppercase tracking-widest text-[#aaaaaa] font-semibold">Current</p>
-                        <p className="text-sm font-medium text-[#333333]">{bro.anchor ?? "—"} kg</p>
+                        <p className="text-[10px] uppercase tracking-widest text-ink-6 font-semibold">Current</p>
+                        <p className="text-sm font-medium text-ink-2">{bro.anchor ?? "—"} kg</p>
                       </div>
                       <div>
-                        <p className="text-[10px] uppercase tracking-widest text-[#aaaaaa] font-semibold">Target</p>
-                        <p className="text-sm font-medium text-[#333333]">{bro.target ?? "—"} kg</p>
+                        <p className="text-[10px] uppercase tracking-widest text-ink-6 font-semibold">Target</p>
+                        <p className="text-sm font-medium text-ink-2">{bro.target ?? "—"} kg</p>
                       </div>
                     </>
                   ) : (
                     /* A Balanced gymbro has no anchor or target to show */
                     <div>
-                      <p className="text-[10px] uppercase tracking-widest text-[#aaaaaa] font-semibold">Last active</p>
-                      <p className="text-sm font-medium text-[#333333]">
+                      <p className="text-[10px] uppercase tracking-widest text-ink-6 font-semibold">Last active</p>
+                      <p className="text-sm font-medium text-ink-2">
                         {bro.lastSessionDate ? relativeDate(bro.lastSessionDate) : "never"}
                       </p>
                     </div>
@@ -445,17 +442,18 @@ export default function GymBrosPage() {
       {/* Remove gymbro confirmation */}
       {pendingRemove && (
         <div
-          className="fixed inset-0 z-50 flex items-end justify-center bg-black/40"
+          role="dialog" aria-modal="true" className="fixed inset-0 z-50 flex items-end justify-center bg-black/40"
           onClick={() => setPendingRemove(null)}
         >
+          <EscapeKey onEscape={() => setPendingRemove(null)} />
           <div
-            className="bg-white w-full max-w-[393px] rounded-t-2xl px-6 pt-6 pb-10 max-h-[90dvh] overflow-y-auto"
+            className="bg-raised w-full max-w-[393px] rounded-t-2xl px-6 pt-6 pb-10 max-h-[90dvh] overflow-y-auto"
             onClick={(e) => e.stopPropagation()}
           >
-            <p className="text-base font-semibold text-[#111111] mb-1">
+            <p className="text-base font-semibold text-ink mb-1">
               Remove {pendingRemove.name}?
             </p>
-            <p className="text-sm text-[#777777] mb-6">
+            <p className="text-sm text-ink-5 mb-6">
               You&apos;ll both stop seeing each other&apos;s sessions. You can add them back by email
               any time.
             </p>
@@ -467,7 +465,7 @@ export default function GymBrosPage() {
             </button>
             <button
               onClick={() => setPendingRemove(null)}
-              className="w-full border border-[#e8e8e8] rounded-xl py-3 text-sm font-semibold text-[#111111] hover:bg-[#fafafa] active:bg-[#f5f5f5] transition-colors"
+              className="w-full border border-line rounded-xl py-3 text-sm font-semibold text-ink hover:bg-surface-1 active:bg-surface-2 transition-colors"
             >
               Cancel
             </button>

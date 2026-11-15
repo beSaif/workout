@@ -14,7 +14,7 @@ function formatDate(dateStr: string): string {
 function Label({ children, className }: { children: React.ReactNode; className?: string }) {
   return (
     <span
-      className={`text-[10px] font-semibold uppercase tracking-widest text-[#aaaaaa] ${className ?? ""}`}
+      className={`text-[10px] font-semibold uppercase tracking-widest text-ink-6 ${className ?? ""}`}
     >
       {children}
     </span>
@@ -71,15 +71,15 @@ function RecordRow({
       }`}
     >
       <span className="flex-1 min-w-0">
-        <span className="block text-sm font-semibold text-[#111111]">{pr.exercise}</span>
+        <span className="block text-sm font-semibold text-ink">{pr.exercise}</span>
         {/* The badge rides the meta line rather than the title: a long exercise name
             wraps, and a badge beside it ends up floating against the wrapped block. */}
         <span className="flex items-center gap-2 mt-0.5">
-          <span className="text-[11px] text-[#aaaaaa]">
+          <span className="text-[11px] text-ink-6">
             {pr.reps} rep{pr.reps === 1 ? "" : "s"} · {formatDate(pr.date)}
           </span>
           {pr.isFresh && (
-            <span className="shrink-0 text-[9px] font-semibold uppercase tracking-widest px-1.5 py-0.5 rounded-full bg-[#fdf3e7] text-[#8a4d14]">
+            <span className="shrink-0 text-[10px] font-semibold uppercase tracking-widest px-1.5 py-0.5 rounded-full bg-warn-tint text-warn">
               New
             </span>
           )}
@@ -87,8 +87,8 @@ function RecordRow({
       </span>
 
       <span className="flex items-baseline gap-0.5 shrink-0">
-        <span className="text-lg font-semibold text-[#111111] tabular-nums">{pr.kg}</span>
-        <span className="text-[11px] text-[#aaaaaa]">kg</span>
+        <span className="text-lg font-semibold text-ink tabular-nums">{pr.kg}</span>
+        <span className="text-[11px] text-ink-6">kg</span>
       </span>
 
       {/* The row itself is the button, so this is a styled span rather than a
@@ -96,7 +96,7 @@ function RecordRow({
       {onReact && (
         <span
           className={`shrink-0 w-8 h-8 rounded-full flex items-center justify-center border transition-colors ${
-            reacted ? "bg-[#fdf3e7] border-transparent" : "bg-white border-[#e8e8e8]"
+            reacted ? "bg-warn-tint border-transparent" : "bg-surface border-line"
           }`}
         >
           <FlameIcon filled={reacted} />
@@ -122,7 +122,7 @@ function StreakGrid({ dots }: { dots: boolean[] }) {
             <span
               key={di}
               className="w-[10px] h-[10px] rounded-[2px]"
-              style={{ backgroundColor: trained ? "#1e3a5f" : "#eeeeee" }}
+              style={{ backgroundColor: trained ? "var(--color-brand-line)" : "var(--color-surface-3)" }}
             />
           ))}
         </div>
@@ -175,7 +175,7 @@ export default function GymbroCard({
   const hasProgress = liftFocused && target > 0 && anchor > 0
 
   return (
-    <div className="rounded-2xl border border-[#eeeeee] bg-white shadow-sm overflow-hidden animate-fade-up">
+    <div className="rounded-2xl border border-line-soft bg-surface shadow-sm overflow-hidden animate-fade-up">
       {/* Artwork */}
       {full && (
         <div
@@ -216,7 +216,7 @@ export default function GymbroCard({
         {/* Name + main lift */}
         {full && (
           <div className="flex items-center justify-between gap-2 mb-4">
-            <h2 className="text-2xl font-semibold text-[#111111] tracking-tight truncate">
+            <h2 className="text-2xl font-semibold text-ink tracking-tight truncate">
               {profile.name}
             </h2>
             <span
@@ -233,18 +233,18 @@ export default function GymbroCard({
         {hasProgress && (
           <div className="mb-4">
             <div className="flex items-baseline justify-between gap-2 mb-1.5">
-              <Label>Current best</Label>
+              <Label>Best e1RM</Label>
               {card.progressPct != null && (
-                <span className="text-xs font-medium text-[#1e3a5f]">{card.progressPct}%</span>
+                <span className="text-xs font-medium text-brand">{card.progressPct}%</span>
               )}
             </div>
             <div className="flex items-baseline gap-1.5 mb-2">
-              <span className="text-2xl font-semibold text-[#111111] tabular-nums leading-none">
-                {anchor}
+              <span className="text-2xl font-semibold text-ink tabular-nums leading-none">
+                {card.standingKg ?? anchor}
               </span>
-              <span className="text-sm text-[#aaaaaa]">/ {target}kg</span>
+              <span className="text-sm text-ink-6">/ {target}kg</span>
             </div>
-            <div className="h-1 rounded-full bg-[#f5f5f5] overflow-hidden">
+            <div className="h-1 rounded-full bg-surface-2 overflow-hidden">
               <div
                 className="h-full rounded-full transition-all duration-500"
                 style={{
@@ -258,7 +258,7 @@ export default function GymbroCard({
 
         {/* Records — ruled off from whatever sits above; on a stats-only card with no
             progress to show, nothing does. */}
-        <div className={full || hasProgress ? "border-t border-[#f5f5f5]" : ""}>
+        <div className={full || hasProgress ? "border-t border-line-soft" : ""}>
           {card.records.length > 0 ? (
             card.records.map((pr) => (
               <RecordRow
@@ -269,23 +269,23 @@ export default function GymbroCard({
               />
             ))
           ) : (
-            <p className="py-6 text-center text-sm text-[#aaaaaa]">No records yet</p>
+            <p className="py-6 text-center text-sm text-ink-6">No records yet</p>
           )}
         </div>
 
         {/* Consistency */}
-        <div className="flex items-end justify-between gap-3 pt-4 mt-1 border-t border-[#f5f5f5]">
+        <div className="flex items-end justify-between gap-3 pt-4 mt-1 border-t border-line-soft">
           <div>
             <Label>Streak</Label>
             <div className="flex items-baseline gap-1.5 mt-1.5">
-              <span className="text-2xl font-semibold text-[#111111] tabular-nums leading-none">
+              <span className="text-2xl font-semibold text-ink tabular-nums leading-none">
                 {card.weekStreak}
               </span>
-              <span className="text-sm text-[#777777]">
+              <span className="text-sm text-ink-5">
                 week{card.weekStreak === 1 ? "" : "s"}
               </span>
             </div>
-            <p className="text-[11px] text-[#aaaaaa] mt-1">
+            <p className="text-[11px] text-ink-6 mt-1">
               {card.avgPerWeek}×/wk over {CARD_WINDOW_DAYS / 7}w
             </p>
           </div>
@@ -294,10 +294,10 @@ export default function GymbroCard({
 
         {/* Last session */}
         {lastSessionSummary && (
-          <div className="rounded-xl bg-[#f5f5f5] px-4 py-3 mt-4">
+          <div className="rounded-xl bg-surface-2 px-4 py-3 mt-4">
             <div className="flex items-center justify-between gap-2">
               <Label>Last seen</Label>
-              <span className="text-[11px] text-[#999999]">
+              <span className="text-[11px] text-ink-6">
                 {card.daysSinceLast === 0
                   ? "today"
                   : card.daysSinceLast === 1
@@ -305,13 +305,13 @@ export default function GymbroCard({
                     : `${card.daysSinceLast}d ago`}
               </span>
             </div>
-            <p className="text-sm font-medium text-[#333333] mt-1.5 truncate">
+            <p className="text-sm font-medium text-ink-2 mt-1.5 truncate">
               {lastSessionSummary.label}
               {lastSessionSummary.muscles.length > 0 &&
                 ` · ${lastSessionSummary.muscles.join(" + ")}`}
             </p>
             {lastSessionSummary.sets > 0 && (
-              <p className="text-[11px] text-[#999999] mt-0.5">
+              <p className="text-[11px] text-ink-6 mt-0.5">
                 {lastSessionSummary.exercises} ex · {lastSessionSummary.sets} sets ·{" "}
                 {lastSessionSummary.volume.toLocaleString("en-GB")} kg
               </p>
@@ -320,7 +320,7 @@ export default function GymbroCard({
         )}
 
         {/* Footer */}
-        <div className="flex items-center justify-between gap-2 pt-3 mt-3 border-t border-[#f5f5f5]">
+        <div className="flex items-center justify-between gap-2 pt-3 mt-3 border-t border-line-soft">
           {/* The profile header already counts sessions; the collectible carries its own. */}
           {full && (
             <Label>

@@ -24,9 +24,9 @@ export default function ProfileTabs({
 }) {
   return (
     <>
-      <div className="fixed top-0 inset-x-0 z-20 h-[env(safe-area-inset-top)] bg-white" aria-hidden="true" />
-      <div className="sticky top-[env(safe-area-inset-top)] z-20 -mx-5 px-5 pb-3 mb-1 bg-white">
-        <div role="tablist" className="flex gap-1 p-1 rounded-xl bg-[#f5f5f5]">
+      <div className="fixed top-0 inset-x-0 z-20 h-[env(safe-area-inset-top)] bg-surface" aria-hidden="true" />
+      <div className="sticky top-[env(safe-area-inset-top)] z-20 -mx-5 px-5 pb-3 mb-1 bg-surface">
+        <div role="tablist" className="flex gap-1 p-1 rounded-xl bg-surface-2">
           {TABS.map((t) => (
             <button
               key={t.id}
@@ -34,7 +34,7 @@ export default function ProfileTabs({
               aria-selected={tab === t.id}
               onClick={() => onChange(t.id)}
               className={`flex-1 py-2 rounded-lg text-xs font-semibold transition-colors ${
-                tab === t.id ? "bg-white text-[#111111] shadow-sm" : "text-[#777777] hover:text-[#333333]"
+                tab === t.id ? "bg-surface-pop text-ink shadow-sm" : "text-ink-5 hover:text-ink-2"
               }`}
             >
               {t.label}

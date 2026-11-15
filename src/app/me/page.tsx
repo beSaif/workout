@@ -11,6 +11,7 @@ import ShareImageSheet from "@/components/ShareImageSheet"
 import ProfileTabs, { ProfileTab } from "@/components/ProfileTabs"
 import ProfileHeader, { SECONDARY_ACTION } from "@/components/ProfileHeader"
 import RoutinePreview from "@/components/RoutinePreview"
+import BackButton from "@/components/BackButton"
 
 interface CardData {
   profile: UserProfile
@@ -66,22 +67,14 @@ export default function MyCardPage() {
   }, [])
 
   const backButton = (
-    <button
-      onClick={() => router.back()}
-      className="mb-6 p-1 -ml-1 text-[#555555] hover:text-[#111111] transition-colors"
-      aria-label="Go back"
-    >
-      <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-        <polyline points="11,4 6,9 11,14" />
-      </svg>
-    </button>
+    <BackButton onClick={() => router.back()} label="Go back" className="mb-4" />
   )
 
   if (loading) {
     return (
       <main className="mx-auto w-full max-w-[393px] px-5 pt-[calc(1.5rem+env(safe-area-inset-top))] pb-8">
         {backButton}
-        <div className="rounded-2xl bg-[#f5f5f5] animate-pulse h-[520px]" />
+        <div className="rounded-2xl bg-surface-2 animate-pulse h-[520px]" />
       </main>
     )
   }
@@ -90,7 +83,7 @@ export default function MyCardPage() {
     return (
       <main className="mx-auto w-full max-w-[393px] px-5 pt-[calc(1.5rem+env(safe-area-inset-top))] pb-8">
         {backButton}
-        <p className="text-sm text-[#aaaaaa] text-center mt-20">No card found</p>
+        <p className="text-sm text-ink-6 text-center mt-20">No card found</p>
       </main>
     )
   }
@@ -123,11 +116,11 @@ export default function MyCardPage() {
             lastSessionSummary={lastSessionSummary}
             isLive={isLive}
           />
-          <p className="text-center text-[10px] text-[#bbbbbb] mt-3">this is what your gymbros see</p>
+          <p className="text-center text-[10px] text-ink-7 mt-3">this is what your gymbros see</p>
         </>
       ) : (
         <>
-          <p className="text-xs text-[#999999] mb-4">
+          <p className="text-xs text-ink-6 mb-4">
             {social.coach
               ? `You train under ${social.coach.name}, so this is their routine.`
               : "Anyone can see your routine and train under you."}

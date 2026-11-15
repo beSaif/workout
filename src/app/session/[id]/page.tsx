@@ -2,12 +2,12 @@
 
 import { useState, useEffect } from "react"
 import { useParams } from "next/navigation"
-import Link from "next/link"
 import { Session, MainLiftSet, TrainingDay, UserProfile, isCardioSet } from "@/lib/types"
 import { getMainLiftLabel, getMainLiftShortLabel, getSessionLabel } from "@/lib/trainingMode"
 import { loadAll, loadSessionsLocal, loadExerciseConfigLocal, loadExerciseConfig, loadProfile, loadProfileLocal, loadTrainingDaysLocal } from "@/lib/storage"
 import { MuscleGroupConfig, DEFAULT_TRAINING_DAYS, getMuscleLabel } from "@/lib/exerciseConfig"
 import { formatCardioSet } from "@/lib/cardio"
+import BackButton from "@/components/BackButton"
 
 function formatDate(iso: string): string {
   return new Intl.DateTimeFormat("en-GB", {
@@ -19,18 +19,18 @@ function formatDate(iso: string): string {
 
 function SetRow({ set }: { set: MainLiftSet }) {
   const isWarmup = set.isWarmup
-  const textColor = isWarmup ? "text-[#aaaaaa]" : "text-[#111111]"
-  const e1rmColor = isWarmup ? "text-[#aaaaaa]" : "text-[#1e3a5f]"
+  const textColor = isWarmup ? "text-ink-6" : "text-ink"
+  const e1rmColor = isWarmup ? "text-ink-6" : "text-brand"
 
   return (
     <>
-      <div className={`grid grid-cols-[2rem_2.5rem_4.5rem_3.5rem] gap-x-3 py-[3px] text-sm ${textColor}`}>
+      <div className={`grid grid-cols-[2rem_3.5rem_1fr_3.5rem] gap-x-3 py-[3px] text-sm whitespace-nowrap ${textColor}`}>
         <span className="font-medium">{set.id}</span>
         <span>{set.kg}kg</span>
         <span>
           {set.reps} reps
           {set.rpe != null && (
-            <span className="text-[#aaaaaa]"> · {set.rpe}</span>
+            <span className="text-ink-6"> · {set.rpe}</span>
           )}
         </span>
         <span className={`text-right ${e1rmColor} font-medium`}>
@@ -38,7 +38,7 @@ function SetRow({ set }: { set: MainLiftSet }) {
         </span>
       </div>
       {set.note && (
-        <div className="text-xs italic text-[#aaaaaa] pb-1 pl-[5.5rem]">
+        <div className="text-xs italic text-ink-6 pb-1 pl-[6.5rem]">
           {set.note}
         </div>
       )}
@@ -76,9 +76,9 @@ export default function SessionDetailPage() {
   if (!mounted) {
     return (
       <main className="mx-auto w-full max-w-[393px] px-4 pt-[calc(1.5rem+env(safe-area-inset-top))] pb-6">
-        <div className="h-4 w-16 bg-[#e8e8e8] rounded animate-pulse mb-8" />
-        <div className="h-6 w-48 bg-[#e8e8e8] rounded animate-pulse mb-2" />
-        <div className="h-4 w-32 bg-[#e8e8e8] rounded animate-pulse" />
+        <div className="h-4 w-16 bg-surface-4 rounded animate-pulse mb-8" />
+        <div className="h-6 w-48 bg-surface-4 rounded animate-pulse mb-2" />
+        <div className="h-4 w-32 bg-surface-4 rounded animate-pulse" />
       </main>
     )
   }
@@ -86,13 +86,8 @@ export default function SessionDetailPage() {
   if (!session) {
     return (
       <main className="mx-auto w-full max-w-[393px] px-4 pt-[calc(1.5rem+env(safe-area-inset-top))] pb-6">
-        <Link
-          href="/"
-          className="inline-flex items-center gap-1 text-sm text-[#1e3a5f] mb-6"
-        >
-          ← Back
-        </Link>
-        <p className="text-sm text-[#777777]">Session not found.</p>
+        <BackButton href="/" label="Back to home" className="mb-3" />
+        <p className="text-sm text-ink-5">Session not found.</p>
       </main>
     )
   }
@@ -106,37 +101,32 @@ export default function SessionDetailPage() {
   return (
     <main className="mx-auto w-full max-w-[393px] px-4 pt-[calc(1.5rem+env(safe-area-inset-top))] pb-6">
       {/* Back */}
-      <Link
-        href="/"
-        className="inline-flex items-center gap-1 text-sm text-[#1e3a5f] mb-6 hover:underline"
-      >
-        ← Back
-      </Link>
+      <BackButton href="/" label="Back to home" className="mb-3" />
 
       {/* Session header */}
       <header className="mb-6">
         <div className="flex items-start justify-between">
           <div>
-            <h1 className="text-xl font-semibold text-[#111111] tracking-tight">
+            <h1 className="text-xl font-semibold text-ink tracking-tight">
               Session {String(session.id).padStart(2, "0")}
-              <span className="text-[#aaaaaa] font-normal"> · {getSessionLabel(session, trainingDays)}</span>
+              <span className="text-ink-6 font-normal"> · {getSessionLabel(session, trainingDays)}</span>
             </h1>
             {session.skippedMainLift && (
-              <span className="inline-block mt-1 text-[9px] font-bold uppercase tracking-wide bg-[#f0f0f0] text-[#888888] rounded-full px-2 py-0.5">
+              <span className="inline-block mt-1 text-[10px] font-bold uppercase tracking-wide bg-surface-3 text-ink-5 rounded-full px-2 py-0.5">
                 No {getMainLiftShortLabel(profile)}
               </span>
             )}
             {session.date && (
-              <p className="text-sm text-[#777777] mt-0.5">{formatDate(session.date)}</p>
+              <p className="text-sm text-ink-5 mt-0.5">{formatDate(session.date)}</p>
             )}
             {session.bw && (
-              <p className="text-xs text-[#aaaaaa] mt-0.5">{session.bw}kg BW</p>
+              <p className="text-xs text-ink-6 mt-0.5">{session.bw}kg BW</p>
             )}
           </div>
           {bestE1RM && (
             <div className="text-right">
-              <p className="text-[10px] text-[#aaaaaa] uppercase tracking-wide mb-0.5">e1RM</p>
-              <p className="text-2xl font-semibold text-[#1e3a5f]">{bestE1RM}<span className="text-sm font-normal">kg</span></p>
+              <p className="text-[10px] text-ink-6 uppercase tracking-wide mb-0.5">e1RM</p>
+              <p className="text-2xl font-semibold text-brand">{bestE1RM}<span className="text-sm font-normal">kg</span></p>
             </div>
           )}
         </div>
@@ -145,7 +135,7 @@ export default function SessionDetailPage() {
       {/* Main lift section — absent on Balanced-mode sessions, which log no main lift */}
       {session.sets.length > 0 && (
       <section className="mb-6">
-        <p className="text-[10px] font-medium text-[#aaaaaa] uppercase tracking-widest mb-3">
+        <p className="text-[10px] font-medium text-ink-6 uppercase tracking-widest mb-3">
           {getMainLiftLabel(profile)}
         </p>
 
@@ -153,35 +143,35 @@ export default function SessionDetailPage() {
         {workingWeight && (
           <div className="flex gap-4 mb-4">
             <div>
-              <p className="text-[10px] text-[#aaaaaa] uppercase tracking-wide mb-0.5">Working</p>
-              <p className="text-sm font-semibold text-[#111111]">{workingWeight}kg</p>
+              <p className="text-[10px] text-ink-6 uppercase tracking-wide mb-0.5">Working</p>
+              <p className="text-sm font-semibold text-ink">{workingWeight}kg</p>
             </div>
             <div>
-              <p className="text-[10px] text-[#aaaaaa] uppercase tracking-wide mb-0.5">Sets</p>
-              <p className="text-sm font-semibold text-[#111111]">{working.length}</p>
+              <p className="text-[10px] text-ink-6 uppercase tracking-wide mb-0.5">Sets</p>
+              <p className="text-sm font-semibold text-ink">{working.length}</p>
             </div>
             {working[0] && (
               <div>
-                <p className="text-[10px] text-[#aaaaaa] uppercase tracking-wide mb-0.5">Reps</p>
-                <p className="text-sm font-semibold text-[#111111]">{working[0].reps}</p>
+                <p className="text-[10px] text-ink-6 uppercase tracking-wide mb-0.5">Reps</p>
+                <p className="text-sm font-semibold text-ink">{working[0].reps}</p>
               </div>
             )}
           </div>
         )}
 
         {/* Sets table */}
-        <div className="bg-[#eff6ff] rounded-xl px-4 py-3">
-          <div className="grid grid-cols-[2rem_2.5rem_4.5rem_3.5rem] gap-x-3 mb-2">
-            <span className="text-[10px] text-[#aaaaaa] uppercase tracking-wide">Set</span>
-            <span className="text-[10px] text-[#aaaaaa] uppercase tracking-wide">kg</span>
-            <span className="text-[10px] text-[#aaaaaa] uppercase tracking-wide">Reps · RPE</span>
-            <span className="text-[10px] text-[#aaaaaa] uppercase tracking-wide text-right">e1RM</span>
+        <div className="bg-brand-tint rounded-xl px-4 py-3">
+          <div className="grid grid-cols-[2rem_3.5rem_1fr_3.5rem] gap-x-3 mb-2">
+            <span className="text-[10px] text-ink-6 uppercase tracking-wide">Set</span>
+            <span className="text-[10px] text-ink-6 uppercase tracking-wide">kg</span>
+            <span className="text-[10px] text-ink-6 uppercase tracking-wide">Reps · RPE</span>
+            <span className="text-[10px] text-ink-6 uppercase tracking-wide text-right">e1RM</span>
           </div>
           {warmups.map((set) => (
             <SetRow key={set.id} set={set} />
           ))}
           {warmups.length > 0 && working.length > 0 && (
-            <div className="h-px bg-[#e8e8e8] my-2" />
+            <div className="h-px bg-surface-4 my-2" />
           )}
           {working.map((set) => (
             <SetRow key={set.id} set={set} />
@@ -193,37 +183,37 @@ export default function SessionDetailPage() {
       {/* Extra workouts */}
       {session.extraWorkouts && session.extraWorkouts.length > 0 && (
         <section className="mb-6">
-          <p className="text-[10px] font-medium text-[#aaaaaa] uppercase tracking-widest mb-3">
+          <p className="text-[10px] font-medium text-ink-6 uppercase tracking-widest mb-3">
             Accessories
           </p>
           <div className="space-y-4">
             {session.extraWorkouts.map((workout) => (
               <div key={workout.muscle}>
-                <p className="text-xs font-semibold text-[#555555] mb-2">
+                <p className="text-xs font-semibold text-ink-4 mb-2">
                   {getMuscleLabel(exerciseConfig, workout.muscle)}
                 </p>
                 {workout.exercises.map((exercise) => (
                   <div key={exercise.name} className="mb-2">
-                    <p className="text-xs text-[#777777] mb-1">{exercise.name}</p>
+                    <p className="text-xs text-ink-5 mb-1">{exercise.name}</p>
                     {exercise.sets.map((set, i) =>
                       // A cardio bout is one sentence, not three columns — the lifting
                       // grid's fixed widths would wrap it mid-figure.
                       isCardioSet(set) ? (
-                        <div key={i} className="flex gap-x-3 py-[2px] text-sm text-[#111111]">
-                          <span className="w-8 shrink-0 font-medium text-[#aaaaaa]">{i + 1}</span>
+                        <div key={i} className="flex gap-x-3 py-[2px] text-sm text-ink">
+                          <span className="w-8 shrink-0 font-medium text-ink-6">{i + 1}</span>
                           <span>{formatCardioSet(set)}</span>
                         </div>
                       ) : (
                         <div
                           key={i}
-                          className="grid grid-cols-[2rem_2.5rem_4.5rem] gap-x-3 py-[2px] text-sm text-[#111111]"
+                          className="grid grid-cols-[2rem_3.5rem_1fr] gap-x-3 py-[2px] text-sm whitespace-nowrap text-ink"
                         >
-                          <span className="font-medium text-[#aaaaaa]">{i + 1}</span>
+                          <span className="font-medium text-ink-6">{i + 1}</span>
                           <span>{set.kg}kg</span>
                           <span>
                             {set.reps} reps
                             {set.rpe != null && (
-                              <span className="text-[#aaaaaa]"> · {set.rpe}</span>
+                              <span className="text-ink-6"> · {set.rpe}</span>
                             )}
                           </span>
                         </div>
@@ -240,10 +230,10 @@ export default function SessionDetailPage() {
       {/* Coach note */}
       {session.coachNote && (
         <section>
-          <p className="text-[10px] font-medium text-[#aaaaaa] uppercase tracking-widest mb-2">
+          <p className="text-[10px] font-medium text-ink-6 uppercase tracking-widest mb-2">
             Note
           </p>
-          <p className="text-sm italic text-[#555555]">{session.coachNote}</p>
+          <p className="text-sm italic text-ink-4">{session.coachNote}</p>
         </section>
       )}
     </main>

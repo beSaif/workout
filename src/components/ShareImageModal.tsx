@@ -3,7 +3,7 @@
 import { useCallback, useRef } from "react"
 import { Session, TrainingBlock, TrainingDay, UserProfile } from "@/lib/types"
 import { getMainLiftLabel, getSessionLabel, isLiftFocused } from "@/lib/trainingMode"
-import { getBestWeight, getLatestBW, sessionWork } from "@/lib/stats"
+import { getBestE1RM, getLatestBW, sessionWork } from "@/lib/stats"
 import { MuscleGroupConfig, getMuscleLabel } from "@/lib/exerciseConfig"
 import { PHASE_SESSION_TYPE } from "@/lib/prescription"
 import ShareCard from "@/components/ShareCard"
@@ -30,7 +30,7 @@ export default function ShareImageModal({
 }: Props) {
   const cardRef = useRef<HTMLDivElement>(null)
 
-  const bestWeight = getBestWeight(sessions)
+  const bestE1RM = getBestE1RM(sessions)
   const bodyweight = session.bw ?? getLatestBW(sessions) ?? profile.bw
 
   // A Balanced session has no main lift to headline, so the card leads with the
@@ -88,7 +88,7 @@ export default function ShareImageModal({
         <ShareCard
           ref={cardRef}
           session={session}
-          bestWeight={bestWeight}
+          bestE1RM={bestE1RM}
           bodyweight={bodyweight}
           target={profile.target ?? null}
           date={session.date}

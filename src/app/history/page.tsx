@@ -1,7 +1,7 @@
 "use client"
 
-import { useState, useEffect } from "react"
 import Link from "next/link"
+import { useState, useEffect } from "react"
 import { Session, TrainingBlock, BlockPhase, UserProfile, TrainingDay } from "@/lib/types"
 import { loadSessionsLocal, loadBlocksLocal, loadExerciseConfig, loadProfileLocal, loadTrainingDaysLocal, loadAll, loadProfile, loadTrainingDays } from "@/lib/storage"
 import { useOnboardingGuard } from "@/lib/useOnboardingGuard"
@@ -9,6 +9,7 @@ import { currentStretchSkips, getMainLiftShortLabel, isLiftFocused } from "@/lib
 import { MuscleGroupConfig, DEFAULT_MUSCLE_GROUPS, DEFAULT_TRAINING_DAYS } from "@/lib/exerciseConfig"
 import SessionCard from "@/components/SessionCard"
 import ShareImageModal from "@/components/ShareImageModal"
+import BackButton from "@/components/BackButton"
 
 const BLOCK_PHASE_ORDER: BlockPhase[] = ["accumulation", "transmutation", "realization", "deload"]
 
@@ -61,10 +62,10 @@ export default function HistoryPage() {
   if (!mounted) {
     return (
       <main className="mx-auto w-full max-w-[393px] px-4 pt-[calc(1.5rem+env(safe-area-inset-top))] pb-6">
-        <div className="h-8 w-32 bg-[#e8e8e8] rounded animate-pulse mb-6" />
+        <div className="h-8 w-32 bg-surface-4 rounded animate-pulse mb-6" />
         <div className="space-y-3">
           {[...Array(3)].map((_, i) => (
-            <div key={i} className="h-24 bg-[#e8e8e8] rounded-xl animate-pulse" />
+            <div key={i} className="h-24 bg-surface-4 rounded-xl animate-pulse" />
           ))}
         </div>
       </main>
@@ -96,27 +97,38 @@ export default function HistoryPage() {
         !currentSkipIds.has(s.id)
     )
     .sort((a, b) => new Date(b.date!).getTime() - new Date(a.date!).getTime())
+  const currentCount = sessions.filter((s) => s.confirmed).length - archiveSessions.length
 
   return (
     <main className="mx-auto w-full max-w-[393px] px-4 pt-[calc(1.5rem+env(safe-area-inset-top))] pb-6">
       <header className="mb-6">
-        <div className="flex items-center gap-3 mb-1">
-          <Link
-            href="/"
-            className="p-1 -ml-1 text-[#555555] hover:text-[#111111] transition-colors"
-            aria-label="Back to home"
-          >
-            <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-              <polyline points="11,4 6,9 11,14" />
-            </svg>
-          </Link>
-          <h1 className="text-2xl font-semibold text-[#111111] tracking-tight">History</h1>
+        <div className="flex items-center gap-2 mb-1">
+          <BackButton href="/" label="Back to home" />
+          <h1 className="text-2xl font-semibold text-ink tracking-tight">History</h1>
         </div>
-        <p className="text-sm text-[#777777] ml-8">{archiveSessions.length} session{archiveSessions.length !== 1 ? "s" : ""}</p>
+        <p className="text-sm text-ink-5 ml-[2.375rem]">{archiveSessions.length} archived session{archiveSessions.length !== 1 ? "s" : ""}</p>
       </header>
 
+      {/* Sessions from the cycle in progress live on Home; say so rather than look empty */}
+      {currentCount > 0 && (
+        <Link
+          href="/"
+          className="flex items-center justify-between gap-3 rounded-xl bg-brand-tint px-4 py-3 mb-4 active:opacity-70"
+        >
+          <span className="text-sm text-brand">
+            <span className="font-semibold">
+              {currentCount} session{currentCount !== 1 ? "s" : ""}
+            </span>{" "}
+            from your current cycle {currentCount !== 1 ? "are" : "is"} on Home
+          </span>
+          <span className="text-sm font-semibold text-brand shrink-0">View →</span>
+        </Link>
+      )}
+
       {archiveSessions.length === 0 ? (
-        <p className="text-sm text-[#aaaaaa] text-center mt-16">No archived sessions yet</p>
+        <p className="text-sm text-ink-5 text-center mt-12 px-6 leading-relaxed">
+          Nothing archived yet. Sessions move here when the cycle they belong to finishes.
+        </p>
       ) : (
         archiveSessions.map((s) => (
           <SessionCard

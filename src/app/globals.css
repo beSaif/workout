@@ -1,15 +1,188 @@
 @import "tailwindcss";
 
-@theme inline {
+/* ---- Colour ---------------------------------------------------------------
+   Every colour in the app is one of these tokens, named for its job: surfaces
+   (backgrounds, lightest first), ink (text, darkest first), lines (borders), and the
+   brand / good / warn / bad families, each split into the shade for text, for a filled
+   background, for a tint and for a border. Text and fills are separate tokens because
+   they part ways in the dark: navy text has to lighten to stay readable on a dark
+   page, while a navy button keeps a white label and only brightens a little.
+
+   The greys used for text (ink-5 to ink-7) are darker than the #777 / #aaa / #ccc they
+   replaced: small labels now clear WCAG AA (4.5:1) on white. */
+@theme {
+  --color-surface: #ffffff;
+  --color-raised: #ffffff;
+  --color-surface-pop: #ffffff;
+  --color-surface-1: #fafafa;
+  --color-surface-2: #f5f5f5;
+  --color-surface-3: #f0f0f0;
+  --color-surface-4: #e8e8e8;
+  --color-surface-5: #d8d8d8;
+  --color-ink: #111111;
+  --color-ink-2: #333333;
+  --color-ink-3: #444444;
+  --color-ink-4: #555555;
+  --color-ink-5: #636363;
+  --color-ink-6: #707070;
+  --color-ink-7: #8f8f8f;
+  --color-ink-8: #d4d4d4;
+  --color-line: #e8e8e8;
+  --color-line-soft: #f0f0f0;
+  --color-line-strong: #d4d4d4;
+  --color-line-heavy: #aaaaaa;
+  --color-brand: #1e3a5f;
+  --color-brand-strong: #16304f;
+  --color-brand-soft: #3b5f8a;
+  --color-brand-fill: #1e3a5f;
+  --color-brand-fill-2: #16304f;
+  --color-brand-fill-3: #0f2540;
+  --color-brand-tint: #eff6ff;
+  --color-brand-tint-2: #f0f4f8;
+  --color-brand-tint-3: #dbeafe;
+  --color-brand-track: #dbe4ef;
+  --color-brand-line: #1e3a5f;
+  --color-brand-line-soft: #bfdbfe;
+  --color-brand-line-2: #d5dfea;
+  --color-good: #2d6a2d;
+  --color-good-bright: #16a34a;
+  --color-good-fill: #16a34a;
+  --color-good-fill-2: #2d6a2d;
+  --color-good-tint: #f3faf4;
+  --color-good-line: #d6e9d9;
+  --color-warn: #8a4d14;
+  --color-warn-2: #b06a1e;
+  --color-warn-3: #c9a06a;
+  --color-warn-fill: #b06a1e;
+  --color-warn-tint: #fdf3e7;
+  --color-warn-line: #f0dcc0;
+  --color-bad: #e05252;
+  --color-bad-fill: #c0392b;
+  --color-bad-fill-2: #a93226;
+  --color-bad-fill-3: #922b21;
   --color-background: #ffffff;
   --color-foreground: #111111;
   --color-muted: #444444;
-  --color-muted-light: #777777;
-  --color-muted-lighter: #aaaaaa;
+  --color-muted-light: #636363;
+  --color-muted-lighter: #707070;
   --color-accent: #1e3a5f;
   --color-accent-bg: #eff6ff;
   --color-border: #e8e8e8;
   --color-border-upcoming: #bfdbfe;
+}
+
+/* Training-phase colours (lib/phaseStyle.ts): the solid, its tint, and text on the tint.
+   They are only ever read from inline styles, so `static` keeps Tailwind from pruning
+   them as unused. */
+@theme static {
+  --color-phase-volume: #2d6a2d;
+  --color-phase-volume-tint: #f0f7f0;
+  --color-phase-volume-muted: #4a8a4a;
+  --color-phase-intensity: #5a2d8a;
+  --color-phase-intensity-tint: #f5f0ff;
+  --color-phase-intensity-muted: #7a4daa;
+  --color-phase-peak: #1e3a5f;
+  --color-phase-peak-tint: #eff6ff;
+  --color-phase-peak-muted: #3b5f8a;
+  --color-phase-deload: #6b6b6b;
+  --color-phase-deload-tint: #f5f5f5;
+  --color-phase-deload-muted: #888888;
+  --color-phase-rebuild: #8a4d14;
+  --color-phase-rebuild-tint: #fdf3e7;
+  --color-phase-rebuild-muted: #b06a1e;
+}
+
+/* Dark follows the phone's setting. Only the token values change; no component knows. */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-surface: #0f1113;
+    --color-raised: #191d21;
+    --color-surface-pop: #3a4249;
+    --color-surface-1: #14171a;
+    --color-surface-2: #1b1f23;
+    --color-surface-3: #242a2f;
+    --color-surface-4: #2e353b;
+    --color-surface-5: #3c444b;
+    --color-ink: #f2f3f4;
+    --color-ink-2: #dcdfe2;
+    --color-ink-3: #c8ccd0;
+    --color-ink-4: #b3b8bd;
+    --color-ink-5: #a1a7ad;
+    --color-ink-6: #8d949b;
+    --color-ink-7: #6b7279;
+    --color-ink-8: #474e55;
+    --color-line: #2a3036;
+    --color-line-soft: #20252a;
+    --color-line-strong: #3d454d;
+    --color-line-heavy: #5c656e;
+    --color-brand: #a3c7f5;
+    --color-brand-strong: #c3dbfa;
+    --color-brand-soft: #8fb4e3;
+    --color-brand-fill: #2f5f9e;
+    --color-brand-fill-2: #3a6db0;
+    --color-brand-fill-3: #447bc2;
+    --color-brand-tint: #142131;
+    --color-brand-tint-2: #1a222b;
+    --color-brand-tint-3: #1c3250;
+    --color-brand-track: #27323e;
+    --color-brand-line: #6f9bd4;
+    --color-brand-line-soft: #2b4668;
+    --color-brand-line-2: #2a3644;
+    --color-good: #7ed48a;
+    --color-good-bright: #4ade80;
+    --color-good-fill: #15803d;
+    --color-good-tint: #12231a;
+    --color-good-line: #23402c;
+    --color-warn: #f0b877;
+    --color-warn-2: #e6a55c;
+    --color-warn-3: #b08a58;
+    --color-warn-tint: #2a2015;
+    --color-warn-line: #4d3b22;
+    --color-bad: #f07a7a;
+    --color-background: #0f1113;
+    --color-foreground: #f2f3f4;
+    --color-muted: #c8ccd0;
+    --color-muted-light: #a1a7ad;
+    --color-muted-lighter: #8d949b;
+    --color-accent: #2f5f9e;
+    --color-accent-bg: #142131;
+    --color-border: #2a3036;
+    --color-border-upcoming: #2b4668;
+
+    --color-phase-volume: #7ed48a;
+    --color-phase-volume-tint: #12231a;
+    --color-phase-volume-muted: #5fae6a;
+    --color-phase-intensity: #c4a1f0;
+    --color-phase-intensity-tint: #201832;
+    --color-phase-intensity-muted: #a585d6;
+    --color-phase-peak: #a3c7f5;
+    --color-phase-peak-tint: #142131;
+    --color-phase-peak-muted: #8fb4e3;
+    --color-phase-deload: #a1a7ad;
+    --color-phase-deload-tint: #1b1f23;
+    --color-phase-deload-muted: #8d949b;
+    --color-phase-rebuild: #f0b877;
+    --color-phase-rebuild-tint: #2a2015;
+    --color-phase-rebuild-muted: #e6a55c;
+
+    /* Tailwind's own palette, where a pale tint or a dark ink is used by name. */
+    --color-red-50: #2a1414;
+    --color-red-100: #3a1a1a;
+    --color-red-200: #5c2626;
+    --color-green-50: #10231a;
+    --color-green-100: #153021;
+    --color-green-300: #2f6b45;
+    --color-green-600: #4ade80;
+    --color-green-700: #86efac;
+    --color-amber-50: #2a2012;
+    --color-amber-300: #6b5320;
+    --color-amber-600: #f5b041;
+    --color-amber-700: #f7c063;
+    --color-amber-900: #fbd38d;
+  }
+}
+
+@theme inline {
   --font-sans: "Inter Variable", "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 
   --animate-slide-up: slide-up 0.38s cubic-bezier(0.32, 0.72, 0, 1) both;
@@ -41,21 +214,21 @@
 }
 
 html {
-  color-scheme: light;
+  color-scheme: light dark;
 }
 
-/* Native feel: the page never drifts sideways, never stretches past its top or
-   bottom edge, and never zooms. clip (not hidden) keeps position: sticky working.
-   pan-x pan-y leaves out pinch and double-tap zoom, and a child can't add them back. */
+/* Native feel: the page never drifts sideways and never stretches past its top or
+   bottom edge. clip (not hidden) keeps position: sticky working. manipulation drops
+   the double-tap zoom (and its tap delay) but leaves pinch, which low-vision users need. */
 html, body {
   overflow-x: clip;
   overscroll-behavior: none;
-  touch-action: pan-x pan-y;
+  touch-action: manipulation;
 }
 
 body {
-  background: #ffffff;
-  color: #111111;
+  background: var(--color-surface);
+  color: var(--color-ink);
   font-family: "Inter Variable", "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 }
 
@@ -119,13 +292,16 @@ body {
 .dot-shadow-dark { background: rgba(0, 0, 0, 0.3); }
 .dot-body {
   position: absolute; inset: 0;
-  background: #1e3a5f;
+  background: var(--color-brand-fill);
   border-radius: 50% 50% 42% 42% / 60% 60% 40% 40%;
   transform-origin: 50% 100%;
   animation: dot-breathe 3.4s ease-in-out infinite;
   --dot-ink: #ffffff;
 }
 .dot-body-dark { background: #ffffff; --dot-ink: #1e3a5f; }
+@media (prefers-color-scheme: dark) {
+  .dot-shadow { background: rgba(0, 0, 0, 0.4); }
+}
 .dot-eye {
   position: absolute; background: var(--dot-ink); border-radius: 3px;
   animation: dot-blink 5.2s infinite;
@@ -142,7 +318,7 @@ body {
   border-radius: 0 50% 50% 50%; transform: rotate(45deg);
 }
 .dot-z {
-  position: absolute; font: 700 9px/1 var(--font-sans); color: #1e3a5f; opacity: 0.55;
+  position: absolute; font: 700 9px/1 var(--font-sans); color: var(--color-brand); opacity: 0.55;
   animation: dot-z 2.4s ease-in-out infinite;
 }
 .dot-body-dark ~ .dot-z { color: #ffffff; }
@@ -209,10 +385,8 @@ body {
 }
 
 /* ---- iOS input zoom ------------------------------------------------------ */
-/* iOS Safari zooms the page when a field under 16px is focused. maximum-scale=1 in
-   the viewport stops that on current iOS; the small fields are still lifted to 16px
-   on iOS only, for the versions that zoom anyway. Unlayered, so it wins over the
-   Tailwind utilities. */
+/* iOS Safari zooms the page when a field under 16px is focused, so the small fields
+   are lifted to 16px on iOS only. Unlayered, so it wins over the Tailwind utilities. */
 @supports (-webkit-touch-callout: none) {
   input.text-xs, input.text-sm, input[class*="text-[1"],
   textarea.text-xs, textarea.text-sm, textarea[class*="text-[1"],

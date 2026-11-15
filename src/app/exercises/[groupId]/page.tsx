@@ -2,7 +2,6 @@
 
 import { useState, useEffect, useRef } from "react"
 import { useParams, useRouter } from "next/navigation"
-import Link from "next/link"
 import {
   MuscleGroupConfig,
   ExerciseConfig,
@@ -22,8 +21,10 @@ import {
 } from "@/lib/storage"
 import { PersonSummary } from "@/lib/routines"
 import { useOnboardingGuard } from "@/lib/useOnboardingGuard"
+import BackButton from "@/components/BackButton"
+import { useConfirm } from "@/components/ConfirmSheet"
 
-const ICON_BUTTON = "p-1.5 text-[#aaaaaa] transition-colors disabled:opacity-30"
+const ICON_BUTTON = "p-1.5 text-ink-6 transition-colors disabled:opacity-30"
 
 /**
  * One muscle group's exercises. At rest each row is a name and its set count; Edit
@@ -31,6 +32,7 @@ const ICON_BUTTON = "p-1.5 text-[#aaaaaa] transition-colors disabled:opacity-30"
  * the group itself.
  */
 export default function GroupPage() {
+  const { confirm, confirmSheet } = useConfirm()
   useOnboardingGuard()
   const params = useParams()
   const router = useRouter()
@@ -82,11 +84,16 @@ export default function GroupPage() {
   async function deleteGroup() {
     if (!group) return
     const exCount = group.exercises.length
-    const msg =
-      exCount > 0
-        ? `Delete "${group.name}" and its ${exCount} exercise${exCount !== 1 ? "s" : ""}? History is kept.`
-        : `Delete "${group.name}"?`
-    if (!window.confirm(msg)) return
+    const yes = await confirm({
+      title: `Delete "${group.name}"?`,
+      body:
+        exCount > 0
+          ? `Its ${exCount} exercise${exCount !== 1 ? "s go" : " goes"} with it. Sessions you already logged keep their history.`
+          : undefined,
+      confirmLabel: "Delete group",
+      destructive: true,
+    })
+    if (!yes) return
     // Retired, not dropped: the confirmation above promises history is kept, and
     // sessions that logged this group resolve its name through the tombstone.
     const live = config.filter((g) => g.id !== group.id && !g.retired)
@@ -105,8 +112,8 @@ export default function GroupPage() {
     updateGroup((g) => ({ ...g, exercises: g.exercises.map((e) => (e.id === ex.id ? { ...e, name } : e)) }))
   }
 
-  function deleteExercise(ex: ExerciseConfig) {
-    if (!window.confirm(`Remove "${ex.name}" from ${group?.name}?`)) return
+  async function deleteExercise(ex: ExerciseConfig) {
+    if (!(await confirm({ title: `Remove "${ex.name}" from ${group?.name}?`, confirmLabel: "Remove", destructive: true }))) return
     updateGroup((g) => ({ ...g, exercises: g.exercises.filter((e) => e.id !== ex.id) }))
   }
 
@@ -158,10 +165,10 @@ export default function GroupPage() {
   if (!mounted) {
     return (
       <main className="mx-auto w-full max-w-[393px] px-4 pt-[calc(1.5rem+env(safe-area-inset-top))] pb-6">
-        <div className="h-4 w-16 bg-[#e8e8e8] rounded animate-pulse mb-8" />
-        <div className="h-6 w-40 bg-[#e8e8e8] rounded animate-pulse mb-6" />
+        <div className="h-4 w-16 bg-surface-4 rounded animate-pulse mb-8" />
+        <div className="h-6 w-40 bg-surface-4 rounded animate-pulse mb-6" />
         {[1, 2, 3].map((i) => (
-          <div key={i} className="h-12 bg-[#e8e8e8] rounded-xl animate-pulse mb-2" />
+          <div key={i} className="h-12 bg-surface-4 rounded-xl animate-pulse mb-2" />
         ))}
       </main>
     )
@@ -170,10 +177,8 @@ export default function GroupPage() {
   if (!group) {
     return (
       <main className="mx-auto w-full max-w-[393px] px-4 pt-[calc(1.5rem+env(safe-area-inset-top))] pb-6">
-        <Link href="/exercises" className="inline-flex items-center gap-1 text-sm text-[#1e3a5f] mb-6 hover:underline">
-          ← Back
-        </Link>
-        <p className="text-sm text-[#777777]">Group not found.</p>
+        <BackButton href="/exercises" label="Back to routine" className="mb-3" />
+        <p className="text-sm text-ink-5">Group not found.</p>
       </main>
     )
   }
@@ -184,18 +189,14 @@ export default function GroupPage() {
 
   return (
     <main className="mx-auto w-full max-w-[393px] px-4 pt-[calc(1.5rem+env(safe-area-inset-top))] pb-[calc(4rem+env(safe-area-inset-bottom))]">
+      {confirmSheet}
       <div className="flex items-center justify-between mb-6">
-        <Link
-          href="/exercises"
-          className="inline-flex items-center gap-1 text-sm text-[#1e3a5f] hover:underline"
-        >
-          ← Routine
-        </Link>
+        <BackButton href="/exercises" label="Back to routine" />
         {/* Cardio has nothing to edit but its exercises, so no Edit until it has some */}
         {!readOnly && (!group.cardio || sortedExercises.length > 0) && (
           <button
             onClick={() => { setEditing(!editing); cancelAdd() }}
-            className="text-sm font-semibold text-[#1e3a5f] hover:text-[#16304f] transition-colors"
+            className="text-sm font-semibold text-brand hover:text-brand-strong transition-colors"
           >
             {editing ? "Done" : "Edit"}
           </button>
@@ -209,24 +210,24 @@ export default function GroupPage() {
           onBlur={(e) => renameGroup(e.target.value)}
           onKeyDown={(e) => { if (e.key === "Enter") e.currentTarget.blur() }}
           aria-label="Muscle group name"
-          className="w-full text-2xl font-semibold text-[#111111] tracking-tight mb-1 border-b border-[#1e3a5f] outline-none bg-transparent"
+          className="w-full text-2xl font-semibold text-ink tracking-tight mb-1 border-b border-brand-line outline-none bg-transparent"
         />
       ) : (
-        <h1 className="text-2xl font-semibold text-[#111111] tracking-tight mb-1">
+        <h1 className="text-2xl font-semibold text-ink tracking-tight mb-1">
           {group.name}
         </h1>
       )}
-      <p className="text-sm text-[#777777] mb-6">
+      <p className="text-sm text-ink-5 mb-6">
         {sortedExercises.length === 0
           ? "No exercises yet — add one below"
           : `${sortedExercises.length} exercise${sortedExercises.length !== 1 ? "s" : ""}`}
         {group.cardio && (
-          <span className="block text-xs text-[#aaaaaa] mt-1">
+          <span className="block text-xs text-ink-6 mt-1">
             Logged in minutes. Bouts is how many each one opens with.
           </span>
         )}
         {readOnly && coach && (
-          <span className="block text-xs text-[#aaaaaa] mt-1">
+          <span className="block text-xs text-ink-6 mt-1">
             Part of {coach.name}&apos;s routine, which you follow — only they can change it.
           </span>
         )}
@@ -234,7 +235,7 @@ export default function GroupPage() {
 
       {/* Column hint, so the number on each row reads as what it is */}
       {sortedExercises.length > 0 && !editing && (
-        <div className="flex justify-between px-4 mb-1.5 text-[10px] font-semibold uppercase tracking-widest text-[#aaaaaa]">
+        <div className="flex justify-between px-4 mb-1.5 text-[10px] font-semibold uppercase tracking-widest text-ink-6">
           <span>Exercise</span>
           <span className={readOnly ? "" : "w-[84px] text-center"}>{countLabel}</span>
         </div>
@@ -242,14 +243,14 @@ export default function GroupPage() {
 
       {/* Exercise list */}
       {(sortedExercises.length > 0 || addingExercise) && (
-        <div className="bg-white border border-[#e8e8e8] rounded-xl overflow-hidden mb-3">
+        <div className="bg-surface border border-line rounded-xl overflow-hidden mb-3">
           {sortedExercises.map((ex, idx) => {
             const sets = getDefaultSets(ex)
             return (
               <div
                 key={ex.id}
                 className={`flex items-center gap-2 px-4 py-3 ${
-                  idx < sortedExercises.length - 1 ? "border-b border-[#f5f5f5]" : ""
+                  idx < sortedExercises.length - 1 ? "border-b border-line-soft" : ""
                 }`}
               >
                 {editing ? (
@@ -258,7 +259,7 @@ export default function GroupPage() {
                       <button
                         onClick={() => moveExercise(ex.id, "up")}
                         disabled={idx === 0}
-                        className="p-0.5 text-[#aaaaaa] disabled:opacity-30 hover:text-[#555555] transition-colors"
+                        className="p-0.5 text-ink-6 disabled:opacity-30 hover:text-ink-4 transition-colors"
                         aria-label={`Move ${ex.name} up`}
                       >
                         <svg width="11" height="11" viewBox="0 0 11 11" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
@@ -268,7 +269,7 @@ export default function GroupPage() {
                       <button
                         onClick={() => moveExercise(ex.id, "down")}
                         disabled={idx === sortedExercises.length - 1}
-                        className="p-0.5 text-[#aaaaaa] disabled:opacity-30 hover:text-[#555555] transition-colors"
+                        className="p-0.5 text-ink-6 disabled:opacity-30 hover:text-ink-4 transition-colors"
                         aria-label={`Move ${ex.name} down`}
                       >
                         <svg width="11" height="11" viewBox="0 0 11 11" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
@@ -282,7 +283,7 @@ export default function GroupPage() {
                       onBlur={(e) => renameExercise(ex, e.target.value)}
                       onKeyDown={(e) => { if (e.key === "Enter") e.currentTarget.blur() }}
                       aria-label="Exercise name"
-                      className="flex-1 min-w-0 text-sm text-[#111111] border-b border-[#e8e8e8] focus:border-[#1e3a5f] outline-none bg-transparent py-0.5"
+                      className="flex-1 min-w-0 text-sm text-ink border-b border-line focus:border-brand-line outline-none bg-transparent py-0.5"
                     />
                     <button
                       onClick={() => deleteExercise(ex)}
@@ -298,9 +299,9 @@ export default function GroupPage() {
                   </>
                 ) : (
                   <>
-                    <span className="flex-1 min-w-0 text-sm text-[#333333] truncate">{ex.name}</span>
+                    <span className="flex-1 min-w-0 text-sm text-ink-2 truncate">{ex.name}</span>
                     {readOnly ? (
-                      <span className="shrink-0 text-xs text-[#999999] tabular-nums">
+                      <span className="shrink-0 text-xs text-ink-6 tabular-nums">
                         {sets} {unit}{sets !== 1 ? "s" : ""}
                       </span>
                     ) : (
@@ -308,18 +309,18 @@ export default function GroupPage() {
                         <button
                           onClick={() => updateDefaultSets(ex.id, Math.max(1, sets - 1))}
                           disabled={sets <= 1}
-                          className="w-6 h-6 rounded-full bg-[#f0f0f0] flex items-center justify-center text-[#555555] text-xs font-bold leading-none disabled:opacity-40"
+                          className="w-6 h-6 rounded-full bg-surface-3 flex items-center justify-center text-ink-4 text-xs font-bold leading-none disabled:opacity-40"
                           aria-label={`Fewer ${unit}s for ${ex.name}`}
                         >
                           −
                         </button>
-                        <span className="text-sm font-semibold text-[#111111] w-5 text-center tabular-nums">
+                        <span className="text-sm font-semibold text-ink w-5 text-center tabular-nums">
                           {sets}
                         </span>
                         <button
                           onClick={() => updateDefaultSets(ex.id, Math.min(8, sets + 1))}
                           disabled={sets >= 8}
-                          className="w-6 h-6 rounded-full bg-[#f0f0f0] flex items-center justify-center text-[#555555] text-xs font-bold leading-none disabled:opacity-40"
+                          className="w-6 h-6 rounded-full bg-surface-3 flex items-center justify-center text-ink-4 text-xs font-bold leading-none disabled:opacity-40"
                           aria-label={`More ${unit}s for ${ex.name}`}
                         >
                           +
@@ -334,7 +335,7 @@ export default function GroupPage() {
 
           {/* Inline add input */}
           {addingExercise && (
-            <div className={`px-4 py-3 ${sortedExercises.length > 0 ? "border-t border-[#f5f5f5]" : ""}`}>
+            <div className={`px-4 py-3 ${sortedExercises.length > 0 ? "border-t border-line-soft" : ""}`}>
               <input
                 ref={addInputRef}
                 value={newExerciseName}
@@ -345,7 +346,7 @@ export default function GroupPage() {
                 }}
                 placeholder="Exercise name"
                 aria-label="New exercise name"
-                className="w-full text-sm text-[#111111] border-b border-[#e8e8e8] focus:border-[#1e3a5f] outline-none bg-transparent pb-1 mb-2"
+                className="w-full text-sm text-ink border-b border-line focus:border-brand-line outline-none bg-transparent pb-1 mb-2"
               />
               {similarWarning.length > 0 && (
                 <div className="mb-2">
@@ -354,7 +355,7 @@ export default function GroupPage() {
                   </p>
                   <button
                     onClick={() => addExercise(true)}
-                    className="text-[11px] text-[#1e3a5f] font-semibold underline mt-0.5"
+                    className="text-[11px] text-brand font-semibold underline mt-0.5"
                   >
                     Add anyway
                   </button>
@@ -364,13 +365,13 @@ export default function GroupPage() {
                 <button
                   onClick={() => addExercise()}
                   disabled={!newExerciseName.trim()}
-                  className="text-xs font-semibold text-white bg-[#1e3a5f] rounded-lg px-4 py-1.5 hover:bg-[#16304f] transition-colors disabled:opacity-40"
+                  className="text-xs font-semibold text-white bg-brand-fill rounded-lg px-4 py-1.5 hover:bg-brand-fill-2 transition-colors disabled:opacity-40"
                 >
                   Add
                 </button>
                 <button
                   onClick={cancelAdd}
-                  className="text-xs font-semibold text-[#777777] hover:text-[#333333] transition-colors"
+                  className="text-xs font-semibold text-ink-5 hover:text-ink-2 transition-colors"
                 >
                   Cancel
                 </button>
@@ -384,7 +385,7 @@ export default function GroupPage() {
       {!addingExercise && !readOnly && !editing && (
         <button
           onClick={() => { setAddingExercise(true); setNewExerciseName(""); setSimilarWarning([]) }}
-          className="w-full border border-dashed border-[#e8e8e8] rounded-xl py-3 text-sm font-semibold text-[#aaaaaa] hover:border-[#1e3a5f] hover:text-[#1e3a5f] transition-colors"
+          className="w-full border border-dashed border-line rounded-xl py-3 text-sm font-semibold text-ink-6 hover:border-brand-line hover:text-brand transition-colors"
         >
           + Add exercise
         </button>

@@ -17,6 +17,31 @@ export interface WhatsNewRelease {
  */
 export const WHATS_NEW: WhatsNewRelease[] = [
   {
+    version: 13,
+    items: [
+      {
+        title: "Dark mode",
+        body: "The app now follows your phone's light or dark setting.",
+      },
+      {
+        title: "A shorter Home",
+        body: "Log Session is one big button. The sessions still to come sit right under it, and logged sessions are one line each: tap one for Details, Share, Edit and Unlog.",
+      },
+      {
+        title: "Last time, while you log",
+        body: "Each working set of your main lift shows what you did last time and the RPE to aim for today.",
+      },
+      {
+        title: "One number for your progress",
+        body: "Home, Profile, your card and the share image now all measure progress the same way: best e1RM against your target. With weekly check-ins on, Profile shows your latest weigh-in as your bodyweight.",
+      },
+      {
+        title: "Smaller fixes",
+        body: "The weight chart draws weekly check-ins. Gymbros has one field: type a name to search, an email to add. History says where this cycle's sessions are. Small grey text is darker, and you can pinch to zoom.",
+      },
+    ],
+  },
+  {
     version: 12,
     items: [
       {

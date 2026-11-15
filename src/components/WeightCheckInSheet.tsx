@@ -4,6 +4,7 @@ import { useState } from "react"
 import { DrumRollPicker } from "@/components/DrumRollPicker"
 import { WeightEntry } from "@/lib/types"
 import { dateKey, describeDay, entryFor, latestEntry } from "@/lib/weight"
+import EscapeKey from "@/components/EscapeKey"
 
 // Two drums rather than one: 0.1kg precision over a sane bodyweight range is ~1650
 // values, and the picker renders every item. Whole kg plus a decimal drum keeps the
@@ -51,15 +52,16 @@ export default function WeightCheckInSheet({
       : "first one. from here it's a trend."
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40">
-      <div className="w-full max-w-[430px] bg-white rounded-t-2xl px-6 pt-6 pb-10 shadow-2xl max-h-[90dvh] overflow-y-auto">
+    <div role="dialog" aria-modal="true" className="fixed inset-0 z-50 flex items-end justify-center bg-black/40">
+      <EscapeKey onEscape={onClose} />
+      <div className="w-full max-w-[430px] bg-raised rounded-t-2xl px-6 pt-6 pb-10 shadow-2xl max-h-[90dvh] overflow-y-auto">
         <div className="mb-4">
-          <p className="text-lg font-semibold text-[#111111] leading-snug mb-1">
+          <p className="text-lg font-semibold text-ink leading-snug mb-1">
             {date && day !== dateKey()
               ? `weight for ${describeDay(day)}`
               : "what did you weigh in at?"}
           </p>
-          <p className="text-sm text-[#777777]">{nudge}</p>
+          <p className="text-sm text-ink-5">{nudge}</p>
         </div>
 
         <div className="flex items-end justify-center gap-2 mb-2">
@@ -78,17 +80,17 @@ export default function WeightCheckInSheet({
           />
         </div>
 
-        <p className="text-center text-sm text-[#aaaaaa] mb-6 tabular-nums">
+        <p className="text-center text-sm text-ink-6 mb-6 tabular-nums">
           {kg.toFixed(1)} kg
         </p>
 
         <button
           onClick={() => onSave(day, kg)}
-          className="w-full bg-[#1e3a5f] text-white text-sm font-semibold rounded-xl py-3.5 active:bg-[#0f2540] transition-colors"
+          className="w-full bg-brand-fill text-white text-sm font-semibold rounded-xl py-3.5 active:bg-brand-fill-3 transition-colors"
         >
           {existing ? "update" : "log it"}
         </button>
-        <button onClick={onClose} className="w-full text-sm text-[#aaaaaa] py-3 mt-1">
+        <button onClick={onClose} className="w-full text-sm text-ink-6 py-3 mt-1">
           {skippable ? "skip this week" : "cancel"}
         </button>
       </div>

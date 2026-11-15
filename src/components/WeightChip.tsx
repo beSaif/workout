@@ -13,7 +13,7 @@ interface Props {
 }
 
 const CHIP =
-  "shrink-0 flex items-baseline gap-1 rounded-full border border-[#e8e8e8] px-2 py-0.5 text-xs font-bold text-[#111111] tabular-nums active:opacity-70 transition-opacity"
+  "shrink-0 flex items-baseline gap-1 rounded-full border border-line px-2 py-0.5 text-xs font-bold text-ink tabular-nums active:opacity-70 transition-opacity"
 
 /**
  * Bodyweight has no universally "good" direction — a cut and a bulk want opposite
@@ -23,7 +23,7 @@ const CHIP =
 function deltaLabel(d: number | null): { text: string; className: string } | null {
   if (d === null || Math.abs(d) < 0.3) return null
   const text = `${d > 0 ? "+" : "−"}${Math.abs(d).toFixed(1)}`
-  return { text, className: Math.abs(d) >= 1.5 ? "text-[#b06a1e]" : "text-[#16a34a]" }
+  return { text, className: Math.abs(d) >= 1.5 ? "text-warn-2" : "text-good-bright" }
 }
 
 /**
@@ -37,7 +37,7 @@ export default function WeightChip({ entries, loading = false, onLog }: Props) {
   if (!latest) {
     if (loading) return null
     return (
-      <button type="button" onClick={onLog} className={`${CHIP} font-semibold text-[#1e3a5f]`}>
+      <button type="button" onClick={onLog} className={`${CHIP} font-semibold text-brand`}>
         + weight
       </button>
     )
@@ -48,7 +48,7 @@ export default function WeightChip({ entries, loading = false, onLog }: Props) {
   return (
     <Link href="/weight" aria-label={`Bodyweight ${latest.kg.toFixed(1)} kilograms, open weight log`} className={CHIP}>
       {latest.kg.toFixed(1)}
-      <span className="text-[10px] font-semibold text-[#aaaaaa]">kg</span>
+      <span className="text-[10px] font-semibold text-ink-6">kg</span>
       {change && <span className={`text-[10px] font-semibold ${change.className}`}>{change.text}</span>}
     </Link>
   )

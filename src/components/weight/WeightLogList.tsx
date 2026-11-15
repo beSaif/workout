@@ -2,6 +2,7 @@
 
 import { WeightEntry } from "@/lib/types"
 import { formatDay, round1 } from "@/lib/weight"
+import { useConfirm } from "@/components/ConfirmSheet"
 
 interface Props {
   /** Oldest first; rendered newest first. */
@@ -11,14 +12,17 @@ interface Props {
 }
 
 export default function WeightLogList({ entries, onEdit, onDelete }: Props) {
+  const { confirm, confirmSheet } = useConfirm()
   if (entries.length === 0) {
-    return <p className="text-sm text-[#aaaaaa]">no weigh-ins yet.</p>
+    return <p className="text-sm text-ink-6">no weigh-ins yet.</p>
   }
 
   const rows = [...entries].reverse()
 
   return (
-    <ul className="divide-y divide-[#f0f0f0]">
+    <>
+      {confirmSheet}
+    <ul className="divide-y divide-line-soft">
       {rows.map((e, i) => {
         // Change against the previous weigh-in, whenever that was.
         const prev = rows[i + 1]
@@ -29,23 +33,28 @@ export default function WeightLogList({ entries, onEdit, onDelete }: Props) {
               onClick={() => onEdit(e.date)}
               className="flex-1 flex items-baseline gap-3 text-left"
             >
-              <span className="text-sm text-[#777777] w-16 shrink-0">{formatDay(e.date)}</span>
-              <span className="text-base font-semibold text-[#111111] tabular-nums">
+              <span className="text-sm text-ink-5 w-16 shrink-0">{formatDay(e.date)}</span>
+              <span className="text-base font-semibold text-ink tabular-nums">
                 {e.kg.toFixed(1)}
-                <span className="text-xs font-normal text-[#aaaaaa] ml-0.5">kg</span>
+                <span className="text-xs font-normal text-ink-6 ml-0.5">kg</span>
               </span>
               {change !== null && change !== 0 && (
-                <span className="text-[11px] text-[#aaaaaa] tabular-nums">
+                <span className="text-[11px] text-ink-6 tabular-nums">
                   {change > 0 ? "+" : "−"}
                   {Math.abs(change).toFixed(1)}
                 </span>
               )}
             </button>
             <button
-              onClick={() => {
-                if (confirm(`Delete the weigh-in from ${formatDay(e.date)}?`)) onDelete(e.date)
+              onClick={async () => {
+                const yes = await confirm({
+                  title: `Delete the weigh-in from ${formatDay(e.date)}?`,
+                  confirmLabel: "Delete",
+                  destructive: true,
+                })
+                if (yes) onDelete(e.date)
               }}
-              className="text-[#cccccc] hover:text-[#e05252] transition-colors p-1"
+              className="text-ink-7 hover:text-bad transition-colors p-1"
               aria-label={`Delete weigh-in from ${formatDay(e.date)}`}
             >
               <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" aria-hidden="true">
@@ -56,5 +65,6 @@ export default function WeightLogList({ entries, onEdit, onDelete }: Props) {
         )
       })}
     </ul>
+    </>
   )
 }

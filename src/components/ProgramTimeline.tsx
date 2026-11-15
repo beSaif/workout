@@ -111,7 +111,7 @@ export default function ProgramTimeline({ blocks, selectedBlockId, onBlockSelect
   return (
     <div className="mb-4">
       <div className="relative flex">
-        <div className="absolute top-[5px] h-px bg-[#e5e5e5]" style={{ left: `${edge}%`, right: `${edge}%` }} />
+        <div className="absolute top-[5px] h-px bg-surface-4" style={{ left: `${edge}%`, right: `${edge}%` }} />
         <div
           className="absolute top-[5px] h-px transition-all duration-500"
           style={{ left: `${edge}%`, width: `${filled}%`, backgroundColor: PHASE_THEME[steps[Math.max(0, nowIdx)].phase].color, opacity: 0.35 }}
@@ -140,11 +140,11 @@ export default function ProgramTimeline({ blocks, selectedBlockId, onBlockSelect
       <button
         onClick={onEditPeak}
         disabled={!onEditPeak}
-        className="mt-3 mx-auto flex items-center gap-1.5 rounded-full bg-[#f5f5f5] px-3 py-1 text-[11px] text-[#777777] active:opacity-70"
+        className="mt-3 mx-auto flex items-center gap-1.5 rounded-full bg-surface-2 px-3 py-1 text-[11px] text-ink-5 active:opacity-70"
       >
         <span>{anchorBlock.phase === "deload" ? "Next cycle peaks at" : "This cycle peaks at"}</span>
-        <span className="font-semibold text-[#111111]">{anchorBlock.anchorWeight}kg</span>
-        {onEditPeak && <span className="font-semibold text-[#1e3a5f]">· Edit</span>}
+        <span className="font-semibold text-ink">{anchorBlock.anchorWeight}kg</span>
+        {onEditPeak && <span className="font-semibold text-brand">· Edit</span>}
       </button>
     </div>
   )
@@ -174,18 +174,18 @@ function StepDot({
   return (
     <>
       <span
-        className="relative z-10 w-[11px] h-[11px] rounded-full border-2 bg-white transition-all"
+        className="relative z-10 w-[11px] h-[11px] rounded-full border-2 bg-surface transition-all"
         style={{
-          borderColor: isDimmed ? "#d4d4d4" : color,
-          backgroundColor: isActiveBlock || isCompleted || isSelected ? color : "#ffffff",
+          borderColor: isDimmed ? "var(--color-line-strong)" : color,
+          backgroundColor: isActiveBlock || isCompleted || isSelected ? color : "var(--color-surface)",
           opacity: isCompleted && !isSelected ? 0.55 : 1,
-          boxShadow: isActiveBlock ? `0 0 0 3px ${color}26` : "none",
+          boxShadow: isActiveBlock ? `0 0 0 3px color-mix(in srgb, ${color} 15%, transparent)` : "none",
         }}
       />
       <span
         className="text-[11px] leading-tight transition-colors"
         style={{
-          color: isDimmed ? "#999999" : isCompleted && !isSelected ? "#888888" : color,
+          color: isDimmed ? "var(--color-ink-6)" : isCompleted && !isSelected ? "var(--color-ink-5)" : color,
           fontWeight: isActiveBlock || isSelected ? 700 : 500,
         }}
       >
@@ -193,7 +193,7 @@ function StepDot({
       </span>
       <span
         className="text-[10px] leading-none tabular-nums"
-        style={{ color: isActiveBlock ? color : "#aaaaaa", opacity: isActiveBlock ? 0.75 : 1 }}
+        style={{ color: isActiveBlock ? color : "var(--color-ink-6)", opacity: isActiveBlock ? 0.75 : 1 }}
       >
         {note}
       </span>

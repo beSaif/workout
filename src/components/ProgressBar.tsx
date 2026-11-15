@@ -12,17 +12,17 @@ export default function ProgressBar({ current, target }: ProgressBarProps) {
   return (
     <div className="mb-6">
       <div className="flex justify-between items-baseline mb-2">
-        <span className="text-xs font-medium text-[#777777] tracking-wide uppercase">
+        <span className="text-xs font-medium text-ink-5 tracking-wide uppercase">
           Road to {target}kg
         </span>
-        <span className="text-xs text-[#777777]">
-          best {current != null ? `${current}kg` : "—"} / {target}kg
-          <span className="ml-2 text-[#1e3a5f] font-medium">{pctStr}%</span>
+        <span className="text-xs text-ink-5">
+          e1RM {current != null ? `${current}kg` : "—"} / {target}kg
+          <span className="ml-2 text-brand font-medium">{pctStr}%</span>
         </span>
       </div>
-      <div className="h-[2px] w-full bg-[#e8e8e8] rounded-full overflow-hidden">
+      <div className="h-[2px] w-full bg-surface-4 rounded-full overflow-hidden">
         <div
-          className="h-full bg-[#1e3a5f] rounded-full transition-all duration-500"
+          className="h-full bg-brand-fill rounded-full transition-all duration-500"
           style={{ width: `${pct}%` }}
         />
       </div>

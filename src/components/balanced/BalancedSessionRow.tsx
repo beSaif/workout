@@ -60,12 +60,12 @@ export default function BalancedSessionRow({
       <div className="flex items-center gap-3 pl-4">
         <div
           title={session.date ? relativeDate(session.date) : undefined}
-          className="shrink-0 w-10 h-11 rounded-lg bg-[#f5f5f5] flex flex-col items-center justify-center"
+          className="shrink-0 w-10 h-11 rounded-lg bg-surface-2 flex flex-col items-center justify-center"
         >
-          <span className="text-[15px] font-bold text-[#111111] leading-none tabular-nums">
+          <span className="text-[15px] font-bold text-ink leading-none tabular-nums">
             {validDate ? date.getDate() : "–"}
           </span>
-          <span className="mt-0.5 text-[9px] font-semibold uppercase tracking-wider text-[#aaaaaa] leading-none">
+          <span className="mt-0.5 text-[10px] font-semibold uppercase tracking-wider text-ink-6 leading-none">
             {validDate ? date.toLocaleDateString(undefined, { weekday: "short" }) : ""}
           </span>
         </div>
@@ -74,20 +74,20 @@ export default function BalancedSessionRow({
           href={`/session/${session.id}`}
           className="flex-1 min-w-0 py-3 active:opacity-70 transition-opacity"
         >
-          <p className="text-[13px] font-bold text-[#111111] truncate">{label}</p>
+          <p className="text-[13px] font-bold text-ink truncate">{label}</p>
 
           {chips.length > 0 && (
             <div className="flex gap-1 mt-1 overflow-hidden">
               {chips.map((id) => (
                 <span
                   key={id}
-                  className="shrink-0 text-[10px] font-medium text-[#777777] bg-[#f5f5f5] rounded px-1.5 py-px"
+                  className="shrink-0 text-[10px] font-medium text-ink-5 bg-surface-2 rounded px-1.5 py-px"
                 >
                   {getMuscleLabel(exerciseConfig, id)}
                 </span>
               ))}
               {hiddenChips > 0 && (
-                <span className="shrink-0 text-[10px] font-medium text-[#aaaaaa] px-0.5 py-px">
+                <span className="shrink-0 text-[10px] font-medium text-ink-6 px-0.5 py-px">
                   +{hiddenChips}
                 </span>
               )}
@@ -95,9 +95,9 @@ export default function BalancedSessionRow({
           )}
 
           {logged ? (
-            detail && <p className="mt-1 text-[11px] text-[#777777] truncate">{detail}</p>
+            detail && <p className="mt-1 text-[11px] text-ink-5 truncate">{detail}</p>
           ) : (
-            <p className="mt-1 text-[11px] text-[#aaaaaa]">No sets logged</p>
+            <p className="mt-1 text-[11px] text-ink-6">No sets logged</p>
           )}
         </Link>
 
@@ -106,10 +106,10 @@ export default function BalancedSessionRow({
             href={`/session/${session.id}`}
             className="pr-4 pt-2 text-right active:opacity-70 transition-opacity"
           >
-            <span className="block text-lg font-bold text-[#111111] leading-none tabular-nums">
+            <span className="block text-lg font-bold text-ink leading-none tabular-nums">
               {work.sets}
             </span>
-            <span className="block mt-0.5 text-[9px] font-semibold uppercase tracking-widest text-[#aaaaaa]">
+            <span className="block mt-0.5 text-[10px] font-semibold uppercase tracking-widest text-ink-6">
               sets
             </span>
           </Link>
@@ -117,7 +117,7 @@ export default function BalancedSessionRow({
             onClick={() => setOpen((v) => !v)}
             aria-label={open ? "Hide session actions" : "Show session actions"}
             aria-expanded={open}
-            className="px-4 py-2 text-[#cccccc] hover:text-[#777777] active:opacity-70 transition-colors"
+            className="px-4 py-2 text-ink-7 hover:text-ink-5 active:opacity-70 transition-colors"
           >
             <svg width="16" height="4" viewBox="0 0 16 4" fill="currentColor" aria-hidden="true">
               <circle cx="2" cy="2" r="1.6" />
@@ -132,19 +132,19 @@ export default function BalancedSessionRow({
         <div className="flex gap-2 px-4 pb-3 pt-1 animate-fade-up">
           <button
             onClick={() => onShare(session)}
-            className="text-xs font-semibold text-[#1e3a5f] border border-[#1e3a5f] rounded-lg px-3 py-1.5 hover:bg-[#1e3a5f] hover:text-white transition-colors"
+            className="text-xs font-semibold text-brand border border-brand-line rounded-lg px-3 py-1.5 hover:bg-brand-fill hover:text-white transition-colors"
           >
             Share
           </button>
           <button
             onClick={() => onEdit(session)}
-            className="text-xs font-semibold text-[#1e3a5f] border border-[#1e3a5f] rounded-lg px-3 py-1.5 hover:bg-[#1e3a5f] hover:text-white transition-colors"
+            className="text-xs font-semibold text-brand border border-brand-line rounded-lg px-3 py-1.5 hover:bg-brand-fill hover:text-white transition-colors"
           >
             Edit
           </button>
           <button
             onClick={() => onUnlog(session)}
-            className="text-xs font-semibold text-[#aaaaaa] border border-[#e8e8e8] rounded-lg px-3 py-1.5 hover:border-[#aaaaaa] transition-colors"
+            className="text-xs font-semibold text-ink-6 border border-line rounded-lg px-3 py-1.5 hover:border-line-heavy transition-colors"
           >
             Unlog
           </button>

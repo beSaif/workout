@@ -99,7 +99,7 @@ export default function UpNextCard({
     : "+ Extras"
 
   return (
-    <section data-ledge data-ledge-home data-ledge-watch className="mb-3 rounded-2xl bg-[#1e3a5f] text-white overflow-hidden">
+    <section data-ledge data-ledge-home data-ledge-watch className="mb-3 rounded-2xl bg-brand-fill text-white overflow-hidden">
       <div className="px-4 pt-3.5 pb-4">
         <div className="flex items-center justify-between mb-2.5">
           <div className="flex items-center gap-1.5">
@@ -131,7 +131,7 @@ export default function UpNextCard({
             {selectedDay?.name ?? "Next session"}
           </h2>
           {isCoachPick && (
-            <span className="text-[9px] font-semibold uppercase tracking-wide bg-white/15 rounded-full px-2 py-0.5">
+            <span className="text-[10px] font-semibold uppercase tracking-wide bg-white/15 rounded-full px-2 py-0.5">
               Coach pick
             </span>
           )}
@@ -197,7 +197,7 @@ export default function UpNextCard({
           <>
             <button
               onClick={toggleExtrasPicker}
-              className="mt-3.5 w-full bg-white text-[#1e3a5f] text-sm font-semibold rounded-xl py-3 active:opacity-80 transition-opacity"
+              className="mt-3.5 w-full bg-surface text-brand text-sm font-semibold rounded-xl py-3 active:opacity-80 transition-opacity"
             >
               Choose muscle groups
             </button>
@@ -213,7 +213,7 @@ export default function UpNextCard({
         ) : (
           <button
             onClick={() => onStartLogging(session)}
-            className="mt-3.5 w-full bg-white text-[#1e3a5f] text-sm font-semibold rounded-xl py-3 active:opacity-80 transition-opacity"
+            className="mt-3.5 w-full bg-surface text-brand text-sm font-semibold rounded-xl py-3 active:opacity-80 transition-opacity"
           >
             Start session
           </button>
@@ -248,7 +248,7 @@ export default function UpNextCard({
                     )}
                   </div>
                   {recommendedDayId && day.id === recommendedDayId && (
-                    <span className="ml-auto shrink-0 text-[9px] font-semibold uppercase tracking-wide text-white/60">
+                    <span className="ml-auto shrink-0 text-[10px] font-semibold uppercase tracking-wide text-white/60">
                       Coach pick
                     </span>
                   )}

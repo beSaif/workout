@@ -4,6 +4,7 @@ import { useState } from "react"
 import { UserProfile, TRAINING_MODE_LABEL } from "@/lib/types"
 import { isLiftFocused } from "@/lib/trainingMode"
 import { ROAST_PRESETS } from "@/lib/messages"
+import EscapeKey from "@/components/EscapeKey"
 
 function initials(name: string) {
   return name
@@ -58,7 +59,7 @@ export default function HypePanelModal({ friends, pr, liftLabel, onClose, onShar
 
   if (sentText !== null) {
     return (
-      <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-zinc-950 px-8 animate-fade-in">
+      <div role="dialog" aria-modal="true" className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-zinc-950 px-8 animate-fade-in">
         <div className="flex flex-col items-center gap-5 text-center">
           <span className="text-7xl animate-bounce-in select-none">🔥</span>
           <div className="flex flex-col gap-1">
@@ -90,9 +91,10 @@ export default function HypePanelModal({ friends, pr, liftLabel, onClose, onShar
 
   return (
     <div
-      className="fixed inset-0 z-50 flex flex-col bg-zinc-950 animate-slide-up"
+      role="dialog" aria-modal="true" className="fixed inset-0 z-50 flex flex-col bg-zinc-950 animate-slide-up"
       style={{ paddingTop: "env(safe-area-inset-top)" }}
     >
+      <EscapeKey onEscape={onClose} />
       {/* Top bar */}
       <div className="flex items-center justify-between px-5 pt-5 pb-2">
         {inComposer && !blastAll && friends.length > 1 ? (

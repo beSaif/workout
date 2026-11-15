@@ -170,7 +170,7 @@ export default function SessionProgressDashes({
             style={style}
             className={`h-5 flex items-center touch-manipulation rounded-md outline-none
                         transition-[flex-grow] duration-300 ease-out
-                        focus-visible:ring-2 focus-visible:ring-[#1e3a5f]/30 ${
+                        focus-visible:ring-2 focus-visible:ring-brand-line/30 ${
               dash.phase === "in"
                 ? "animate-dash-in"
                 : dash.phase === "out"
@@ -191,7 +191,7 @@ export default function SessionProgressDashes({
                   ? "h-[5px] bg-accent shadow-[0_0_0_3px_rgba(30,58,95,0.10)]"
                   : dash.done
                     ? "h-[3px] bg-accent"
-                    : "h-[3px] bg-[#e4e4e4]"
+                    : "h-[3px] bg-surface-4"
               }`}
             />
           </button>

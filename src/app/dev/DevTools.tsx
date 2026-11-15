@@ -148,30 +148,30 @@ export default function DevTools() {
   return (
     <main className="mx-auto w-full max-w-[393px] px-4 pt-[calc(1.5rem+env(safe-area-inset-top))] pb-6">
       <header className="mb-6 flex items-center gap-4">
-        <Link href="/" className="text-sm text-[#777777]">← Back</Link>
-        <h1 className="text-2xl font-semibold text-[#111111] tracking-tight">Dev Tools</h1>
+        <Link href="/" className="text-sm text-ink-5">← Back</Link>
+        <h1 className="text-2xl font-semibold text-ink tracking-tight">Dev Tools</h1>
       </header>
 
       {/* localStorage */}
       <section className="mb-6">
         <div className="flex items-center justify-between mb-2">
-          <h2 className="text-sm font-semibold text-[#111111]">
+          <h2 className="text-sm font-semibold text-ink">
             localStorage{" "}
-            <span className="text-[#777777] font-normal">({localData.sessions.length} sessions · {localData.blocks.length} blocks)</span>
+            <span className="text-ink-5 font-normal">({localData.sessions.length} sessions · {localData.blocks.length} blocks)</span>
           </h2>
           <div className="flex items-center gap-3">
             <button
               onClick={() => copy(localData, "local")}
-              className="text-xs font-medium text-[#1e3a5f]"
+              className="text-xs font-medium text-brand"
             >
               {copied === "local" ? "Copied!" : "Copy JSON"}
             </button>
-            <button onClick={clearLocal} className="text-xs text-[#aaaaaa]">
+            <button onClick={clearLocal} className="text-xs text-ink-6">
               Clear
             </button>
           </div>
         </div>
-        <pre className="bg-[#f5f5f5] rounded-xl p-3 text-[11px] leading-relaxed text-[#333333] overflow-x-auto max-h-52 overflow-y-auto">
+        <pre className="bg-surface-2 rounded-xl p-3 text-[11px] leading-relaxed text-ink-2 overflow-x-auto max-h-52 overflow-y-auto">
           {JSON.stringify(localData, null, 2)}
         </pre>
       </section>
@@ -179,9 +179,9 @@ export default function DevTools() {
       {/* Vercel KV */}
       <section className="mb-6">
         <div className="flex items-center justify-between mb-2">
-          <h2 className="text-sm font-semibold text-[#111111]">
+          <h2 className="text-sm font-semibold text-ink">
             Vercel KV{" "}
-            <span className="text-[#777777] font-normal">
+            <span className="text-ink-5 font-normal">
               {kvStatus === "loading" && "(loading…)"}
               {kvStatus === "error" && "(unavailable)"}
               {kvStatus === "ok" && `(${kvCount} sessions)`}
@@ -190,30 +190,30 @@ export default function DevTools() {
           {kvStatus === "ok" && (
             <button
               onClick={() => copy(kvData, "kv")}
-              className="text-xs font-medium text-[#1e3a5f]"
+              className="text-xs font-medium text-brand"
             >
               {copied === "kv" ? "Copied!" : "Copy JSON"}
             </button>
           )}
         </div>
         {kvStatus === "ok" && (
-          <pre className="bg-[#f5f5f5] rounded-xl p-3 text-[11px] leading-relaxed text-[#333333] overflow-x-auto max-h-52 overflow-y-auto">
+          <pre className="bg-surface-2 rounded-xl p-3 text-[11px] leading-relaxed text-ink-2 overflow-x-auto max-h-52 overflow-y-auto">
             {kvCount > 0 ? JSON.stringify(kvData, null, 2) : "{}"}
           </pre>
         )}
         {kvStatus === "loading" && (
-          <div className="bg-[#f5f5f5] rounded-xl p-4 text-xs text-[#aaaaaa]">Fetching from KV…</div>
+          <div className="bg-surface-2 rounded-xl p-4 text-xs text-ink-6">Fetching from KV…</div>
         )}
         {kvStatus === "error" && (
-          <div className="bg-[#f5f5f5] rounded-xl p-4 text-xs text-[#aaaaaa]">KV is unavailable in this environment.</div>
+          <div className="bg-surface-2 rounded-xl p-4 text-xs text-ink-6">KV is unavailable in this environment.</div>
         )}
       </section>
 
       {/* Notifications */}
       <section className="mb-6">
-        <h2 className="text-sm font-semibold text-[#111111] mb-1">Notifications</h2>
-        <p className="text-xs text-[#aaaaaa] mb-3">
-          Permission: <span className="font-medium text-[#333333]">
+        <h2 className="text-sm font-semibold text-ink mb-1">Notifications</h2>
+        <p className="text-xs text-ink-6 mb-3">
+          Permission: <span className="font-medium text-ink-2">
             {notifPermission}
           </span>
         </p>
@@ -221,20 +221,20 @@ export default function DevTools() {
           <button
             onClick={() => testNotification(5)}
             disabled={notifStatus === "scheduled" || notifStatus === "requesting"}
-            className="flex-1 py-3 rounded-xl bg-[#f5f5f5] text-sm text-[#111111] disabled:opacity-40"
+            className="flex-1 py-3 rounded-xl bg-surface-2 text-sm text-ink disabled:opacity-40"
           >
             Fire in 5s
           </button>
           <button
             onClick={() => testNotification(10)}
             disabled={notifStatus === "scheduled" || notifStatus === "requesting"}
-            className="flex-1 py-3 rounded-xl bg-[#f5f5f5] text-sm text-[#111111] disabled:opacity-40"
+            className="flex-1 py-3 rounded-xl bg-surface-2 text-sm text-ink disabled:opacity-40"
           >
             Fire in 10s
           </button>
         </div>
         {notifStatus === "scheduled" && notifCountdown !== null && (
-          <p className="mt-2 text-xs text-[#1e3a5f] text-center">Firing in {notifCountdown}s — background the app now</p>
+          <p className="mt-2 text-xs text-brand text-center">Firing in {notifCountdown}s — background the app now</p>
         )}
         {notifStatus === "denied" && (
           <p className="mt-2 text-xs text-red-500 text-center">Permission denied — enable in iOS Settings → Notifications</p>
@@ -246,19 +246,19 @@ export default function DevTools() {
 
       {/* Recalibrate */}
       <section className="mb-6">
-        <h2 className="text-sm font-semibold text-[#111111] mb-1">Recalibrate</h2>
-        <p className="text-xs text-[#aaaaaa] mb-3">
+        <h2 className="text-sm font-semibold text-ink mb-1">Recalibrate</h2>
+        <p className="text-xs text-ink-6 mb-3">
           Repairs data inconsistencies: re-syncs block ↔ session links, re-derives rebuild loads from what you actually lifted (so the next session isn&apos;t too high), and regenerates the upcoming session.
         </p>
         <button
           onClick={runRecalibrate}
           disabled={localData.sessions.length === 0}
-          className="w-full py-3 rounded-xl bg-[#b06a1e] text-sm font-semibold text-white disabled:opacity-40"
+          className="w-full py-3 rounded-xl bg-warn-fill text-sm font-semibold text-white disabled:opacity-40"
         >
           Recalibrate data
         </button>
         {recalNotes && (
-          <ul className="mt-3 bg-[#fdf3e7] rounded-xl p-3 text-[11px] leading-relaxed text-[#8a4d14] list-disc pl-6">
+          <ul className="mt-3 bg-warn-tint rounded-xl p-3 text-[11px] leading-relaxed text-warn list-disc pl-6">
             {recalNotes.map((note, i) => (
               <li key={i}>{note}</li>
             ))}
@@ -268,8 +268,8 @@ export default function DevTools() {
 
       {/* Reset block */}
       <section className="mb-6">
-        <h2 className="text-sm font-semibold text-[#111111] mb-1">Reset block</h2>
-        <p className="text-xs text-[#aaaaaa] mb-3">
+        <h2 className="text-sm font-semibold text-ink mb-1">Reset block</h2>
+        <p className="text-xs text-ink-6 mb-3">
           Winds the program back to session 1 of block 1 (Accumulation), carrying over your
           current peak. Every logged session stays in history — only the block
           bookkeeping is cleared. Use after a long layoff.
@@ -277,12 +277,12 @@ export default function DevTools() {
         <button
           onClick={runResetBlock}
           disabled={localData.blocks.length === 0}
-          className="w-full py-3 rounded-xl bg-[#2d6a2d] text-sm font-semibold text-white disabled:opacity-40"
+          className="w-full py-3 rounded-xl bg-good-fill-2 text-sm font-semibold text-white disabled:opacity-40"
         >
           Reset to block 1, session 1
         </button>
         {resetNotes && (
-          <ul className="mt-3 bg-[#f0f7f0] rounded-xl p-3 text-[11px] leading-relaxed text-[#2d6a2d] list-disc pl-6">
+          <ul className="mt-3 bg-good-tint rounded-xl p-3 text-[11px] leading-relaxed text-good list-disc pl-6">
             {resetNotes.map((note, i) => (
               <li key={i}>{note}</li>
             ))}
@@ -292,19 +292,19 @@ export default function DevTools() {
 
       {/* Sync actions */}
       <section className="mb-6">
-        <h2 className="text-sm font-semibold text-[#111111] mb-3">Sync</h2>
+        <h2 className="text-sm font-semibold text-ink mb-3">Sync</h2>
         <div className="flex flex-col gap-2">
           <button
             onClick={pullFromKV}
             disabled={kvStatus !== "ok" || kvCount === 0}
-            className="w-full py-3 rounded-xl bg-[#f5f5f5] text-sm text-[#111111] disabled:opacity-40"
+            className="w-full py-3 rounded-xl bg-surface-2 text-sm text-ink disabled:opacity-40"
           >
             Pull KV → localStorage
           </button>
           <button
             onClick={pushToKV}
             disabled={localData.sessions.length === 0}
-            className="w-full py-3 rounded-xl bg-[#1e3a5f] text-sm text-white disabled:opacity-40"
+            className="w-full py-3 rounded-xl bg-brand-fill text-sm text-white disabled:opacity-40"
           >
             Push localStorage → KV
           </button>
@@ -312,9 +312,9 @@ export default function DevTools() {
       </section>
 
       {/* Danger zone */}
-      <section className="border-t border-[#e8e8e8] pt-6">
-        <h2 className="text-sm font-semibold text-[#111111] mb-1">Danger zone</h2>
-        <p className="text-xs text-[#aaaaaa] mb-3">Wipes everything — profile, sessions, blocks, exercises. Signs you out. Use to re-test onboarding.</p>
+      <section className="border-t border-line pt-6">
+        <h2 className="text-sm font-semibold text-ink mb-1">Danger zone</h2>
+        <p className="text-xs text-ink-6 mb-3">Wipes everything — profile, sessions, blocks, exercises. Signs you out. Use to re-test onboarding.</p>
         <button
           onClick={deleteAccount}
           className="w-full py-3 rounded-xl border-2 border-red-200 text-sm font-semibold text-red-500 hover:bg-red-50 active:bg-red-100 transition-colors"

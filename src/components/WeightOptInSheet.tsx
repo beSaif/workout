@@ -18,13 +18,13 @@ interface Props {
  */
 export default function WeightOptInSheet({ saving, error, onAccept, onDecline }: Props) {
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40">
-      <div className="w-full max-w-[430px] bg-white rounded-t-2xl px-6 pt-6 pb-10 shadow-2xl max-h-[90dvh] overflow-y-auto">
+    <div role="dialog" aria-modal="true" className="fixed inset-0 z-50 flex items-end justify-center bg-black/40">
+      <div className="w-full max-w-[430px] bg-raised rounded-t-2xl px-6 pt-6 pb-10 shadow-2xl max-h-[90dvh] overflow-y-auto">
         <div className="mb-6">
-          <p className="text-lg font-semibold text-[#111111] leading-snug mb-1">
+          <p className="text-lg font-semibold text-ink leading-snug mb-1">
             want to check in your weight weekly?
           </p>
-          <p className="text-sm text-[#777777]">
+          <p className="text-sm text-ink-5">
             one number, once a week — log more often with the + whenever you like. strength is
             relative to bodyweight; tracking it is how you find out whether you&apos;re actually gaining, or just
             heavier.
@@ -36,14 +36,14 @@ export default function WeightOptInSheet({ saving, error, onAccept, onDecline }:
         <button
           onClick={onAccept}
           disabled={saving}
-          className="w-full bg-[#1e3a5f] text-white text-sm font-semibold rounded-xl py-3.5 active:bg-[#0f2540] transition-colors disabled:opacity-40"
+          className="w-full bg-brand-fill text-white text-sm font-semibold rounded-xl py-3.5 active:bg-brand-fill-3 transition-colors disabled:opacity-40"
         >
           {saving ? "saving…" : "yeah, ask me weekly"}
         </button>
         <button
           onClick={onDecline}
           disabled={saving}
-          className="w-full text-sm text-[#aaaaaa] py-3 mt-1 disabled:opacity-40"
+          className="w-full text-sm text-ink-6 py-3 mt-1 disabled:opacity-40"
         >
           no thanks
         </button>

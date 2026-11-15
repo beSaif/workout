@@ -1,6 +1,7 @@
 "use client"
 
 import { useCallback, useEffect, useRef, useState } from "react"
+import EscapeKey from "@/components/EscapeKey"
 
 interface Props {
   /** Top-bar label, lowercase like the rest of the share UI. */
@@ -128,9 +129,10 @@ export default function ShareImageSheet({ title, fileName, alt, capture, onClose
 
   return (
     <div
-      className="fixed inset-0 z-50 flex flex-col bg-zinc-950 animate-slide-up"
+      role="dialog" aria-modal="true" className="fixed inset-0 z-50 flex flex-col bg-zinc-950 animate-slide-up"
       style={{ paddingTop: "env(safe-area-inset-top)" }}
     >
+      <EscapeKey onEscape={onClose} />
       {/* Top bar */}
       <div className="flex items-center justify-between px-5 pt-5 pb-3">
         <p className="text-zinc-500 text-[11px] uppercase tracking-[0.18em] font-semibold">

@@ -1,4 +1,5 @@
 import { Session } from "./types"
+import { getBestE1RM } from "./stats"
 
 /**
  * Everything the gymbro card shows, derived from a friend's session history.
@@ -50,7 +51,13 @@ export interface FriendCardStats {
   avgPerWeek: number
   /** Best-ever set per exercise, heaviest first. */
   records: FriendPR[]
-  /** Percent of the way from 0 to their target, or null outside lift-focused mode. */
+  /**
+   * Where the main lift stands, in kg: the best e1RM logged, or the cycle's peak until
+   * there is a set to estimate from. Null outside lift-focused mode. Optional so a card
+   * built before this field existed still renders (the peak stands in).
+   */
+  standingKg?: number | null
+  /** `standingKg` as a percent of their target, or null outside lift-focused mode. */
   progressPct: number | null
   rarity: RarityTier
 }
@@ -186,9 +193,12 @@ export function buildFriendCard(
 
   const anchor = opts.anchor ?? 0
   const target = opts.target ?? 0
+  // The same measure Home, Profile and the share card use: best e1RM against the
+  // target. The cycle's peak stands in until there is a logged set to estimate from.
+  const standing = getBestE1RM(confirmed) ?? (anchor > 0 ? anchor : null)
   const progressPct =
-    opts.liftFocused && target > 0 && anchor > 0
-      ? Math.min(100, Math.round((anchor / target) * 100))
+    opts.liftFocused && target > 0 && standing != null
+      ? Math.min(100, Math.round((standing / target) * 100))
       : null
 
   return {
@@ -200,6 +210,7 @@ export function buildFriendCard(
     sessionsInWindow,
     avgPerWeek: Math.round((sessionsInWindow / (CARD_WINDOW_DAYS / 7)) * 10) / 10,
     records: personalRecords(confirmed, opts.mainLiftLabel, todayMs, opts.prLimit ?? 4),
+    standingKg: opts.liftFocused ? standing : null,
     progressPct,
     rarity: rarityFor(progressPct),
   }

@@ -24,17 +24,19 @@ import {
 } from "@/lib/storage"
 import { PersonSummary } from "@/lib/routines"
 import { useOnboardingGuard } from "@/lib/useOnboardingGuard"
+import BackButton from "@/components/BackButton"
+import { useConfirm } from "@/components/ConfirmSheet"
 
-const SECTION_LABEL = "text-[10px] font-semibold uppercase tracking-widest text-[#aaaaaa] mb-3"
+const SECTION_LABEL = "text-[10px] font-semibold uppercase tracking-widest text-ink-6 mb-3"
 const ADD_BUTTON =
-  "w-full border border-dashed border-[#e8e8e8] rounded-xl py-3 text-sm font-semibold text-[#aaaaaa] hover:border-[#1e3a5f] hover:text-[#1e3a5f] transition-colors"
+  "w-full border border-dashed border-line rounded-xl py-3 text-sm font-semibold text-ink-6 hover:border-brand-line hover:text-brand transition-colors"
 
 function Chevron({ open = false }: { open?: boolean }) {
   return (
     <svg
       width="7" height="12" viewBox="0 0 7 12" fill="none"
-      stroke="#cccccc" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"
-      className={`shrink-0 transition-transform ${open ? "rotate-90" : ""}`}
+      stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"
+      className={`shrink-0 text-ink-7 transition-transform ${open ? "rotate-90" : ""}`}
       aria-hidden="true"
     >
       <path d="M1 1l5 5-5 5" />
@@ -45,8 +47,8 @@ function Chevron({ open = false }: { open?: boolean }) {
 function chipClass(on: boolean) {
   return `px-3 py-1 rounded-full text-xs font-semibold border transition-colors ${
     on
-      ? "bg-[#1e3a5f] text-white border-[#1e3a5f]"
-      : "bg-white text-[#777777] border-[#e8e8e8] hover:border-[#1e3a5f] hover:text-[#1e3a5f]"
+      ? "bg-brand-fill text-white border-brand-line"
+      : "bg-surface text-ink-5 border-line hover:border-brand-line hover:text-brand"
   }`
 }
 
@@ -56,6 +58,7 @@ function chipClass(on: boolean) {
  * it once opened, and a group's live on its own page.
  */
 export default function ExercisesPage() {
+  const { confirm, confirmSheet } = useConfirm()
   useOnboardingGuard()
   const [config, setConfig] = useState<MuscleGroupConfig[]>(DEFAULT_MUSCLE_GROUPS)
   const [trainingDays, setTrainingDays] = useState<TrainingDay[]>(DEFAULT_TRAINING_DAYS)
@@ -93,7 +96,12 @@ export default function ExercisesPage() {
 
   async function stopFollowing() {
     if (!coach) return
-    if (!window.confirm(`Stop training under ${coach.name}? Their routine, as it is now, stays yours to edit.`)) return
+    const yes = await confirm({
+      title: `Stop training under ${coach.name}?`,
+      body: "Their routine, as it is now, stays yours to edit.",
+      confirmLabel: "Stop training under them",
+    })
+    if (!yes) return
     setStopping(true)
     if (await stopTrainingUnderCoach()) setCoach(null)
     setStopping(false)
@@ -171,8 +179,14 @@ export default function ExercisesPage() {
     persistDays(trainingDays.map((d) => (d.id === id ? { ...d, name } : d)))
   }
 
-  function deleteDay(day: TrainingDay) {
-    if (!window.confirm(`Delete "${day.name}"? Its muscles stay in the list but won't be part of any training day.`)) return
+  async function deleteDay(day: TrainingDay) {
+    const yes = await confirm({
+      title: `Delete "${day.name}"?`,
+      body: "Its muscles stay in the list but won't be part of any training day.",
+      confirmLabel: "Delete day",
+      destructive: true,
+    })
+    if (!yes) return
     persistDays(trainingDays.filter((d) => d.id !== day.id))
     if (expandedDayId === day.id) setExpandedDayId(null)
   }
@@ -193,10 +207,10 @@ export default function ExercisesPage() {
   if (!mounted) {
     return (
       <main className="mx-auto w-full max-w-[393px] px-4 pt-[calc(1.5rem+env(safe-area-inset-top))] pb-6">
-        <div className="h-4 w-16 bg-[#e8e8e8] rounded animate-pulse mb-8" />
-        <div className="h-6 w-48 bg-[#e8e8e8] rounded animate-pulse mb-6" />
+        <div className="h-4 w-16 bg-surface-4 rounded animate-pulse mb-8" />
+        <div className="h-6 w-48 bg-surface-4 rounded animate-pulse mb-6" />
         {[1, 2, 3, 4, 5, 6].map((i) => (
-          <div key={i} className="h-14 bg-[#e8e8e8] rounded-xl animate-pulse mb-2" />
+          <div key={i} className="h-14 bg-surface-4 rounded-xl animate-pulse mb-2" />
         ))}
       </main>
     )
@@ -214,28 +228,23 @@ export default function ExercisesPage() {
 
   return (
     <main className="mx-auto w-full max-w-[393px] px-4 pt-[calc(1.5rem+env(safe-area-inset-top))] pb-[calc(4rem+env(safe-area-inset-bottom))]">
-      <Link
-        href="/"
-        className="inline-flex items-center gap-1 text-sm text-[#1e3a5f] mb-6 hover:underline"
-      >
-        ← Back
-      </Link>
-
-      <h1 className="text-2xl font-semibold text-[#111111] tracking-tight mb-1">
-        Routine
-      </h1>
-      <p className="text-sm text-[#777777] mb-6">
+      {confirmSheet}
+      <header className="flex items-center gap-2 mb-1">
+        <BackButton href="/" label="Back to home" />
+        <h1 className="text-2xl font-semibold text-ink tracking-tight">Routine</h1>
+      </header>
+      <p className="text-sm text-ink-5 mb-6">
         Your training days and the exercises in each.
       </p>
 
       {/* ─── Coach ─── */}
       {coach && (
-        <div className="bg-[#f0f4f8] border border-[#dbe4ee] rounded-xl px-4 py-3 mb-6">
-          <p className="text-sm text-[#111111]">
+        <div className="bg-brand-tint-2 border border-brand-line-2 rounded-xl px-4 py-3 mb-6">
+          <p className="text-sm text-ink">
             Following{" "}
             <Link
               href={`/friends/${encodeURIComponent(coach.email)}`}
-              className="font-semibold text-[#1e3a5f] hover:underline"
+              className="font-semibold text-brand hover:underline"
             >
               {coach.name}
             </Link>
@@ -255,12 +264,12 @@ export default function ExercisesPage() {
       {!locked && (
         <Link
           href="/plan"
-          className="flex items-center gap-3 bg-white border border-[#e8e8e8] rounded-xl px-4 py-3.5 mb-6 hover:border-[#1e3a5f] transition-colors"
+          className="flex items-center gap-3 bg-surface border border-line rounded-xl px-4 py-3.5 mb-6 hover:border-brand-line transition-colors"
         >
           <DotFace />
           <div className="flex-1 min-w-0">
-            <p className="text-sm font-semibold text-[#111111]">Plan with Dot</p>
-            <p className="text-[11px] text-[#aaaaaa] mt-0.5">
+            <p className="text-sm font-semibold text-ink">Plan with Dot</p>
+            <p className="text-[11px] text-ink-6 mt-0.5">
               A new split from a few questions, or paste one from your own AI.
             </p>
           </div>
@@ -283,8 +292,8 @@ export default function ExercisesPage() {
           return (
             <div
               key={day.id}
-              className={`bg-white border rounded-xl overflow-hidden transition-colors ${
-                isExpanded ? "border-[#cfd9e5]" : "border-[#e8e8e8]"
+              className={`bg-surface border rounded-xl overflow-hidden transition-colors ${
+                isExpanded ? "border-brand-line-2" : "border-line"
               }`}
             >
               {isEditing ? (
@@ -299,18 +308,18 @@ export default function ExercisesPage() {
                     }}
                     onBlur={() => saveRenameDay(day.id)}
                     aria-label="Day name"
-                    className="w-full text-sm font-semibold text-[#111111] border-b border-[#1e3a5f] outline-none bg-transparent py-0.5"
+                    className="w-full text-sm font-semibold text-ink border-b border-brand-line outline-none bg-transparent py-0.5"
                   />
                 </div>
               ) : (
                 <button
                   onClick={() => setExpandedDayId(isExpanded ? null : day.id)}
                   aria-expanded={isExpanded}
-                  className="w-full flex items-center gap-3 px-4 py-3.5 text-left hover:bg-[#fafafa] transition-colors"
+                  className="w-full flex items-center gap-3 px-4 py-3.5 text-left hover:bg-surface-1 transition-colors"
                 >
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-semibold text-[#111111] truncate">{day.name}</p>
-                    <p className="text-[11px] text-[#aaaaaa] mt-0.5 truncate">
+                    <p className="text-sm font-semibold text-ink truncate">{day.name}</p>
+                    <p className="text-[11px] text-ink-6 mt-0.5 truncate">
                       {dayMuscleNames || "No muscles yet — tap to add"}
                     </p>
                   </div>
@@ -320,8 +329,8 @@ export default function ExercisesPage() {
 
               {/* Expanded: which muscles this day trains, then the day's own actions */}
               {isExpanded && (
-                <div className="border-t border-[#f0f0f0] px-4 pt-3 pb-3">
-                  <p className="text-[11px] text-[#999999] mb-2">
+                <div className="border-t border-line-soft px-4 pt-3 pb-3">
+                  <p className="text-[11px] text-ink-6 mb-2">
                     {locked ? "Muscles trained this day" : "Tap to add or remove muscles"}
                   </p>
                   <div className="flex flex-wrap gap-2">
@@ -341,10 +350,10 @@ export default function ExercisesPage() {
                     ))}
                   </div>
                   {!locked && (
-                    <div className="flex gap-4 mt-3 pt-3 border-t border-[#f5f5f5]">
+                    <div className="flex gap-4 mt-3 pt-3 border-t border-line-soft">
                       <button
                         onClick={() => startRenameDay(day)}
-                        className="text-xs font-semibold text-[#555555] hover:text-[#111111] transition-colors"
+                        className="text-xs font-semibold text-ink-4 hover:text-ink transition-colors"
                       >
                         Rename
                       </button>
@@ -366,7 +375,7 @@ export default function ExercisesPage() {
       {/* Add training day */}
       <div className="mb-8">
         {locked ? null : addingDay ? (
-          <div className="border border-[#e8e8e8] rounded-xl px-4 py-4 bg-white">
+          <div className="border border-line rounded-xl px-4 py-4 bg-surface">
             <input
               ref={addDayInputRef}
               value={newDayName}
@@ -377,19 +386,19 @@ export default function ExercisesPage() {
               }}
               placeholder="Day name, e.g. Push"
               aria-label="New training day name"
-              className="w-full text-sm text-[#111111] border-b border-[#e8e8e8] focus:border-[#1e3a5f] outline-none bg-transparent pb-1 mb-4"
+              className="w-full text-sm text-ink border-b border-line focus:border-brand-line outline-none bg-transparent pb-1 mb-4"
             />
             <div className="flex gap-3">
               <button
                 onClick={addDay}
                 disabled={!newDayName.trim()}
-                className="text-xs font-semibold text-white bg-[#1e3a5f] rounded-lg px-4 py-1.5 hover:bg-[#16304f] transition-colors disabled:opacity-40"
+                className="text-xs font-semibold text-white bg-brand-fill rounded-lg px-4 py-1.5 hover:bg-brand-fill-2 transition-colors disabled:opacity-40"
               >
                 Add day
               </button>
               <button
                 onClick={() => { setAddingDay(false); setNewDayName("") }}
-                className="text-xs font-semibold text-[#777777] hover:text-[#333333] transition-colors"
+                className="text-xs font-semibold text-ink-5 hover:text-ink-2 transition-colors"
               >
                 Cancel
               </button>
@@ -405,7 +414,7 @@ export default function ExercisesPage() {
       {/* ─── Muscle Groups ─── */}
       <p className={SECTION_LABEL}>Muscle Groups</p>
 
-      <div className="bg-white border border-[#e8e8e8] rounded-xl overflow-hidden">
+      <div className="bg-surface border border-line rounded-xl overflow-hidden">
         {sortedGroups.map((group, idx) => {
           const exCount = group.exercises.length
           const days = sortedDays.filter((d) => d.muscleGroupIds.includes(group.id))
@@ -414,17 +423,17 @@ export default function ExercisesPage() {
             <Link
               key={group.id}
               href={`/exercises/${group.id}`}
-              className={`flex items-center gap-3 px-4 py-3 hover:bg-[#fafafa] transition-colors ${
-                idx < sortedGroups.length - 1 ? "border-b border-[#f5f5f5]" : ""
+              className={`flex items-center gap-3 px-4 py-3 hover:bg-surface-1 transition-colors ${
+                idx < sortedGroups.length - 1 ? "border-b border-line-soft" : ""
               }`}
             >
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-semibold text-[#111111] truncate">{group.name}</p>
-                <p className="text-[11px] text-[#aaaaaa] mt-0.5 truncate">
+                <p className="text-sm font-semibold text-ink truncate">{group.name}</p>
+                <p className="text-[11px] text-ink-6 mt-0.5 truncate">
                   {exCount === 0 ? "No exercises" : `${exCount} exercise${exCount !== 1 ? "s" : ""}`}
                   {" · "}
                   {days.length > 0 ? (
-                    <span className="text-[#1e3a5f]">{days.map((d) => d.name).join(", ")}</span>
+                    <span className="text-brand">{days.map((d) => d.name).join(", ")}</span>
                   ) : (
                     <span className="text-amber-600">Not on a day</span>
                   )}
@@ -439,7 +448,7 @@ export default function ExercisesPage() {
       {/* Add muscle group: name and day together, one step */}
       <div className="mt-3">
         {locked ? null : addingGroup ? (
-          <div className="border border-[#e8e8e8] rounded-xl px-4 py-4 bg-white">
+          <div className="border border-line rounded-xl px-4 py-4 bg-surface">
             <input
               ref={addGroupInputRef}
               value={newGroupName}
@@ -450,9 +459,9 @@ export default function ExercisesPage() {
               }}
               placeholder="Muscle group, e.g. Abs"
               aria-label="New muscle group name"
-              className="w-full text-sm text-[#111111] border-b border-[#e8e8e8] focus:border-[#1e3a5f] outline-none bg-transparent pb-1 mb-4"
+              className="w-full text-sm text-ink border-b border-line focus:border-brand-line outline-none bg-transparent pb-1 mb-4"
             />
-            <p className="text-[11px] text-[#999999] mb-2">Train it on</p>
+            <p className="text-[11px] text-ink-6 mb-2">Train it on</p>
             <div className="flex flex-wrap gap-2 mb-4">
               <button
                 onClick={() => setNewGroupDayId(null)}
@@ -476,13 +485,13 @@ export default function ExercisesPage() {
               <button
                 onClick={addGroupFinish}
                 disabled={!newGroupName.trim()}
-                className="text-xs font-semibold text-white bg-[#1e3a5f] rounded-lg px-4 py-1.5 hover:bg-[#16304f] transition-colors disabled:opacity-40"
+                className="text-xs font-semibold text-white bg-brand-fill rounded-lg px-4 py-1.5 hover:bg-brand-fill-2 transition-colors disabled:opacity-40"
               >
                 Add group
               </button>
               <button
                 onClick={resetAddGroup}
-                className="text-xs font-semibold text-[#777777] hover:text-[#333333] transition-colors"
+                className="text-xs font-semibold text-ink-5 hover:text-ink-2 transition-colors"
               >
                 Cancel
               </button>
@@ -499,21 +508,21 @@ export default function ExercisesPage() {
       {cardioGroups.length > 0 && (
         <>
           <p className={`${SECTION_LABEL} mt-8 !mb-1`}>Cardio</p>
-          <p className="text-[11px] text-[#999999] mb-3">
+          <p className="text-[11px] text-ink-6 mb-3">
             Logged in minutes. Add a bout from any session.
           </p>
-          <div className="bg-white border border-[#e8e8e8] rounded-xl overflow-hidden">
+          <div className="bg-surface border border-line rounded-xl overflow-hidden">
             {cardioGroups.map((group, idx) => (
               <Link
                 key={group.id}
                 href={`/exercises/${group.id}`}
-                className={`flex items-center gap-3 px-4 py-3 hover:bg-[#fafafa] transition-colors ${
-                  idx < cardioGroups.length - 1 ? "border-b border-[#f5f5f5]" : ""
+                className={`flex items-center gap-3 px-4 py-3 hover:bg-surface-1 transition-colors ${
+                  idx < cardioGroups.length - 1 ? "border-b border-line-soft" : ""
                 }`}
               >
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-semibold text-[#111111] truncate">{group.name}</p>
-                  <p className="text-[11px] text-[#aaaaaa] mt-0.5">
+                  <p className="text-sm font-semibold text-ink truncate">{group.name}</p>
+                  <p className="text-[11px] text-ink-6 mt-0.5">
                     {group.exercises.length === 0
                       ? "No exercises"
                       : `${group.exercises.length} exercise${group.exercises.length !== 1 ? "s" : ""}`}

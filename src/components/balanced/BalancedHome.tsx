@@ -32,10 +32,10 @@ const LAYOFF_DAYS = 7
 
 function gapPill(daysSince: number): { text: string; className: string } {
   if (daysSince >= LAYOFF_DAYS) {
-    return { text: `${daysSince}d off`, className: "bg-[#fff8ed] text-[#b06a1e]" }
+    return { text: `${daysSince}d off`, className: "bg-warn-tint text-warn-2" }
   }
-  if (daysSince === 0) return { text: "trained today", className: "bg-[#f3faf4] text-[#16a34a]" }
-  return { text: `${daysSince}d since last`, className: "bg-[#f5f5f5] text-[#777777]" }
+  if (daysSince === 0) return { text: "trained today", className: "bg-good-tint text-good-bright" }
+  return { text: `${daysSince}d since last`, className: "bg-surface-2 text-ink-5" }
 }
 
 /**
@@ -83,9 +83,9 @@ export default function BalancedHome({
       />
 
       {recent.length > 0 && (
-        <section data-ledge className="mt-5 rounded-xl bg-white border border-[#e8e8e8] overflow-hidden">
+        <section data-ledge className="mt-5 rounded-xl bg-surface border border-line overflow-hidden">
           <div className="flex items-baseline justify-between gap-2 px-4 pt-3 pb-2">
-            <p className="text-[10px] font-semibold uppercase tracking-widest text-[#aaaaaa]">
+            <p className="text-[10px] font-semibold uppercase tracking-widest text-ink-6">
               Recent sessions
             </p>
             {pill && (
@@ -94,7 +94,7 @@ export default function BalancedHome({
               </span>
             )}
           </div>
-          <div className="divide-y divide-[#f0f0f0] border-t border-[#f0f0f0]">
+          <div className="divide-y divide-line-soft border-t border-line-soft">
             {recent.map((s) => (
               <BalancedSessionRow
                 key={s.id}

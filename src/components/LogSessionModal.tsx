@@ -93,6 +93,17 @@ interface LogSessionModalProps {
   initialDraft?: SessionDraft
   exerciseConfig: MuscleGroupConfig[]
   mainLiftLabel: string
+  /** Log mode: the effort the main lift's working sets are aiming for, e.g. "Aim for RPE 7". */
+  mainLiftTarget?: string
+}
+
+/** The top working set of the most recent session that trained the main lift. */
+function lastMainLift(previousSessions: Session[]): { kg: number; reps: number; rpe: number | null; date: string | null } | null {
+  for (const s of previousSessions) {
+    const top = s.sets.find((x) => !x.isWarmup && x.reps > 0 && x.kg > 0)
+    if (top) return { kg: top.kg, reps: top.reps, rpe: top.rpe, date: s.date }
+  }
+  return null
 }
 
 interface EditableSet extends MainLiftSet {
@@ -294,14 +305,14 @@ function SortableGroupRow({
     <div
       ref={setNodeRef}
       style={style}
-      className={`flex items-center gap-3 py-3.5 px-1 border-b border-[#f0f0f0] select-none ${
-        isDragging ? "bg-[#f9f9f9] shadow-sm rounded-lg z-10 relative" : ""
+      className={`flex items-center gap-3 py-3.5 px-1 border-b border-line-soft select-none ${
+        isDragging ? "bg-surface-1 shadow-sm rounded-lg z-10 relative" : ""
       }`}
     >
       <button
         {...attributes}
         {...listeners}
-        className="text-[#cccccc] touch-none cursor-grab active:cursor-grabbing p-1 shrink-0"
+        className="text-ink-7 touch-none cursor-grab active:cursor-grabbing p-1 shrink-0"
         aria-label="Drag to reorder"
       >
         <svg width="12" height="16" viewBox="0 0 12 16" fill="currentColor">
@@ -314,24 +325,24 @@ function SortableGroupRow({
         </svg>
       </button>
       <div className="flex-1 min-w-0">
-        <p className="text-sm font-medium text-[#111111] truncate">{label}</p>
+        <p className="text-sm font-medium text-ink truncate">{label}</p>
         <div className="flex items-center gap-1 mt-1 flex-wrap">
           {count <= 10 && Array.from({ length: count }, (_, i) => (
             <div
               key={i}
               className={`w-2 h-2 rounded-full shrink-0 ${
-                i < completedCount ? "bg-[#1e3a5f]" : "bg-[#e0e0e0]"
+                i < completedCount ? "bg-brand-fill" : "bg-surface-4"
               }`}
             />
           ))}
-          <span className="text-[11px] text-[#aaaaaa] ml-0.5">{completedCount} / {count}</span>
+          <span className="text-[11px] text-ink-6 ml-0.5">{completedCount} / {count}</span>
         </div>
         {topCardio !== null ? (
-          <p className="text-[10px] text-[#1e3a5f] mt-0.5 font-medium">
+          <p className="text-[10px] text-brand mt-0.5 font-medium">
             {formatCardioSet(cardioSetValues(topCardio))}
           </p>
         ) : topKg !== null && topReps !== null ? (
-          <p className="text-[10px] text-[#1e3a5f] mt-0.5 font-medium">
+          <p className="text-[10px] text-brand mt-0.5 font-medium">
             Top: {topKg} × {topReps}
           </p>
         ) : null}
@@ -339,7 +350,7 @@ function SortableGroupRow({
       {onDelete && (
         <button
           onClick={onDelete}
-          className="text-[#cccccc] hover:text-red-400 transition-colors p-1 shrink-0"
+          className="text-ink-7 hover:text-red-400 transition-colors p-1 shrink-0"
           aria-label="Delete exercise"
         >
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
@@ -487,7 +498,10 @@ export default function LogSessionModal({
   initialDraft,
   exerciseConfig,
   mainLiftLabel,
+  mainLiftTarget,
 }: LogSessionModalProps) {
+  // Editing a logged session: "last time" is the one before it, not itself.
+  const lastLift = lastMainLift(previousSessions.filter((s) => s.id !== session.id))
   // Fixed for the life of the modal: the session's main lift does not change mid-log.
   const duplicateOfMainLift = mainLiftDuplicate(session, mainLiftLabel)
 
@@ -1255,15 +1269,15 @@ export default function LogSessionModal({
   const exercisesSheet = showExercisesSheet ? (
     <>
       <div className="absolute inset-0 bg-black/20 z-10" onClick={closeExercisesSheet} />
-      <div className="absolute bottom-0 left-0 right-0 bg-white rounded-t-2xl shadow-[0_-4px_24px_rgba(0,0,0,0.10)] flex flex-col z-20 max-h-[75%]">
+      <div className="absolute bottom-0 left-0 right-0 bg-raised rounded-t-2xl shadow-[0_-4px_24px_rgba(0,0,0,0.10)] flex flex-col z-20 max-h-[75%]">
         <div className="flex justify-center pt-3 shrink-0">
-          <div className="w-9 h-1 bg-[#e0e0e0] rounded-full" />
+          <div className="w-9 h-1 bg-surface-4 rounded-full" />
         </div>
         <div className="pt-3 pb-2 px-4 flex items-center justify-between shrink-0">
-          <p className="text-[10px] uppercase tracking-widest font-medium text-[#aaaaaa]">
+          <p className="text-[10px] uppercase tracking-widest font-medium text-ink-6">
             Exercises
           </p>
-          <button onClick={closeExercisesSheet} className="text-sm font-semibold text-[#1e3a5f]">
+          <button onClick={closeExercisesSheet} className="text-sm font-semibold text-brand">
             Done
           </button>
         </div>
@@ -1272,8 +1286,8 @@ export default function LogSessionModal({
             onClick={() => setExercisesSheetTab("current")}
             className={`flex-1 py-2 rounded-lg text-xs font-semibold transition-colors ${
               exercisesSheetTab === "current"
-                ? "bg-[#111111] text-white"
-                : "bg-[#f5f5f5] text-[#777777] hover:bg-[#ebebeb]"
+                ? "bg-brand-fill text-white"
+                : "bg-surface-2 text-ink-5 hover:bg-surface-3"
             }`}
           >
             Current
@@ -1282,8 +1296,8 @@ export default function LogSessionModal({
             onClick={() => setExercisesSheetTab("add")}
             className={`flex-1 py-2 rounded-lg text-xs font-semibold transition-colors ${
               exercisesSheetTab === "add"
-                ? "bg-[#111111] text-white"
-                : "bg-[#f5f5f5] text-[#777777] hover:bg-[#ebebeb]"
+                ? "bg-brand-fill text-white"
+                : "bg-surface-2 text-ink-5 hover:bg-surface-3"
             }`}
           >
             Add
@@ -1292,24 +1306,24 @@ export default function LogSessionModal({
 
         {exercisesSheetTab === "current" && (
           <>
-            <div className="px-4 py-2.5 border-y border-[#f0f0f0] flex items-center gap-2 shrink-0">
-              <span className="text-[12px] font-semibold text-[#111111]">
+            <div className="px-4 py-2.5 border-y border-line-soft flex items-center gap-2 shrink-0">
+              <span className="text-[12px] font-semibold text-ink">
                 {completedCount} / {carouselItems.length} sets
               </span>
-              <span className="text-[#dddddd]">·</span>
-              <span className="text-[12px] text-[#777777]">
+              <span className="text-ink-8">·</span>
+              <span className="text-[12px] text-ink-5">
                 {totalVolume.toLocaleString()} kg volume
               </span>
             </div>
             {selectedGroups.length > 0 && (
-              <div className="px-4 py-3 border-b border-[#f0f0f0] shrink-0 space-y-2">
-                <p className="text-[10px] uppercase tracking-widest text-[#aaaaaa] font-medium">
+              <div className="px-4 py-3 border-b border-line-soft shrink-0 space-y-2">
+                <p className="text-[10px] uppercase tracking-widest text-ink-6 font-medium">
                   Muscle groups
                 </p>
                 <div className="flex flex-wrap gap-1.5">
                   {selectedGroups.map((muscleId) => (
-                    <div key={muscleId} className="flex items-center gap-1 rounded-full bg-[#f5f5f5] pl-3 pr-1 py-1">
-                      <span className="text-xs font-medium text-[#333333]">
+                    <div key={muscleId} className="flex items-center gap-1 rounded-full bg-surface-2 pl-3 pr-1 py-1">
+                      <span className="text-xs font-medium text-ink-2">
                         {getMuscleLabel(exerciseConfig, muscleId)}
                       </span>
                       {availableGroups.length > 0 && (
@@ -1317,8 +1331,8 @@ export default function LogSessionModal({
                           onClick={() => setSwapFromMuscle(swapFromMuscle === muscleId ? null : muscleId)}
                           className={`text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded-full transition-colors ${
                             swapFromMuscle === muscleId
-                              ? "bg-[#1e3a5f] text-white"
-                              : "text-[#777777] hover:text-[#111111]"
+                              ? "bg-brand-fill text-white"
+                              : "text-ink-5 hover:text-ink"
                           }`}
                         >
                           Swap
@@ -1328,15 +1342,15 @@ export default function LogSessionModal({
                   ))}
                 </div>
                 {swapFromMuscle && (
-                  <div className="rounded-xl border border-[#e8e8e8] p-1.5">
-                    <p className="text-[10px] uppercase tracking-widest text-[#aaaaaa] font-medium px-2 pt-1 pb-0.5">
+                  <div className="rounded-xl border border-line p-1.5">
+                    <p className="text-[10px] uppercase tracking-widest text-ink-6 font-medium px-2 pt-1 pb-0.5">
                       Swap {getMuscleLabel(exerciseConfig, swapFromMuscle)} with…
                     </p>
                     {availableGroups.map((g) => (
                       <button
                         key={g.id}
                         onClick={() => setPendingSwap({ from: swapFromMuscle, to: g.id })}
-                        className="w-full text-left px-2 py-2 rounded-lg hover:bg-[#f5f5f5] text-sm text-[#111111]"
+                        className="w-full text-left px-2 py-2 rounded-lg hover:bg-surface-2 text-sm text-ink"
                       >
                         {g.name}
                       </button>
@@ -1382,7 +1396,7 @@ export default function LogSessionModal({
         )}
 
         {exercisesSheetTab === "add" && (
-          <div className="flex-1 overflow-y-auto py-3 px-4 space-y-3 border-t border-[#f0f0f0]">
+          <div className="flex-1 overflow-y-auto py-3 px-4 space-y-3 border-t border-line-soft">
             {[...sortedMuscleGroups(exerciseConfig), ...sortedCardioGroups(exerciseConfig)].map((g) => {
               const present = extraState[g.id] ?? {}
               const allExercises = getExercisesForMuscle(exerciseConfig, g.id)
@@ -1391,18 +1405,18 @@ export default function LogSessionModal({
               })
               const allAdded = addable.length > 0 && addable.every((name) => present[name])
               return (
-                <div key={g.id} className="rounded-xl border border-[#e8e8e8] p-3">
+                <div key={g.id} className="rounded-xl border border-line p-3">
                   <div className="flex items-center justify-between mb-2">
                     <div className="min-w-0">
-                      <p className="text-sm font-semibold text-[#111111]">{g.name}</p>
+                      <p className="text-sm font-semibold text-ink">{g.name}</p>
                       {g.cardio && (
-                        <p className="text-[10px] text-[#aaaaaa] mt-0.5">Logged in minutes</p>
+                        <p className="text-[10px] text-ink-6 mt-0.5">Logged in minutes</p>
                       )}
                     </div>
                     {!allAdded && (
                       <button
                         onClick={() => addMuscleGroup(g.id)}
-                        className="text-[10px] uppercase tracking-wide text-[#1e3a5f] hover:text-[#16304f] font-semibold px-2 py-1"
+                        className="text-[10px] uppercase tracking-wide text-brand hover:text-brand-strong font-semibold px-2 py-1"
                       >
                         Add all
                       </button>
@@ -1413,13 +1427,13 @@ export default function LogSessionModal({
                       const added = !!present[name]
                       return (
                         <div key={name} className="flex items-center justify-between py-1.5">
-                          <span className="text-sm text-[#333333]">{name}</span>
+                          <span className="text-sm text-ink-2">{name}</span>
                           {added ? (
-                            <span className="text-[10px] uppercase tracking-wide text-[#aaaaaa]">Added</span>
+                            <span className="text-[10px] uppercase tracking-wide text-ink-6">Added</span>
                           ) : (
                             <button
                               onClick={() => addExerciseToMuscle(g.id, name)}
-                              className="text-[10px] uppercase tracking-wide text-[#1e3a5f] hover:text-[#16304f] font-semibold px-2 py-1"
+                              className="text-[10px] uppercase tracking-wide text-brand hover:text-brand-strong font-semibold px-2 py-1"
                             >
                               + Add
                             </button>
@@ -1440,24 +1454,24 @@ export default function LogSessionModal({
   const swapConfirmation = pendingSwap ? (
     <>
       <div className="absolute inset-0 bg-black/30 z-30" onClick={() => setPendingSwap(null)} />
-      <div className="absolute bottom-0 left-0 right-0 bg-white rounded-t-2xl shadow-[0_-4px_24px_rgba(0,0,0,0.15)] z-40 p-5">
-        <p className="text-sm font-semibold text-[#111111] mb-1">Swap muscle group?</p>
-        <p className="text-base font-bold text-[#111111]">
+      <div className="absolute bottom-0 left-0 right-0 bg-raised rounded-t-2xl shadow-[0_-4px_24px_rgba(0,0,0,0.15)] z-40 p-5">
+        <p className="text-sm font-semibold text-ink mb-1">Swap muscle group?</p>
+        <p className="text-base font-bold text-ink">
           {getMuscleLabel(exerciseConfig, pendingSwap.from)} → {getMuscleLabel(exerciseConfig, pendingSwap.to)}
         </p>
-        <p className="text-xs text-[#aaaaaa] mt-1 mb-4">
+        <p className="text-xs text-ink-6 mt-1 mb-4">
           All {getMuscleLabel(exerciseConfig, pendingSwap.from)} exercises and sets will be removed and replaced with default {getMuscleLabel(exerciseConfig, pendingSwap.to)} exercises.
         </p>
         <div className="flex gap-3">
           <button
             onClick={() => setPendingSwap(null)}
-            className="flex-1 rounded-xl py-3 text-sm font-semibold bg-[#f5f5f5] text-[#333333] hover:bg-[#ebebeb] transition-colors"
+            className="flex-1 rounded-xl py-3 text-sm font-semibold bg-surface-2 text-ink-2 hover:bg-surface-3 transition-colors"
           >
             Cancel
           </button>
           <button
             onClick={() => swapMuscleGroup(pendingSwap.from, pendingSwap.to)}
-            className="flex-1 rounded-xl py-3 text-sm font-semibold bg-[#1e3a5f] text-white hover:bg-[#16304f] transition-colors"
+            className="flex-1 rounded-xl py-3 text-sm font-semibold bg-brand-fill text-white hover:bg-brand-fill-2 transition-colors"
           >
             Swap
           </button>
@@ -1469,18 +1483,18 @@ export default function LogSessionModal({
   // Edit mode — scrollable full-session list
   if (mode === "edit") {
     return (
-      <div className="fixed inset-0 z-50 bg-white flex flex-col overflow-hidden pt-[env(safe-area-inset-top)]">
+      <div role="dialog" aria-modal="true" className="fixed inset-0 z-50 bg-surface flex flex-col overflow-hidden pt-[env(safe-area-inset-top)]">
         <div className="mx-auto w-full max-w-[393px] flex flex-col flex-1 min-h-0 relative">
 
           {/* Sticky header */}
-          <div className="px-4 pt-6 pb-4 shrink-0 border-b border-[#f0f0f0]">
+          <div className="px-4 pt-6 pb-4 shrink-0 border-b border-line-soft">
             <div className="flex items-center justify-between">
-              <h2 className="text-base font-semibold text-[#111111]">
+              <h2 className="text-base font-semibold text-ink">
                 Edit Session {String(session.id).padStart(2, "0")}
               </h2>
               <button
                 onClick={onClose}
-                className="text-[#777777] hover:text-[#111111] text-xl leading-none px-1"
+                className="text-ink-5 hover:text-ink text-xl leading-none px-1"
                 aria-label="Close"
               >
                 ×
@@ -1496,13 +1510,13 @@ export default function LogSessionModal({
               {hasMain && (
               <div>
                 <div className="flex items-center justify-between mb-3">
-                  <p className="text-[10px] uppercase tracking-widest text-[#aaaaaa] font-medium">
+                  <p className="text-[10px] uppercase tracking-widest text-ink-6 font-medium">
                     {mainLiftLabel}
                   </p>
                   {mainLiftLabel !== MAIN_LIFT_LABEL.bench && (
                     <button
                       onClick={() => setPendingDeleteExercise({ kind: "main" })}
-                      className="text-xs text-[#bbbbbb] hover:text-red-400 transition-colors px-1"
+                      className="text-xs text-ink-7 hover:text-red-400 transition-colors px-1"
                     >
                       Remove
                     </button>
@@ -1512,16 +1526,16 @@ export default function LogSessionModal({
                   {sets.map((set, idx) => (
                     <div
                       key={set.id}
-                      className="rounded-2xl border border-[#e8e8e8] p-4"
+                      className="rounded-2xl border border-line p-4"
                     >
                       <div className="flex items-center justify-between mb-3">
-                        <span className="text-xs font-semibold text-[#333333]">
+                        <span className="text-xs font-semibold text-ink-2">
                           {set.id}{set.isWarmup ? " · Warm-up" : ""}
                         </span>
                         <button
                           onClick={() => deleteSet(idx, set.id)}
                           disabled={sets.length <= 1}
-                          className="text-[11px] text-[#bbbbbb] disabled:opacity-30 hover:text-red-400 transition-colors"
+                          className="text-[11px] text-ink-7 disabled:opacity-30 hover:text-red-400 transition-colors"
                         >
                           Delete
                         </button>
@@ -1554,7 +1568,7 @@ export default function LogSessionModal({
                 </div>
                 <button
                   onClick={() => addSetAfterCurrent(sets.length - 1)}
-                  className="mt-2 w-full py-2.5 rounded-xl border border-dashed border-[#e8e8e8] text-xs text-[#aaaaaa] hover:text-[#777777] hover:border-[#aaaaaa] transition-colors"
+                  className="mt-2 w-full py-2.5 rounded-xl border border-dashed border-line text-xs text-ink-6 hover:text-ink-5 hover:border-line-heavy transition-colors"
                 >
                   + Add set
                 </button>
@@ -1565,12 +1579,12 @@ export default function LogSessionModal({
               {selectedGroups.map((muscleId) => (
                 <div key={muscleId}>
                   <div className="flex items-center justify-between mb-3">
-                    <p className="text-[10px] uppercase tracking-widest text-[#aaaaaa] font-medium">
+                    <p className="text-[10px] uppercase tracking-widest text-ink-6 font-medium">
                       {getMuscleLabel(exerciseConfig, muscleId)}
                     </p>
                     <button
                       onClick={() => removeMuscleGroup(muscleId)}
-                      className="text-[10px] uppercase tracking-wide text-[#bbbbbb] hover:text-red-400 transition-colors"
+                      className="text-[10px] uppercase tracking-wide text-ink-7 hover:text-red-400 transition-colors"
                     >
                       Remove
                     </button>
@@ -1579,23 +1593,23 @@ export default function LogSessionModal({
                     {Object.entries(extraState[muscleId] ?? {}).map(([exercise, exerciseSets]) => (
                       <div key={exercise}>
                         <div className="flex items-center justify-between mb-2">
-                          <p className="text-sm font-medium text-[#333333]">{exercise}</p>
+                          <p className="text-sm font-medium text-ink-2">{exercise}</p>
                           <button
                             onClick={() => setPendingDeleteExercise({ kind: "extra", muscle: muscleId, exercise })}
-                            className="text-[10px] uppercase tracking-wide text-[#bbbbbb] hover:text-red-400 transition-colors"
+                            className="text-[10px] uppercase tracking-wide text-ink-7 hover:text-red-400 transition-colors"
                           >
                             Delete
                           </button>
                         </div>
                         <div className="space-y-2">
                           {exerciseSets.map((s, i) => (
-                            <div key={i} className="rounded-xl border border-[#e8e8e8] p-3">
+                            <div key={i} className="rounded-xl border border-line p-3">
                               <div className="flex items-center justify-between mb-2">
-                                <span className="text-[11px] text-[#aaaaaa]">Set {i + 1}</span>
+                                <span className="text-[11px] text-ink-6">Set {i + 1}</span>
                                 <button
                                   onClick={() => deleteExtraSet(muscleId, exercise, i)}
                                   disabled={exerciseSets.length <= 1}
-                                  className="text-[11px] text-[#bbbbbb] disabled:opacity-30 hover:text-red-400 transition-colors"
+                                  className="text-[11px] text-ink-7 disabled:opacity-30 hover:text-red-400 transition-colors"
                                 >
                                   Delete
                                 </button>
@@ -1642,7 +1656,7 @@ export default function LogSessionModal({
                         </div>
                         <button
                           onClick={() => addExtraSetAfter(muscleId, exercise, exerciseSets.length - 1)}
-                          className="mt-1.5 w-full py-2 rounded-xl border border-dashed border-[#e8e8e8] text-xs text-[#aaaaaa] hover:text-[#777777] hover:border-[#aaaaaa] transition-colors"
+                          className="mt-1.5 w-full py-2 rounded-xl border border-dashed border-line text-xs text-ink-6 hover:text-ink-5 hover:border-line-heavy transition-colors"
                         >
                           + Add set
                         </button>
@@ -1655,14 +1669,14 @@ export default function LogSessionModal({
               {/* Manage exercises */}
               <button
                 onClick={() => { setExercisesSheetTab("add"); setShowExercisesSheet(true) }}
-                className="w-full py-3 rounded-2xl border border-dashed border-[#e8e8e8] text-xs font-medium text-[#aaaaaa] hover:text-[#777777] hover:border-[#aaaaaa] transition-colors"
+                className="w-full py-3 rounded-2xl border border-dashed border-line text-xs font-medium text-ink-6 hover:text-ink-5 hover:border-line-heavy transition-colors"
               >
                 + Add exercise or muscle group
               </button>
 
               {/* Notes */}
               <div>
-                <label className="block text-xs font-medium text-[#777777] mb-1.5 uppercase tracking-wide">
+                <label className="block text-xs font-medium text-ink-5 mb-1.5 uppercase tracking-wide">
                   Session Notes
                 </label>
                 <textarea
@@ -1670,13 +1684,13 @@ export default function LogSessionModal({
                   onChange={(e) => setCoachNote(e.target.value)}
                   rows={3}
                   placeholder="How did it feel?"
-                  className="w-full border border-[#e8e8e8] rounded-lg px-3 py-2 text-sm text-[#111111] focus:outline-none focus:border-[#1e3a5f] resize-none"
+                  className="w-full border border-line rounded-lg px-3 py-2 text-sm text-ink focus:outline-none focus:border-brand-line resize-none"
                 />
               </div>
 
               <button
                 onClick={handleConfirm}
-                className="w-full bg-[#1e3a5f] text-white text-sm font-semibold rounded-xl py-3.5 hover:bg-[#16304f] transition-colors"
+                className="w-full bg-brand-fill text-white text-sm font-semibold rounded-xl py-3.5 hover:bg-brand-fill-2 transition-colors"
               >
                 Save Changes
               </button>
@@ -1690,23 +1704,23 @@ export default function LogSessionModal({
           {pendingDeleteExercise && (
             <>
               <div className="absolute inset-0 bg-black/30 z-30" onClick={() => setPendingDeleteExercise(null)} />
-              <div className="absolute bottom-0 left-0 right-0 bg-white rounded-t-2xl shadow-[0_-4px_24px_rgba(0,0,0,0.15)] z-40 p-5">
-                <p className="text-sm font-semibold text-[#111111] mb-1">Remove exercise?</p>
+              <div className="absolute bottom-0 left-0 right-0 bg-raised rounded-t-2xl shadow-[0_-4px_24px_rgba(0,0,0,0.15)] z-40 p-5">
+                <p className="text-sm font-semibold text-ink mb-1">Remove exercise?</p>
                 {pendingDeleteExercise.kind === "main" ? (
                   <>
-                    <p className="text-base font-bold text-[#111111]">{mainLiftLabel}</p>
-                    <p className="text-xs text-[#aaaaaa] mt-1 mb-4">
+                    <p className="text-base font-bold text-ink">{mainLiftLabel}</p>
+                    <p className="text-xs text-ink-6 mt-1 mb-4">
                       All sets will be removed. This session will have no main lift.
                     </p>
                   </>
                 ) : (
                   <>
-                    <p className="text-base font-bold text-[#111111]">{pendingDeleteExercise.exercise}</p>
+                    <p className="text-base font-bold text-ink">{pendingDeleteExercise.exercise}</p>
                     {(() => {
                       const p = pendingDeleteExercise
                       const willBeEmpty = Object.keys(extraState[p.muscle] ?? {}).filter(e => e !== p.exercise).length === 0
                       return willBeEmpty ? (
-                        <p className="text-xs text-[#aaaaaa] mt-1 mb-4">
+                        <p className="text-xs text-ink-6 mt-1 mb-4">
                           This will also remove the {getMuscleLabel(exerciseConfig, p.muscle)} group.
                         </p>
                       ) : (
@@ -1718,7 +1732,7 @@ export default function LogSessionModal({
                 <div className="flex gap-3">
                   <button
                     onClick={() => setPendingDeleteExercise(null)}
-                    className="flex-1 rounded-xl py-3 text-sm font-semibold bg-[#f5f5f5] text-[#333333] hover:bg-[#ebebeb] transition-colors"
+                    className="flex-1 rounded-xl py-3 text-sm font-semibold bg-surface-2 text-ink-2 hover:bg-surface-3 transition-colors"
                   >
                     Cancel
                   </button>
@@ -1742,9 +1756,9 @@ export default function LogSessionModal({
   }
 
   return (
-    <div className={`fixed inset-0 z-50 flex flex-col overflow-hidden transition-colors duration-300 pt-[env(safe-area-inset-top)] ${restActive ? "bg-[#eff6ff]" : "bg-white"}`}>
+    <div role="dialog" aria-modal="true" className={`fixed inset-0 z-50 flex flex-col overflow-hidden transition-colors duration-300 pt-[env(safe-area-inset-top)] ${restActive ? "bg-brand-tint" : "bg-surface"}`}>
       {restActive && (
-        <div className="w-full bg-[#1e3a5f] flex items-center justify-between px-5 py-3 shrink-0">
+        <div className="w-full bg-brand-fill flex items-center justify-between px-5 py-3 shrink-0">
           <span className="text-white/50 text-xs uppercase tracking-widest">Resting</span>
           <span className="text-white font-bold tabular-nums text-lg">{timerDisplay}</span>
           <button
@@ -1763,7 +1777,7 @@ export default function LogSessionModal({
             {mode === "log" && onMinimize && (
               <button
                 onClick={handleMinimize}
-                className="text-[#777777] hover:text-[#111111] mr-2 p-1 -ml-1"
+                className="text-ink-5 hover:text-ink mr-2 p-1 -ml-1"
                 aria-label="Minimize"
               >
                 <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -1771,12 +1785,12 @@ export default function LogSessionModal({
                 </svg>
               </button>
             )}
-            <h2 className="flex-1 text-base font-semibold text-[#111111]">
+            <h2 className="flex-1 text-base font-semibold text-ink">
               Log Session {String(session.id).padStart(2, "0")}
             </h2>
             <button
               onClick={onClose}
-              className="text-[#777777] hover:text-[#111111] text-xl leading-none px-1"
+              className="text-ink-5 hover:text-ink text-xl leading-none px-1"
               aria-label="Close"
             >
               ×
@@ -1786,8 +1800,8 @@ export default function LogSessionModal({
           {mode === "log" && carouselItems.length > 0 && (
             <div>
               <div className="flex items-center justify-between mb-2">
-                <span className="text-[10px] text-[#aaaaaa] uppercase tracking-widest">Progress</span>
-                <span className="text-[10px] text-[#aaaaaa] tabular-nums">
+                <span className="text-[10px] text-ink-6 uppercase tracking-widest">Progress</span>
+                <span className="text-[10px] text-ink-6 tabular-nums">
                   {completedCount} / {carouselItems.length}
                 </span>
               </div>
@@ -1818,30 +1832,48 @@ export default function LogSessionModal({
                       data-ledge
                       data-ledge-watch
                       className={`rounded-2xl border-2 p-5 transition-colors ${
-                        isDone ? "border-[#1e3a5f]/30 bg-[#1e3a5f]/[0.03]" : "border-[#e8e8e8]"
+                        isDone ? "border-brand-line/30 bg-brand-fill/[0.03]" : "border-line"
                       }`}
                     >
-                      <p className="text-[10px] uppercase tracking-widest text-[#aaaaaa] mb-1">
+                      <p className="text-[10px] uppercase tracking-widest text-ink-6 mb-1">
                         {mainLiftLabel}{isWarmup ? " · Warm-up" : ""}
                       </p>
                       <div className="flex items-center justify-between mb-5">
-                        <span className="text-3xl font-bold text-[#111111] leading-none">
+                        <span className="text-3xl font-bold text-ink leading-none">
                           {item.set.id}
-                          {isDone && <span className="ml-2 text-[#1e3a5f] text-2xl">✓</span>}
+                          {isDone && <span className="ml-2 text-brand text-2xl">✓</span>}
                         </span>
                         {!isWarmup && item.set.e1rm != null && (
-                          <span className="text-sm font-semibold text-[#1e3a5f]">
+                          <span className="text-sm font-semibold text-brand">
                             e1RM {item.set.e1rm}kg
                           </span>
                         )}
                       </div>
 
+                      {/* What this set is measured against: last time's top set and today's target effort. */}
+                      {!isWarmup && (lastLift || mainLiftTarget) && (
+                        <div className="-mt-2 mb-4 rounded-lg bg-surface-2 px-3 py-2 text-xs leading-snug">
+                          {lastLift && (
+                            <p className="text-ink-4">
+                              Last time{" "}
+                              <span className="font-semibold text-ink tabular-nums">
+                                {lastLift.kg}kg × {lastLift.reps}
+                              </span>
+                              {lastLift.rpe != null && ` at RPE ${lastLift.rpe}`}
+                              {lastLift.date &&
+                                ` · ${new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short" }).format(new Date(lastLift.date))}`}
+                            </p>
+                          )}
+                          {mainLiftTarget && <p className="font-semibold text-brand">{mainLiftTarget}</p>}
+                        </div>
+                      )}
+
                       {isWarmup ? (
                         <div className="flex items-baseline gap-2 mb-5">
-                          <span className="text-2xl font-semibold text-[#333333]">
+                          <span className="text-2xl font-semibold text-ink-2">
                             {item.set.kg}kg
                           </span>
-                          <span className="text-sm text-[#aaaaaa]">&times; {item.set.reps} reps</span>
+                          <span className="text-sm text-ink-6">&times; {item.set.reps} reps</span>
                         </div>
                       ) : (
                         <div key={item.set.id} className="flex gap-2 mb-5">
@@ -1874,28 +1906,28 @@ export default function LogSessionModal({
                         onClick={() => tapDone(item.set.id)}
                         className={`relative w-full rounded-xl py-3.5 text-sm font-semibold transition-[background-color,color,transform] duration-100 active:scale-[0.97] ${
                           poppingKey === item.set.id
-                            ? "bg-[#1e3a5f] text-white done-pop"
+                            ? "bg-brand-fill text-white done-pop"
                             : isDone
-                            ? "bg-[#1e3a5f]/10 text-[#1e3a5f] hover:bg-[#1e3a5f]/20 active:bg-[#1e3a5f]/30"
-                            : "bg-[#111111] text-white hover:bg-[#333333] active:bg-[#000000]"
+                            ? "bg-brand-fill/10 text-brand hover:bg-brand-fill/20 active:bg-brand-fill/30"
+                            : "bg-brand-fill text-white hover:bg-brand-fill-2 active:bg-brand-fill-3"
                         }`}
                       >
                         {isDone || poppingKey === item.set.id ? "✓ Done" : "Done"}
                         <HapticTap />
                       </button>
-                      <div className="flex items-center justify-between mt-3 pt-3 border-t border-[#f0f0f0]">
+                      <div className="flex items-center justify-between mt-3 pt-3 border-t border-line-soft">
                         <div className="flex items-center gap-3">
                           <button
                             onClick={() => deleteCurrentSet(item.globalIndex, item.set.id)}
                             disabled={sets.length <= 1}
-                            className="text-xs text-[#bbbbbb] disabled:opacity-30 hover:text-red-400 transition-colors px-1"
+                            className="text-xs text-ink-7 disabled:opacity-30 hover:text-red-400 transition-colors px-1"
                           >
                             Delete set
                           </button>
                           {mainLiftLabel !== MAIN_LIFT_LABEL.bench && (
                             <button
                               onClick={() => setPendingDeleteExercise({ kind: "main" })}
-                              className="text-xs text-[#bbbbbb] hover:text-red-400 transition-colors px-1"
+                              className="text-xs text-ink-7 hover:text-red-400 transition-colors px-1"
                             >
                               Delete exercise
                             </button>
@@ -1903,7 +1935,7 @@ export default function LogSessionModal({
                         </div>
                         <button
                           onClick={() => addSetAfterCurrent(item.globalIndex)}
-                          className="text-xs text-[#bbbbbb] hover:text-[#111111] transition-colors px-1"
+                          className="text-xs text-ink-7 hover:text-ink transition-colors px-1"
                         >
                           + Add set after
                         </button>
@@ -1925,24 +1957,24 @@ export default function LogSessionModal({
                       data-ledge
                       data-ledge-watch
                       className={`rounded-2xl border-2 p-5 transition-colors ${
-                        isDone ? "border-[#1e3a5f]/30 bg-[#1e3a5f]/[0.03]" : "border-[#e8e8e8]"
+                        isDone ? "border-brand-line/30 bg-brand-fill/[0.03]" : "border-line"
                       }`}
                     >
-                      <p className="text-[10px] uppercase tracking-widest text-[#aaaaaa] mb-1">
+                      <p className="text-[10px] uppercase tracking-widest text-ink-6 mb-1">
                         {getMuscleLabel(exerciseConfig, item.muscle)}
                       </p>
                       <div className="flex items-start justify-between mb-5">
                         <div>
-                          <p className="text-xl font-bold text-[#111111] leading-tight">
+                          <p className="text-xl font-bold text-ink leading-tight">
                             {item.exercise}
-                            {isDone && <span className="ml-2 text-[#1e3a5f] text-lg">✓</span>}
+                            {isDone && <span className="ml-2 text-brand text-lg">✓</span>}
                           </p>
-                          <p className="text-xs text-[#aaaaaa] mt-0.5">
+                          <p className="text-xs text-ink-6 mt-0.5">
                             {isCardio ? "Bout" : "Set"} {item.setIndex + 1}
                           </p>
                         </div>
                         {topSet && (
-                          <span className="text-xs text-[#aaaaaa] mt-0.5 text-right">
+                          <span className="text-xs text-ink-6 mt-0.5 text-right">
                             {isCardio
                               ? `last: ${formatCardioSet(topSet)}`
                               : `best: ${topSet.kg}kg \u00d7 ${topSet.reps}`}
@@ -1978,7 +2010,7 @@ export default function LogSessionModal({
                               ))}
                             </div>
                             {derived && (
-                              <p className="mt-2 text-center text-[11px] text-[#aaaaaa] tabular-nums">
+                              <p className="mt-2 text-center text-[11px] text-ink-6 tabular-nums">
                                 {derived}
                               </p>
                             )}
@@ -1995,10 +2027,10 @@ export default function LogSessionModal({
                                       title={full ? "Turn one off first — the card fits two" : undefined}
                                       className={`rounded-full border px-2.5 py-1 text-[11px] font-medium transition-colors ${
                                         on
-                                          ? "border-[#1e3a5f] bg-[#1e3a5f]/[0.06] text-[#1e3a5f]"
+                                          ? "border-brand-line bg-brand-fill/[0.06] text-brand"
                                           : full
-                                            ? "border-[#f0f0f0] text-[#dddddd]"
-                                            : "border-[#e8e8e8] text-[#aaaaaa] hover:border-[#1e3a5f] hover:text-[#1e3a5f]"
+                                            ? "border-line-soft text-ink-8"
+                                            : "border-line text-ink-6 hover:border-brand-line hover:text-brand"
                                       }`}
                                     >
                                       {on ? "− " : "+ "}
@@ -2033,34 +2065,34 @@ export default function LogSessionModal({
                         onClick={() => tapDone(key)}
                         className={`relative w-full rounded-xl py-3.5 text-sm font-semibold transition-[background-color,color,transform] duration-100 active:scale-[0.97] ${
                           poppingKey === key
-                            ? "bg-[#1e3a5f] text-white done-pop"
+                            ? "bg-brand-fill text-white done-pop"
                             : isDone
-                            ? "bg-[#1e3a5f]/10 text-[#1e3a5f] hover:bg-[#1e3a5f]/20 active:bg-[#1e3a5f]/30"
-                            : "bg-[#111111] text-white hover:bg-[#333333] active:bg-[#000000]"
+                            ? "bg-brand-fill/10 text-brand hover:bg-brand-fill/20 active:bg-brand-fill/30"
+                            : "bg-brand-fill text-white hover:bg-brand-fill-2 active:bg-brand-fill-3"
                         }`}
                       >
                         {isDone || poppingKey === key ? "✓ Done" : "Done"}
                         <HapticTap />
                       </button>
-                      <div className="flex items-center justify-between mt-3 pt-3 border-t border-[#f0f0f0]">
+                      <div className="flex items-center justify-between mt-3 pt-3 border-t border-line-soft">
                         <div className="flex items-center gap-3">
                           <button
                             onClick={() => deleteExtraSet(item.muscle, item.exercise, item.setIndex)}
                             disabled={(extraState[item.muscle]?.[item.exercise]?.length ?? 0) <= 1}
-                            className="text-xs text-[#bbbbbb] disabled:opacity-30 hover:text-red-400 transition-colors px-1"
+                            className="text-xs text-ink-7 disabled:opacity-30 hover:text-red-400 transition-colors px-1"
                           >
                             Delete set
                           </button>
                           <button
                             onClick={() => setPendingDeleteExercise({ kind: "extra", muscle: item.muscle, exercise: item.exercise })}
-                            className="text-xs text-[#bbbbbb] hover:text-red-400 transition-colors px-1"
+                            className="text-xs text-ink-7 hover:text-red-400 transition-colors px-1"
                           >
                             Delete exercise
                           </button>
                         </div>
                         <button
                           onClick={() => addExtraSetAfter(item.muscle, item.exercise, item.setIndex)}
-                          className="text-xs text-[#bbbbbb] hover:text-[#111111] transition-colors px-1"
+                          className="text-xs text-ink-7 hover:text-ink transition-colors px-1"
                         >
                           + Add set after
                         </button>
@@ -2076,14 +2108,14 @@ export default function LogSessionModal({
                 <button
                   onClick={navigatePrev}
                   disabled={currentSetIndex === 0}
-                  className="text-sm font-semibold text-[#777777] disabled:text-[#d4d4d4] px-3 py-2 rounded-lg hover:bg-[#f5f5f5] disabled:hover:bg-transparent transition-colors"
+                  className="text-sm font-semibold text-ink-5 disabled:text-ink-8 px-3 py-2 rounded-lg hover:bg-surface-2 disabled:hover:bg-transparent transition-colors"
                 >
                   ‹ Prev
                 </button>
                 <button
                   onClick={navigateNext}
                   disabled={currentSetIndex === carouselItems.length - 1}
-                  className="text-sm font-semibold text-[#777777] disabled:text-[#d4d4d4] px-3 py-2 rounded-lg hover:bg-[#f5f5f5] disabled:hover:bg-transparent transition-colors"
+                  className="text-sm font-semibold text-ink-5 disabled:text-ink-8 px-3 py-2 rounded-lg hover:bg-surface-2 disabled:hover:bg-transparent transition-colors"
                 >
                   Next ›
                 </button>
@@ -2096,11 +2128,11 @@ export default function LogSessionModal({
             <div className="flex-1 flex flex-col justify-center">
             <div className="w-full space-y-4">
               <div data-ledge data-ledge-home className="text-center mb-2">
-                <p className="text-sm font-semibold text-[#1e3a5f]">Session complete</p>
-                <p className="text-xs text-[#aaaaaa] mt-0.5">All sets done — add a note and confirm</p>
+                <p className="text-sm font-semibold text-brand">Session complete</p>
+                <p className="text-xs text-ink-6 mt-0.5">All sets done — add a note and confirm</p>
               </div>
               <div>
-                <label className="block text-xs font-medium text-[#777777] mb-1.5 uppercase tracking-wide">
+                <label className="block text-xs font-medium text-ink-5 mb-1.5 uppercase tracking-wide">
                   Session Notes
                 </label>
                 <textarea
@@ -2108,12 +2140,12 @@ export default function LogSessionModal({
                   onChange={(e) => setCoachNote(e.target.value)}
                   rows={3}
                   placeholder="How did it feel?"
-                  className="w-full border border-[#e8e8e8] rounded-lg px-3 py-2 text-sm text-[#111111] focus:outline-none focus:border-[#1e3a5f] resize-none"
+                  className="w-full border border-line rounded-lg px-3 py-2 text-sm text-ink focus:outline-none focus:border-brand-line resize-none"
                 />
               </div>
               <button
                 onClick={handleConfirm}
-                className="w-full bg-[#1e3a5f] text-white text-sm font-semibold rounded-xl py-3.5 hover:bg-[#16304f] transition-colors"
+                className="w-full bg-brand-fill text-white text-sm font-semibold rounded-xl py-3.5 hover:bg-brand-fill-2 transition-colors"
               >
                 Confirm Session
               </button>
@@ -2127,7 +2159,7 @@ export default function LogSessionModal({
         {mode === "log" && !allDone && carouselItems.length > 0 && (
           <button
             onClick={() => { setExercisesSheetTab("current"); setShowExercisesSheet(true) }}
-            className="absolute bottom-3 left-1/2 -translate-x-1/2 flex flex-col items-center gap-0.5 text-[#aaaaaa] hover:text-[#111111] px-3 py-1 transition-colors"
+            className="absolute bottom-3 left-1/2 -translate-x-1/2 flex flex-col items-center gap-0.5 text-ink-6 hover:text-ink px-3 py-1 transition-colors"
             aria-label="Manage exercises"
           >
             <svg width="10" height="6" viewBox="0 0 20 11" fill="none">
@@ -2144,22 +2176,22 @@ export default function LogSessionModal({
         {pendingDeleteExercise && (
           <>
             <div className="absolute inset-0 bg-black/30 z-30" onClick={() => setPendingDeleteExercise(null)} />
-            <div className="absolute bottom-0 left-0 right-0 bg-white rounded-t-2xl shadow-[0_-4px_24px_rgba(0,0,0,0.15)] z-40 p-5">
-              <p className="text-sm font-semibold text-[#111111] mb-1">Remove exercise?</p>
+            <div className="absolute bottom-0 left-0 right-0 bg-raised rounded-t-2xl shadow-[0_-4px_24px_rgba(0,0,0,0.15)] z-40 p-5">
+              <p className="text-sm font-semibold text-ink mb-1">Remove exercise?</p>
               {pendingDeleteExercise.kind === "main" ? (
                 <>
-                  <p className="text-base font-bold text-[#111111]">{mainLiftLabel}</p>
-                  <p className="text-xs text-[#aaaaaa] mt-1 mb-4">
+                  <p className="text-base font-bold text-ink">{mainLiftLabel}</p>
+                  <p className="text-xs text-ink-6 mt-1 mb-4">
                     All sets will be removed. This session will have no main lift.
                   </p>
                 </>
               ) : (
                 <>
-                  <p className="text-base font-bold text-[#111111]">{pendingDeleteExercise.exercise}</p>
+                  <p className="text-base font-bold text-ink">{pendingDeleteExercise.exercise}</p>
                   {(() => {
                     const willBeEmpty = Object.keys(extraState[pendingDeleteExercise.muscle] ?? {}).filter(e => e !== pendingDeleteExercise.exercise).length === 0
                     return willBeEmpty ? (
-                      <p className="text-xs text-[#aaaaaa] mt-1 mb-4">
+                      <p className="text-xs text-ink-6 mt-1 mb-4">
                         This will also remove the {getMuscleLabel(exerciseConfig, pendingDeleteExercise.muscle)} group.
                       </p>
                     ) : (
@@ -2171,7 +2203,7 @@ export default function LogSessionModal({
               <div className="flex gap-3">
                 <button
                   onClick={() => setPendingDeleteExercise(null)}
-                  className="flex-1 rounded-xl py-3 text-sm font-semibold bg-[#f5f5f5] text-[#333333] hover:bg-[#ebebeb] active:bg-[#e0e0e0] transition-colors"
+                  className="flex-1 rounded-xl py-3 text-sm font-semibold bg-surface-2 text-ink-2 hover:bg-surface-3 active:bg-surface-4 transition-colors"
                 >
                   Cancel
                 </button>

@@ -4,7 +4,7 @@ import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { signOut } from "next-auth/react"
 import Link from "next/link"
-import { Session, UserProfile, TRAINING_MODE_LABEL } from "@/lib/types"
+import { Session, UserProfile, WeightEntry, TRAINING_MODE_LABEL } from "@/lib/types"
 import { isLiftFocused, getMainLiftLabel, getTrainingMode } from "@/lib/trainingMode"
 import {
   loadProfile,
@@ -12,10 +12,15 @@ import {
   saveProfile,
   loadAll,
   loadSessionsLocal,
+  loadWeights,
+  loadWeightsLocal,
   wipeLocalUserData,
 } from "@/lib/storage"
 import { getBestE1RM, getBestWeight, getLatestBW } from "@/lib/stats"
 import ProgressBar from "@/components/ProgressBar"
+import { formatDay, latestEntry } from "@/lib/weight"
+import BackButton from "@/components/BackButton"
+import EscapeKey from "@/components/EscapeKey"
 
 function formatJoined(iso: string): string {
   const d = new Date(iso)
@@ -33,6 +38,8 @@ export default function ProfilePage() {
   const [bw, setBw] = useState("")
   const [target, setTarget] = useState("")
   const [weighInDaily, setWeighInDaily] = useState(false)
+
+  const [weights, setWeights] = useState<WeightEntry[]>([])
 
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
@@ -58,8 +65,13 @@ export default function ProfilePage() {
       // eslint-disable-next-line react-hooks/set-state-in-effect -- localStorage is only readable after mount
       seedForm(cached)
       setSessions(loadSessionsLocal())
+      setWeights(loadWeightsLocal())
       setMounted(true)
     }
+
+    loadWeights().then((data) => {
+      if (!cancelled) setWeights(data)
+    })
 
     loadProfile().then((p) => {
       if (cancelled) return
@@ -138,93 +150,106 @@ export default function ProfilePage() {
   if (!mounted || !profile) {
     return (
       <main className="mx-auto w-full max-w-[393px] px-4 pt-[calc(1.5rem+env(safe-area-inset-top))] pb-[calc(4rem+env(safe-area-inset-bottom))]">
-        <div className="h-8 w-32 bg-[#e8e8e8] rounded animate-pulse mb-6" />
-        <div className="h-40 w-full bg-[#f5f5f5] rounded-xl animate-pulse mb-4" />
-        <div className="h-40 w-full bg-[#f5f5f5] rounded-xl animate-pulse" />
+        <div className="h-8 w-32 bg-surface-4 rounded animate-pulse mb-6" />
+        <div className="h-40 w-full bg-surface-2 rounded-xl animate-pulse mb-4" />
+        <div className="h-40 w-full bg-surface-2 rounded-xl animate-pulse" />
       </main>
     )
   }
 
   const bestE1RM = getBestE1RM(sessions)
   const bestWeight = getBestWeight(sessions)
-  const latestBW = getLatestBW(sessions)
+  // With check-ins on, the weight log is where bodyweight lives: the same number the
+  // chip on Home shows, rather than a second field here that drifts away from it.
+  const weighIn = profile.weighInDaily ? latestEntry(weights) : null
+  const latestBW = weighIn?.kg ?? getLatestBW(sessions)
 
   return (
     <main className="mx-auto w-full max-w-[393px] px-4 pt-[calc(1.5rem+env(safe-area-inset-top))] pb-[calc(4rem+env(safe-area-inset-bottom))]">
       {/* Header */}
-      <header className="flex items-center gap-3 mb-6">
-        <button
-          onClick={() => router.push("/")}
-          className="p-1 -ml-1 text-[#555555] hover:text-[#111111] transition-colors shrink-0"
-          aria-label="Back to home"
-        >
-          <svg width="18" height="18" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-            <polyline points="10,3 5,8 10,13" />
-          </svg>
-        </button>
-        <h1 className="text-2xl font-semibold text-[#111111] tracking-tight">Profile</h1>
+      <header className="flex items-center gap-2 mb-6">
+        <BackButton href="/" label="Back to home" />
+        <h1 className="text-2xl font-semibold text-ink tracking-tight">Profile</h1>
       </header>
 
       {/* My card */}
       <Link
         href="/me"
-        className="flex items-center justify-between mb-4 px-4 py-4 rounded-xl bg-[#f5f5f5] border border-[#e8e8e8] active:opacity-70 transition-opacity"
+        className="flex items-center justify-between mb-4 px-4 py-4 rounded-xl bg-surface-2 border border-line active:opacity-70 transition-opacity"
       >
         <div>
-          <p className="text-[10px] font-semibold uppercase tracking-widest text-[#aaaaaa] mb-1">
+          <p className="text-[10px] font-semibold uppercase tracking-widest text-ink-6 mb-1">
             My card
           </p>
-          <p className="text-sm text-[#111111]">See yourself the way your gymbros do</p>
+          <p className="text-sm text-ink">See yourself the way your gymbros do</p>
         </div>
-        <span className="text-[#1e3a5f] text-sm font-semibold shrink-0 ml-3">View →</span>
+        <span className="text-brand text-sm font-semibold shrink-0 ml-3">View →</span>
       </Link>
 
       {/* Personal */}
-      <section className="mb-4 px-4 py-4 rounded-xl bg-[#f5f5f5] border border-[#e8e8e8]">
-        <p className="text-[10px] font-semibold uppercase tracking-widest text-[#aaaaaa] mb-4">
+      <section className="mb-4 px-4 py-4 rounded-xl bg-surface-2 border border-line">
+        <p className="text-[10px] font-semibold uppercase tracking-widest text-ink-6 mb-4">
           Personal
         </p>
 
-        <label className="block text-sm text-[#777777] mb-1.5">Name</label>
+        <label className="block text-sm text-ink-5 mb-1.5">Name</label>
         <input
           value={name}
           onChange={(e) => setName(e.target.value)}
           placeholder="Saif"
-          className="w-full text-lg font-semibold text-[#111111] border-b-2 border-[#e8e8e8] focus:border-[#1e3a5f] outline-none bg-transparent pb-2 mb-5"
+          className="w-full text-lg font-semibold text-ink border-b-2 border-line focus:border-brand-line outline-none bg-transparent pb-2 mb-5"
         />
 
-        <label className="block text-sm text-[#777777] mb-1.5">Bodyweight</label>
-        <div className="flex items-baseline gap-2 border-b-2 border-[#e8e8e8] focus-within:border-[#1e3a5f] pb-2">
-          <input
-            type="number"
-            inputMode="decimal"
-            step="0.1"
-            value={bw}
-            onChange={(e) => setBw(e.target.value)}
-            placeholder="60"
-            className="flex-1 text-lg font-semibold text-[#111111] outline-none bg-transparent"
-          />
-          <span className="text-base text-[#aaaaaa]">kg</span>
-        </div>
+        {weighIn ? (
+          <div className="flex items-end justify-between">
+            <div>
+              <p className="text-sm text-ink-5 mb-1.5">Bodyweight</p>
+              <p className="text-lg font-semibold text-ink tabular-nums">
+                {weighIn.kg.toFixed(1)}
+                <span className="text-base font-normal text-ink-5 ml-1.5">kg</span>
+              </p>
+              <p className="text-xs text-ink-5 mt-0.5">from your {formatDay(weighIn.date)} check-in</p>
+            </div>
+            <Link href="/weight" className="text-sm font-semibold text-brand hover:underline">
+              Update →
+            </Link>
+          </div>
+        ) : (
+          <>
+          <label className="block text-sm text-ink-5 mb-1.5">Bodyweight</label>
+          <div className="flex items-baseline gap-2 border-b-2 border-line focus-within:border-brand-line pb-2">
+            <input
+              type="number"
+              inputMode="decimal"
+              step="0.1"
+              value={bw}
+              onChange={(e) => setBw(e.target.value)}
+              placeholder="60"
+              className="flex-1 text-lg font-semibold text-ink outline-none bg-transparent"
+            />
+            <span className="text-base text-ink-6">kg</span>
+          </div>
+          </>
+        )}
       </section>
 
       {/* Goal */}
-      <section className="mb-4 px-4 py-4 rounded-xl bg-[#f5f5f5] border border-[#e8e8e8]">
-        <p className="text-[10px] font-semibold uppercase tracking-widest text-[#aaaaaa] mb-4">
+      <section className="mb-4 px-4 py-4 rounded-xl bg-surface-2 border border-line">
+        <p className="text-[10px] font-semibold uppercase tracking-widest text-ink-6 mb-4">
           Goal
         </p>
 
         <div className={`flex items-center justify-between ${liftFocused ? "mb-5" : ""}`}>
-          <span className="text-sm text-[#777777]">Training focus</span>
-          <Link href="/exercises" className="text-sm font-semibold text-[#1e3a5f] hover:underline">
+          <span className="text-sm text-ink-5">Training focus</span>
+          <Link href="/exercises" className="text-sm font-semibold text-brand hover:underline">
             {TRAINING_MODE_LABEL[getTrainingMode(profile)]} · change
           </Link>
         </div>
 
         {liftFocused && (
         <>
-        <label className="block text-sm text-[#777777] mb-1.5">Target</label>
-        <div className="flex items-baseline gap-2 border-b-2 border-[#e8e8e8] focus-within:border-[#1e3a5f] pb-2 mb-5">
+        <label className="block text-sm text-ink-5 mb-1.5">Target</label>
+        <div className="flex items-baseline gap-2 border-b-2 border-line focus-within:border-brand-line pb-2 mb-5">
           <input
             type="number"
             inputMode="decimal"
@@ -232,14 +257,14 @@ export default function ProfilePage() {
             value={target}
             onChange={(e) => setTarget(e.target.value)}
             placeholder="140"
-            className="flex-1 text-lg font-semibold text-[#111111] outline-none bg-transparent"
+            className="flex-1 text-lg font-semibold text-ink outline-none bg-transparent"
           />
-          <span className="text-base text-[#aaaaaa]">kg</span>
+          <span className="text-base text-ink-6">kg</span>
         </div>
 
         <div className="flex items-center justify-between">
-          <span className="text-sm text-[#777777]">Main lift</span>
-          <span className="text-sm font-semibold text-[#111111]">
+          <span className="text-sm text-ink-5">Main lift</span>
+          <span className="text-sm font-semibold text-ink">
             {getMainLiftLabel(profile)}
           </span>
         </div>
@@ -248,15 +273,15 @@ export default function ProfilePage() {
       </section>
 
       {/* Weight check-in */}
-      <section className="mb-4 px-4 py-4 rounded-xl bg-[#f5f5f5] border border-[#e8e8e8]">
-        <p className="text-[10px] font-semibold uppercase tracking-widest text-[#aaaaaa] mb-4">
+      <section className="mb-4 px-4 py-4 rounded-xl bg-surface-2 border border-line">
+        <p className="text-[10px] font-semibold uppercase tracking-widest text-ink-6 mb-4">
           Weight check-in
         </p>
 
         <div className="flex items-center justify-between">
           <div className="flex-1 pr-3">
-            <p className="text-sm text-[#111111]">Weekly check-in</p>
-            <p className="text-xs text-[#999999] mt-0.5">
+            <p className="text-sm text-ink">Weekly check-in</p>
+            <p className="text-xs text-ink-6 mt-0.5">
               we ask once a week; log any other day with the +. turning this off keeps your history.
             </p>
           </div>
@@ -266,7 +291,7 @@ export default function ProfilePage() {
             aria-label="Weekly weight check-in"
             onClick={() => setWeighInDaily((v) => !v)}
             className={`relative w-11 h-6 shrink-0 rounded-full transition-colors ${
-              weighInDaily ? "bg-[#1e3a5f]" : "bg-[#d8d8d8]"
+              weighInDaily ? "bg-brand-fill" : "bg-surface-5"
             }`}
           >
             <span
@@ -280,7 +305,7 @@ export default function ProfilePage() {
         {profile.weighInDaily && (
           <Link
             href="/weight"
-            className="block mt-4 text-sm font-semibold text-[#1e3a5f] hover:underline"
+            className="block mt-4 text-sm font-semibold text-brand hover:underline"
           >
             View weight trend →
           </Link>
@@ -288,60 +313,50 @@ export default function ProfilePage() {
       </section>
 
       {/* Stats (read-only) */}
-      <section className="mb-4 px-4 py-4 rounded-xl bg-[#f5f5f5] border border-[#e8e8e8]">
-        <p className="text-[10px] font-semibold uppercase tracking-widest text-[#aaaaaa] mb-4">
+      <section className="mb-4 px-4 py-4 rounded-xl bg-surface-2 border border-line">
+        <p className="text-[10px] font-semibold uppercase tracking-widest text-ink-6 mb-4">
           Stats
         </p>
         {liftFocused && (
-          <ProgressBar current={bestWeight} target={targetVal > 0 ? targetVal : (profile.target ?? 0)} />
+          <ProgressBar current={bestE1RM} target={targetVal > 0 ? targetVal : (profile.target ?? 0)} />
         )}
         <div className={`grid grid-cols-3 gap-2 ${liftFocused ? "-mt-2" : ""}`}>
           {liftFocused ? (
             <>
               <div>
-                <p className="text-lg font-semibold text-[#111111]">{bestE1RM != null ? `${bestE1RM}` : "—"}</p>
-                <p className="text-xs text-[#999999]">current e1RM</p>
+                <p className="text-lg font-semibold text-ink">{bestE1RM != null ? `${bestE1RM}` : "—"}</p>
+                <p className="text-xs text-ink-6">current e1RM</p>
               </div>
               <div>
-                <p className="text-lg font-semibold text-[#111111]">{bestWeight != null ? `${bestWeight}` : "—"}</p>
-                <p className="text-xs text-[#999999]">best lift</p>
+                <p className="text-lg font-semibold text-ink">{bestWeight != null ? `${bestWeight}` : "—"}</p>
+                <p className="text-xs text-ink-6">best lift</p>
               </div>
             </>
           ) : (
             <div>
-              <p className="text-lg font-semibold text-[#111111]">{sessions.filter((s) => s.confirmed).length}</p>
-              <p className="text-xs text-[#999999]">sessions</p>
+              <p className="text-lg font-semibold text-ink">{sessions.filter((s) => s.confirmed).length}</p>
+              <p className="text-xs text-ink-6">sessions</p>
             </div>
           )}
           <div>
-            <p className="text-lg font-semibold text-[#111111]">{latestBW != null ? `${latestBW}` : profile.bw}</p>
-            <p className="text-xs text-[#999999]">bodyweight</p>
+            <p className="text-lg font-semibold text-ink">{latestBW != null ? `${latestBW}` : profile.bw}</p>
+            <p className="text-xs text-ink-6">bodyweight</p>
           </div>
         </div>
       </section>
 
-      {/* Save */}
-      {error && <p className="text-sm text-red-500 mb-3">{error}</p>}
-      <button
-        onClick={handleSave}
-        disabled={!valid || !changed || saving}
-        className="w-full bg-[#1e3a5f] text-white text-sm font-semibold rounded-xl py-3.5 hover:bg-[#16304f] active:bg-[#0f2540] transition-colors disabled:opacity-40 disabled:pointer-events-none"
-      >
-        {saving ? "Saving…" : saved ? "Saved ✓" : "Save changes"}
-      </button>
-
       {/* Account */}
-      <section className="mt-8 px-4 py-4 rounded-xl bg-[#f5f5f5] border border-[#e8e8e8]">
-        <p className="text-[10px] font-semibold uppercase tracking-widest text-[#aaaaaa] mb-4">
+      <section className="mt-4 px-4 py-4 rounded-xl bg-surface-2 border border-line">
+        <p className="text-[10px] font-semibold uppercase tracking-widest text-ink-6 mb-4">
           Account
         </p>
         <div className="flex items-center justify-between mb-3">
-          <span className="text-sm text-[#777777]">Email</span>
-          <span className="text-sm text-[#111111] truncate ml-3">{profile.email}</span>
+          <span className="text-sm text-ink-5">Email</span>
+          <span className="text-sm text-ink truncate ml-3">{profile.email}</span>
         </div>
         <div className="flex items-center justify-between">
-          <span className="text-sm text-[#777777]">Member since</span>
-          <span className="text-sm text-[#111111]">{formatJoined(profile.createdAt)}</span>
+          <span className="text-sm text-ink-5">Member since</span>
+          <span className="text-sm text-ink">{formatJoined(profile.createdAt)}</span>
         </div>
       </section>
 
@@ -352,15 +367,35 @@ export default function ProfilePage() {
         Delete account &amp; data
       </button>
 
-      {/* Delete confirmation */}
+      {/* Save: pinned to the bottom the moment something is edited, wherever on the page that was */}
+      {(changed || saving || saved || error) && (
+        <>
+          <div className="h-24" aria-hidden="true" />
+          <div className="fixed bottom-0 inset-x-0 z-40 flex justify-center pointer-events-none animate-fade-up">
+            <div className="pointer-events-auto w-full max-w-[393px] bg-raised/95 backdrop-blur border-t border-line px-4 pt-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))]">
+              {error && <p className="text-sm text-red-500 mb-2">{error}</p>}
+              <button
+                onClick={handleSave}
+                disabled={!valid || !changed || saving}
+                className="w-full bg-brand-fill text-white text-sm font-semibold rounded-xl py-3.5 hover:bg-brand-fill-2 active:bg-brand-fill-3 transition-colors disabled:opacity-40 disabled:pointer-events-none"
+              >
+                {saving ? "Saving…" : saved ? "Saved ✓" : "Save changes"}
+              </button>
+            </div>
+          </div>
+        </>
+      )}
+
+
       {showDelete && (
-        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40" onClick={() => !deleting && setShowDelete(false)}>
+        <div role="dialog" aria-modal="true" className="fixed inset-0 z-50 flex items-end justify-center bg-black/40" onClick={() => !deleting && setShowDelete(false)}>
+          <EscapeKey onEscape={() => !deleting && setShowDelete(false)} />
           <div
-            className="bg-white w-full max-w-[393px] rounded-t-2xl px-6 pt-6 pb-10 max-h-[90dvh] overflow-y-auto"
+            className="bg-raised w-full max-w-[393px] rounded-t-2xl px-6 pt-6 pb-10 max-h-[90dvh] overflow-y-auto"
             onClick={(e) => e.stopPropagation()}
           >
-            <p className="text-base font-semibold text-[#111111] mb-1">Delete everything?</p>
-            <p className="text-sm text-[#777777] mb-6">
+            <p className="text-base font-semibold text-ink mb-1">Delete everything?</p>
+            <p className="text-sm text-ink-5 mb-6">
               This permanently wipes your profile, sessions, and exercise setup, then signs you out.
               This can&apos;t be undone.
             </p>
@@ -374,7 +409,7 @@ export default function ProfilePage() {
             <button
               onClick={() => setShowDelete(false)}
               disabled={deleting}
-              className="w-full border border-[#e8e8e8] rounded-xl py-3 text-sm font-semibold text-[#111111] hover:bg-[#fafafa] active:bg-[#f5f5f5] transition-colors disabled:opacity-50"
+              className="w-full border border-line rounded-xl py-3 text-sm font-semibold text-ink hover:bg-surface-1 active:bg-surface-2 transition-colors disabled:opacity-50"
             >
               Cancel
             </button>

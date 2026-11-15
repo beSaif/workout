@@ -4,6 +4,7 @@ import { useState } from "react"
 import Link from "next/link"
 import MessageComposer from "@/components/MessageComposer"
 import { GymbroMessage, UserPresence } from "@/lib/types"
+import EscapeKey from "@/components/EscapeKey"
 
 function initials(name: string): string {
   return name
@@ -24,9 +25,10 @@ export default function FriendMessagePopup({ friend, messages, onClose }: Props)
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-end bg-black/50 animate-fade-in"
+      role="dialog" aria-modal="true" className="fixed inset-0 z-50 flex items-end bg-black/50 animate-fade-in"
       onClick={onClose}
     >
+      <EscapeKey onEscape={onClose} />
       <div
         className="bg-zinc-900 rounded-t-3xl w-full overflow-hidden animate-slide-up pb-8"
         onClick={(e) => e.stopPropagation()}

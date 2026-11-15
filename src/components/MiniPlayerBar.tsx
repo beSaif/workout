@@ -54,29 +54,29 @@ export default function MiniPlayerBar() {
   const { label, setsCompleted, totalSets } = miniState
 
   return (
-    <div className="fixed bottom-0 left-0 right-0 z-40 bg-white border-t border-[#e8e8e8] shadow-[0_-2px_12px_rgba(0,0,0,0.08)] flex justify-center pb-[calc(env(safe-area-inset-bottom)+8px)]">
+    <div className="fixed bottom-0 left-0 right-0 z-40 bg-raised border-t border-line shadow-[0_-2px_12px_rgba(0,0,0,0.08)] flex justify-center pb-[calc(env(safe-area-inset-bottom)+8px)]">
       <button
         onClick={handleTap}
-        className="w-full max-w-[393px] mx-0 bg-white flex items-center px-4 py-4 gap-3 active:bg-[#f5f5f5] transition-colors"
+        className="w-full max-w-[393px] mx-0 bg-surface flex items-center px-4 py-4 gap-3 active:bg-surface-2 transition-colors"
         aria-label="Return to session"
       >
         {/* Pulsing dot */}
         <span className="relative flex h-2 w-2 shrink-0">
-          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#1e3a5f] opacity-60" />
-          <span className="relative inline-flex rounded-full h-2 w-2 bg-[#1e3a5f]" />
+          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-brand-fill opacity-60" />
+          <span className="relative inline-flex rounded-full h-2 w-2 bg-brand-fill" />
         </span>
 
         {/* Label + progress */}
         <div className="flex-1 min-w-0 text-left">
-          <p className="text-sm font-semibold text-[#111111] truncate">{label}</p>
-          <p className="text-xs text-[#777777]">
+          <p className="text-sm font-semibold text-ink truncate">{label}</p>
+          <p className="text-xs text-ink-5">
             {setsCompleted} / {totalSets} sets
           </p>
         </div>
 
         {/* Rest timer (if active) */}
         {restSeconds !== null && (
-          <span className="text-sm font-bold tabular-nums text-[#1e3a5f] shrink-0">
+          <span className="text-sm font-bold tabular-nums text-brand shrink-0">
             {formatSeconds(restSeconds)}
           </span>
         )}
@@ -87,7 +87,7 @@ export default function MiniPlayerBar() {
           height="18"
           viewBox="0 0 18 18"
           fill="none"
-          stroke="#777777"
+          stroke="var(--color-ink-5)"
           strokeWidth="2"
           strokeLinecap="round"
           strokeLinejoin="round"

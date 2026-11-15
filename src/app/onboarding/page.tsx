@@ -195,21 +195,21 @@ export default function OnboardingPage() {
 
   if (checking || submitting) {
     return (
-      <main className="min-h-dvh bg-white flex items-center justify-center">
-        {submitting && <p className="text-sm text-[#777777]">saving…</p>}
+      <main className="min-h-dvh bg-surface flex items-center justify-center">
+        {submitting && <p className="text-sm text-ink-5">saving…</p>}
       </main>
     )
   }
 
   return (
-    <main className="min-h-dvh flex flex-col bg-white">
+    <main className="min-h-dvh flex flex-col bg-surface">
       {/* Progress dots */}
       <div className="flex justify-center gap-1.5 pt-8 pb-12">
         {visibleSteps.map((i) => (
           <div
             key={i}
             className={`h-1 rounded-full transition-all ${
-              i === step ? "w-8 bg-[#1e3a5f]" : i < step ? "w-1.5 bg-[#1e3a5f]/40" : "w-1.5 bg-[#e8e8e8]"
+              i === step ? "w-8 bg-brand-fill" : i < step ? "w-1.5 bg-brand-fill/40" : "w-1.5 bg-surface-4"
             }`}
           />
         ))}
@@ -227,7 +227,7 @@ export default function OnboardingPage() {
                 onChange={(e) => setName(e.target.value)}
                 onKeyDown={(e) => { if (e.key === "Enter" && canAdvance) next() }}
                 placeholder="Saif"
-                className="w-full text-2xl font-semibold text-[#111111] border-b-2 border-[#e8e8e8] focus:border-[#1e3a5f] outline-none bg-transparent pb-2"
+                className="w-full text-2xl font-semibold text-ink border-b-2 border-line focus:border-brand-line outline-none bg-transparent pb-2"
               />
             </Question>
           )}
@@ -235,7 +235,7 @@ export default function OnboardingPage() {
           {/* Step 1: bodyweight */}
           {step === 1 && (
             <Question label="how much do you weigh?" hint="in kg — we use this to track your relative strength over time.">
-              <div className="flex items-baseline gap-2 border-b-2 border-[#e8e8e8] focus-within:border-[#1e3a5f] pb-2">
+              <div className="flex items-baseline gap-2 border-b-2 border-line focus-within:border-brand-line pb-2">
                 <input
                   autoFocus
                   type="number"
@@ -245,9 +245,9 @@ export default function OnboardingPage() {
                   onChange={(e) => setBw(e.target.value)}
                   onKeyDown={(e) => { if (e.key === "Enter" && canAdvance) next() }}
                   placeholder="60"
-                  className="flex-1 text-2xl font-semibold text-[#111111] outline-none bg-transparent"
+                  className="flex-1 text-2xl font-semibold text-ink outline-none bg-transparent"
                 />
-                <span className="text-base text-[#aaaaaa]">kg</span>
+                <span className="text-base text-ink-6">kg</span>
               </div>
 
               {/* The opt-in rides on this step rather than getting one of its own: the
@@ -260,7 +260,7 @@ export default function OnboardingPage() {
               >
                 <span
                   className={`w-5 h-5 shrink-0 rounded-md border-2 flex items-center justify-center transition-colors ${
-                    weighInDaily ? "bg-[#1e3a5f] border-[#1e3a5f]" : "border-[#d8d8d8]"
+                    weighInDaily ? "bg-brand-fill border-brand-line" : "border-line-strong"
                   }`}
                 >
                   {weighInDaily && (
@@ -270,8 +270,8 @@ export default function OnboardingPage() {
                   )}
                 </span>
                 <span className="flex-1">
-                  <span className="block text-sm text-[#111111]">check in weekly</span>
-                  <span className="block text-xs text-[#999999] mt-0.5">
+                  <span className="block text-sm text-ink">check in weekly</span>
+                  <span className="block text-xs text-ink-6 mt-0.5">
                     we&apos;ll ask for this number once a week and chart the trend. log more
                     often anytime.
                   </span>
@@ -311,8 +311,8 @@ export default function OnboardingPage() {
                     >
                       <div className="w-2.5 h-2.5 rounded-full mt-1.5 shrink-0" style={{ backgroundColor: dot }} />
                       <div>
-                        <span className="text-sm font-semibold text-[#111111]">{itemName}</span>
-                        <span className="text-sm text-[#777777]">{desc}</span>
+                        <span className="text-sm font-semibold text-ink">{itemName}</span>
+                        <span className="text-sm text-ink-5">{desc}</span>
                       </div>
                     </div>
                   ))}
@@ -331,14 +331,14 @@ export default function OnboardingPage() {
                     onClick={() => setMode(m)}
                     className={`w-full text-left px-4 py-4 rounded-xl border-2 transition-colors ${
                       mode === m
-                        ? "border-[#1e3a5f] bg-[#eff6ff]"
-                        : "border-[#e8e8e8] hover:border-[#cccccc]"
+                        ? "border-brand-line bg-brand-tint"
+                        : "border-line hover:border-line-strong"
                     }`}
                   >
-                    <span className={`block text-base font-semibold ${mode === m ? "text-[#1e3a5f]" : "text-[#111111]"}`}>
+                    <span className={`block text-base font-semibold ${mode === m ? "text-brand" : "text-ink"}`}>
                       {TRAINING_MODE_LABEL[m].toLowerCase()}
                     </span>
-                    <span className="block text-sm text-[#777777] mt-1 leading-snug">
+                    <span className="block text-sm text-ink-5 mt-1 leading-snug">
                       {TRAINING_MODE_DESC[m].toLowerCase()}
                     </span>
                   </button>
@@ -357,8 +357,8 @@ export default function OnboardingPage() {
                     onClick={() => setLift(l)}
                     className={`w-full text-left px-4 py-4 rounded-xl border-2 transition-colors ${
                       lift === l
-                        ? "border-[#1e3a5f] bg-[#eff6ff] text-[#1e3a5f]"
-                        : "border-[#e8e8e8] text-[#111111] hover:border-[#cccccc]"
+                        ? "border-brand-line bg-brand-tint text-brand"
+                        : "border-line text-ink hover:border-line-strong"
                     }`}
                   >
                     <span className="text-base font-semibold">{MAIN_LIFT_LABEL[l]}</span>
@@ -378,12 +378,12 @@ export default function OnboardingPage() {
                     onClick={() => setTrainingAge(t.value)}
                     className={`w-full text-left px-4 py-3.5 rounded-xl border-2 transition-colors ${
                       trainingAge === t.value
-                        ? "border-[#1e3a5f] bg-[#eff6ff] text-[#1e3a5f]"
-                        : "border-[#e8e8e8] text-[#111111] hover:border-[#cccccc]"
+                        ? "border-brand-line bg-brand-tint text-brand"
+                        : "border-line text-ink hover:border-line-strong"
                     }`}
                   >
                     <span className="block text-base font-semibold">{t.label}</span>
-                    <span className="block text-xs text-[#888888] mt-0.5">{t.detail}</span>
+                    <span className="block text-xs text-ink-5 mt-0.5">{t.detail}</span>
                   </button>
                 ))}
               </div>
@@ -409,7 +409,7 @@ export default function OnboardingPage() {
               label={`what's your current 1 rep max on ${lift ? MAIN_LIFT_LABEL[lift].toLowerCase() : "your lift"}?`}
               hint="your best single rep. be honest — every session is a percentage of this."
             >
-              <div className="flex items-baseline gap-2 border-b-2 border-[#e8e8e8] focus-within:border-[#1e3a5f] pb-2">
+              <div className="flex items-baseline gap-2 border-b-2 border-line focus-within:border-brand-line pb-2">
                 <input
                   autoFocus
                   type="number"
@@ -419,9 +419,9 @@ export default function OnboardingPage() {
                   onChange={(e) => setAnchor(e.target.value)}
                   onKeyDown={(e) => { if (e.key === "Enter" && canAdvance) next() }}
                   placeholder="100"
-                  className="flex-1 text-2xl font-semibold text-[#111111] outline-none bg-transparent"
+                  className="flex-1 text-2xl font-semibold text-ink outline-none bg-transparent"
                 />
-                <span className="text-base text-[#aaaaaa]">kg</span>
+                <span className="text-base text-ink-6">kg</span>
               </div>
             </Question>
           )}
@@ -440,17 +440,17 @@ export default function OnboardingPage() {
                       onClick={() => setTarget(String(kg))}
                       className={`flex-1 flex flex-col items-center py-3 rounded-xl border-2 transition-colors ${
                         target === String(kg)
-                          ? "border-[#1e3a5f] bg-[#eff6ff] text-[#1e3a5f]"
-                          : "border-[#e8e8e8] text-[#111111] hover:border-[#cccccc]"
+                          ? "border-brand-line bg-brand-tint text-brand"
+                          : "border-line text-ink hover:border-line-strong"
                       }`}
                     >
                       <span className="text-base font-semibold">{kg}kg</span>
-                      <span className="text-xs text-[#aaaaaa] mt-0.5">{label}</span>
+                      <span className="text-xs text-ink-6 mt-0.5">{label}</span>
                     </button>
                   ))}
                 </div>
               )}
-              <div className="flex items-baseline gap-2 border-b-2 border-[#e8e8e8] focus-within:border-[#1e3a5f] pb-2">
+              <div className="flex items-baseline gap-2 border-b-2 border-line focus-within:border-brand-line pb-2">
                 <input
                   type="number"
                   inputMode="decimal"
@@ -459,9 +459,9 @@ export default function OnboardingPage() {
                   onChange={(e) => setTarget(e.target.value)}
                   onKeyDown={(e) => { if (e.key === "Enter" && canAdvance) next() }}
                   placeholder="140"
-                  className="flex-1 text-2xl font-semibold text-[#111111] outline-none bg-transparent"
+                  className="flex-1 text-2xl font-semibold text-ink outline-none bg-transparent"
                 />
-                <span className="text-base text-[#aaaaaa]">kg</span>
+                <span className="text-base text-ink-6">kg</span>
               </div>
             </Question>
           )}
@@ -478,7 +478,7 @@ export default function OnboardingPage() {
                 <button
                   onClick={handleGoogleSignIn}
                   disabled={!readUnlocked}
-                  className="w-full flex items-center justify-center gap-3 border border-[#e8e8e8] rounded-xl py-3.5 text-sm font-semibold text-[#111111] hover:bg-[#fafafa] active:bg-[#f5f5f5] transition-colors mt-4"
+                  className="w-full flex items-center justify-center gap-3 border border-line rounded-xl py-3.5 text-sm font-semibold text-ink hover:bg-surface-1 active:bg-surface-2 transition-colors mt-4"
                 >
                   <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true">
                     <path fill="#4285F4" d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844a4.14 4.14 0 0 1-1.796 2.716v2.258h2.908c1.702-1.567 2.684-3.874 2.684-6.615z"/>
@@ -491,7 +491,7 @@ export default function OnboardingPage() {
                 <button
                   onClick={back}
                   disabled={!readUnlocked}
-                  className="w-full text-center text-sm text-[#aaaaaa] hover:text-[#777777] mt-4 py-2"
+                  className="w-full text-center text-sm text-ink-6 hover:text-ink-5 mt-4 py-2"
                 >
                   back
                 </button>
@@ -509,7 +509,7 @@ export default function OnboardingPage() {
             {step > 0 && (
               <button
                 onClick={back}
-                className="text-sm font-semibold text-[#777777] hover:text-[#111111] px-4 py-3"
+                className="text-sm font-semibold text-ink-5 hover:text-ink px-4 py-3"
               >
                 back
               </button>
@@ -517,7 +517,7 @@ export default function OnboardingPage() {
             <button
               onClick={next}
               disabled={!canAdvance}
-              className="flex-1 bg-[#1e3a5f] text-white text-sm font-semibold rounded-xl py-3.5 hover:bg-[#16304f] active:bg-[#0f2540] transition-colors disabled:opacity-40"
+              className="flex-1 bg-brand-fill text-white text-sm font-semibold rounded-xl py-3.5 hover:bg-brand-fill-2 active:bg-brand-fill-3 transition-colors disabled:opacity-40"
             >
               continue
             </button>
@@ -560,7 +560,7 @@ function PhasesReveal({ started, onComplete }: { started: boolean; onComplete?: 
             <div>
               <span
                 style={{ transitionDelay: `${i * 500}ms` }}
-                className={`text-sm font-semibold text-[#111111] transition-opacity duration-500 ${labelsVisible ? "opacity-100" : "opacity-0"}`}
+                className={`text-sm font-semibold text-ink transition-opacity duration-500 ${labelsVisible ? "opacity-100" : "opacity-0"}`}
                 onTransitionEnd={i === PHASES.length - 1 ? (e) => {
                   if (e.propertyName === "opacity") setDescsVisible(true)
                 } : undefined}
@@ -576,7 +576,7 @@ function PhasesReveal({ started, onComplete }: { started: boolean; onComplete?: 
       </div>
       <p
         style={{ transitionDelay: `${PHASES.length * 150}ms` }}
-        className={`mt-6 text-sm text-[#777777] transition-opacity duration-500 ${descsVisible ? "opacity-100" : "opacity-0"}`}
+        className={`mt-6 text-sm text-ink-5 transition-opacity duration-500 ${descsVisible ? "opacity-100" : "opacity-0"}`}
         onTransitionEnd={(e) => { if (e.propertyName === "opacity") onComplete?.() }}
       >
         then you reset and go again — heavier than before.
@@ -597,7 +597,7 @@ function DescSpan({ children, delay }: { children: React.ReactNode; delay: numbe
   return (
     <span
       style={{ transitionDelay: `${delay}ms`, opacity: visible ? 1 : 0 }}
-      className="text-sm text-[#777777] transition-opacity duration-500"
+      className="text-sm text-ink-5 transition-opacity duration-500"
     >
       {children}
     </span>
@@ -687,11 +687,11 @@ function Question({
         {highlight ? (
           <RevealText text={label} onComplete={handleLabelComplete} />
         ) : (
-          <span className="text-[#111111]">{label}</span>
+          <span className="text-ink">{label}</span>
         )}
       </h2>
       {hint && (
-        <p className="text-sm text-[#777777] mb-8">
+        <p className="text-sm text-ink-5 mb-8">
           {highlight ? (
             <RevealText text={hint} started={labelDone} onComplete={onHighlightComplete} />
           ) : (

@@ -20,31 +20,31 @@ export default function PreviewSessionRow({ label, rx, tag, faint = false, onJum
     <>
       <span className="flex flex-col gap-0.5 min-w-0">
         <span className="flex items-center gap-1.5">
-          <span className={`text-xs font-medium ${faint ? "text-[#aaaaaa]" : "text-[#888888]"}`}>{label}</span>
+          <span className={`text-xs font-medium ${faint ? "text-ink-6" : "text-ink-5"}`}>{label}</span>
           {rx.light && (
-            <span className="text-[9px] font-semibold uppercase tracking-wide text-[#888888] bg-white rounded px-1 py-px">
+            <span className="text-[10px] font-semibold uppercase tracking-wide text-ink-5 bg-surface rounded px-1 py-px">
               Light
             </span>
           )}
           {tag && (
-            <span className="text-[9px] font-semibold uppercase tracking-wide text-[#1e3a5f] bg-[#dbeafe] rounded px-1 py-px">
+            <span className="text-[10px] font-semibold uppercase tracking-wide text-brand bg-brand-tint-3 rounded px-1 py-px">
               {tag}
             </span>
           )}
         </span>
-        {effort && <span className="text-[10px] text-[#aaaaaa]">{effort}</span>}
+        {effort && <span className="text-[10px] text-ink-6">{effort}</span>}
       </span>
       <span className="flex items-center gap-3 shrink-0">
         <span className="text-right">
-          <span className={`text-sm font-semibold tabular-nums ${faint ? "text-[#777777]" : "text-[#444444]"}`}>
+          <span className={`text-sm font-semibold tabular-nums ${faint ? "text-ink-5" : "text-ink-3"}`}>
             {rx.weight}kg
           </span>
-          <span className="text-xs text-[#aaaaaa] tabular-nums ml-1.5">
+          <span className="text-xs text-ink-6 tabular-nums ml-1.5">
             {rx.reps} × {rx.sets}
           </span>
         </span>
         {onJump && (
-          <span className="text-[10px] font-semibold uppercase tracking-wide text-[#1e3a5f] border border-[#1e3a5f]/30 rounded-full px-2 py-0.5">
+          <span className="text-[10px] font-semibold uppercase tracking-wide text-brand border border-brand-line/30 rounded-full px-2 py-0.5">
             Jump
           </span>
         )}
@@ -52,7 +52,7 @@ export default function PreviewSessionRow({ label, rx, tag, faint = false, onJum
     </>
   )
 
-  const className = "w-full text-left px-4 py-2.5 rounded-xl bg-[#f5f5f5] mb-2 flex justify-between items-center gap-3"
+  const className = "w-full text-left px-4 py-2.5 rounded-xl bg-surface-2 mb-2 flex justify-between items-center gap-3"
   if (!onJump) return <div className={className}>{body}</div>
   return (
     <button onClick={onJump} className={`${className} active:opacity-70`}>

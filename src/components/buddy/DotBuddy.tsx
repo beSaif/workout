@@ -725,14 +725,14 @@ export default function DotBuddy({ cue = null, startAsleep = false }: Props) {
     <div ref={layerRef} data-dot aria-hidden="true" className="fixed inset-0 z-[55] pointer-events-none overflow-hidden">
       {bubble && (
         <div
-          className="absolute w-[240px] rounded-[14px] bg-white border border-[#e8e8e8] px-3 py-2.5 shadow-[0_10px_24px_rgba(17,24,39,0.12)] flex flex-col gap-0.5 animate-fade-in"
+          className="absolute w-[240px] rounded-[14px] bg-raised border border-line px-3 py-2.5 shadow-[0_10px_24px_rgba(17,24,39,0.12)] flex flex-col gap-0.5 animate-fade-in"
           style={{ left: bubble.left, top: bubble.top, transform: bubble.above ? "translateY(-100%)" : undefined }}
         >
-          <span className="text-[10px] font-bold tracking-[0.12em] text-[#1e3a5f]">TODAY</span>
-          <span className="text-[13px] font-semibold text-[#111111] tabular-nums">{bubble.cue.title}</span>
-          <span className="text-xs leading-snug text-[#555555]">{bubble.cue.line}</span>
+          <span className="text-[10px] font-bold tracking-[0.12em] text-brand">TODAY</span>
+          <span className="text-[13px] font-semibold text-ink tabular-nums">{bubble.cue.title}</span>
+          <span className="text-xs leading-snug text-ink-4">{bubble.cue.line}</span>
           <span
-            className={`absolute w-3 h-3 bg-white border-[#e8e8e8] rotate-45 ${
+            className={`absolute w-3 h-3 bg-surface border-line rotate-45 ${
               bubble.above ? "-bottom-[7px] border-r border-b" : "-top-[7px] border-l border-t"
             }`}
             style={{ left: bubble.tail - 6 }}

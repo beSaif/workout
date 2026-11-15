@@ -59,17 +59,17 @@ export default function MuscleRecoveryBars({ sessions, exerciseConfig, trainingD
     : `${stale} of ${rows.length} need work`
 
   return (
-    <section data-ledge className="mb-3 px-4 py-3 rounded-xl bg-white border border-[#e8e8e8]">
+    <section data-ledge className="mb-3 px-4 py-3 rounded-xl bg-surface border border-line">
       <button
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
         className="w-full text-left active:opacity-70 transition-opacity"
       >
         <div className="flex items-baseline justify-between gap-2 mb-2">
-          <p className="text-[10px] font-semibold uppercase tracking-widest text-[#aaaaaa]">
+          <p className="text-[10px] font-semibold uppercase tracking-widest text-ink-6">
             Muscle balance
           </p>
-          <span className="flex items-center gap-1 text-[11px] text-[#777777]">
+          <span className="flex items-center gap-1 text-[11px] text-ink-5">
             {summary}
             <svg
               width="9"
@@ -101,7 +101,7 @@ export default function MuscleRecoveryBars({ sessions, exerciseConfig, trainingD
                   className="h-1.5 rounded-full mb-1"
                   style={{ backgroundColor: STATE_COLOR[r.state] }}
                 />
-                <p className="text-[9px] font-medium text-[#777777] leading-tight truncate">
+                <p className="text-[10px] font-medium text-ink-5 leading-tight truncate">
                   {r.label}
                 </p>
               </div>
@@ -120,12 +120,12 @@ export default function MuscleRecoveryBars({ sessions, exerciseConfig, trainingD
                 <div key={r.id} className="flex items-center gap-2.5">
                   <span
                     title={r.label}
-                    className="w-[74px] shrink-0 truncate text-[11px] font-semibold text-[#444444]"
+                    className="w-[74px] shrink-0 truncate text-[11px] font-semibold text-ink-3"
                   >
                     {r.label}
-                    {r.inAnyDay === false && <span className="text-[#cccccc]"> *</span>}
+                    {r.inAnyDay === false && <span className="text-ink-7"> *</span>}
                   </span>
-                  <div className="flex-1 min-w-0 h-1.5 rounded-full bg-[#f0f0f0] overflow-hidden">
+                  <div className="flex-1 min-w-0 h-1.5 rounded-full bg-surface-3 overflow-hidden">
                     <div
                       className="h-full rounded-full transition-all duration-500"
                       // Widths are inline because Tailwind cannot generate classes
@@ -146,20 +146,20 @@ export default function MuscleRecoveryBars({ sessions, exerciseConfig, trainingD
           </div>
 
           {untrained ? (
-            <p className="mt-2.5 text-[11px] text-[#777777]">
+            <p className="mt-2.5 text-[11px] text-ink-5">
               Log a session to start tracking your balance
             </p>
           ) : (
             <button
               onClick={() => setMetric((v) => (v === "days" ? "sets" : "days"))}
-              className="mt-2.5 text-[11px] font-semibold text-[#777777] hover:text-[#1e3a5f] active:opacity-70 transition-colors"
+              className="mt-2.5 text-[11px] font-semibold text-ink-5 hover:text-brand active:opacity-70 transition-colors"
             >
               {metric === "days" ? "days since" : `${BALANCE_WINDOW_DAYS}d sets`}
             </button>
           )}
 
           {unscheduled > 0 && (
-            <p className="mt-2 text-[10px] text-[#aaaaaa]">
+            <p className="mt-2 text-[10px] text-ink-6">
               * not in any training day —{" "}
               <Link href="/exercises" className="underline">
                 edit days

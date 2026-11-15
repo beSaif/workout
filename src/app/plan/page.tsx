@@ -22,19 +22,21 @@ import { useOnboardingGuard } from "@/lib/useOnboardingGuard"
 import RoutinePreview from "@/components/RoutinePreview"
 import DotFace from "@/components/buddy/DotFace"
 import HapticTap from "@/components/HapticTap"
+import BackButton from "@/components/BackButton"
+import { useConfirm } from "@/components/ConfirmSheet"
 
-const SECTION_LABEL = "text-[10px] font-semibold uppercase tracking-widest text-[#aaaaaa] mb-3"
+const SECTION_LABEL = "text-[10px] font-semibold uppercase tracking-widest text-ink-6 mb-3"
 const PRIMARY =
-  "relative w-full rounded-xl bg-[#1e3a5f] py-3 text-sm font-semibold text-white hover:bg-[#16304f] transition-colors disabled:opacity-40"
+  "relative w-full rounded-xl bg-brand-fill py-3 text-sm font-semibold text-white hover:bg-brand-fill-2 transition-colors disabled:opacity-40"
 const SECONDARY =
-  "w-full rounded-xl border border-[#e8e8e8] bg-white py-3 text-sm font-semibold text-[#1e3a5f] hover:border-[#1e3a5f] transition-colors disabled:opacity-40"
-const TEXT_LINK = "text-xs font-semibold text-[#777777] hover:text-[#333333] transition-colors"
+  "w-full rounded-xl border border-line bg-surface py-3 text-sm font-semibold text-brand hover:border-brand-line transition-colors disabled:opacity-40"
+const TEXT_LINK = "text-xs font-semibold text-ink-5 hover:text-ink-2 transition-colors"
 
 function chipClass(on: boolean) {
   return `px-3 py-1.5 rounded-full text-xs font-semibold border transition-colors ${
     on
-      ? "bg-[#1e3a5f] text-white border-[#1e3a5f]"
-      : "bg-white text-[#777777] border-[#e8e8e8] hover:border-[#1e3a5f] hover:text-[#1e3a5f]"
+      ? "bg-brand-fill text-white border-brand-line"
+      : "bg-surface text-ink-5 border-line hover:border-brand-line hover:text-brand"
   }`
 }
 
@@ -74,6 +76,7 @@ function nameList(names: string[], max = 5): string {
  * nothing changes until it is applied, which can be undone.
  */
 export default function PlanPage() {
+  const { confirm, confirmSheet } = useConfirm()
   useOnboardingGuard()
   const [mounted, setMounted] = useState(false)
   const [config, setConfig] = useState<MuscleGroupConfig[]>([])
@@ -179,11 +182,16 @@ export default function PlanPage() {
     setStep("review")
   }
 
-  function apply() {
+  async function apply() {
     if (!resolved) return
     if (status && status.athleteCount > 0) {
       const n = status.athleteCount
-      if (!window.confirm(`${n} athlete${n === 1 ? " trains" : "s train"} under you and will get this routine too. Apply it?`)) return
+      const yes = await confirm({
+        title: "Apply this routine?",
+        body: `${n} athlete${n === 1 ? " trains" : "s train"} under you and will get this routine too.`,
+        confirmLabel: "Apply routine",
+      })
+      if (!yes) return
     }
     haptic("exercise")
     applyRoutinePlan({ config: resolved.config, days: resolved.days }, { config, days })
@@ -196,8 +204,14 @@ export default function PlanPage() {
     })
   }
 
-  function undo() {
-    if (!window.confirm("Put your routine back to how it was before this plan? Changes made since are lost.")) return
+  async function undo() {
+    const yes = await confirm({
+      title: "Put your routine back?",
+      body: "It returns to how it was before this plan. Changes made since are lost.",
+      confirmLabel: "Restore routine",
+      destructive: true,
+    })
+    if (!yes) return
     const restored = undoRoutinePlan(config)
     if (!restored) return
     setConfig(restored.config)
@@ -210,37 +224,35 @@ export default function PlanPage() {
   if (!mounted) {
     return (
       <main className="mx-auto w-full max-w-[393px] px-4 pt-[calc(1.5rem+env(safe-area-inset-top))] pb-6">
-        <div className="h-4 w-16 bg-[#e8e8e8] rounded animate-pulse mb-8" />
-        <div className="h-6 w-48 bg-[#e8e8e8] rounded animate-pulse mb-6" />
-        <div className="h-32 bg-[#e8e8e8] rounded-xl animate-pulse" />
+        <div className="h-4 w-16 bg-surface-4 rounded animate-pulse mb-8" />
+        <div className="h-6 w-48 bg-surface-4 rounded animate-pulse mb-6" />
+        <div className="h-32 bg-surface-4 rounded-xl animate-pulse" />
       </main>
     )
   }
 
   const back =
     step === "start" || step === "done" ? (
-      <Link href="/exercises" className="inline-flex items-center gap-1 text-sm text-[#1e3a5f] mb-6 hover:underline">
-        ← Routine
-      </Link>
+      <BackButton href="/exercises" label="Back to routine" className="mb-3" />
     ) : (
-      <button
+      <BackButton
         onClick={() => setStep(step === "review" && proposal?.source === "paste" ? "paste" : "start")}
         disabled={step === "thinking"}
-        className="inline-flex items-center gap-1 text-sm text-[#1e3a5f] mb-6 hover:underline disabled:opacity-40"
-      >
-        ← Back
-      </button>
+        label="Back"
+        className="mb-3"
+      />
     )
 
   return (
     <main className="mx-auto w-full max-w-[393px] px-4 pt-[calc(1.5rem+env(safe-area-inset-top))] pb-[calc(4rem+env(safe-area-inset-bottom))]">
+      {confirmSheet}
       {back}
 
       <div className="flex items-end gap-3 mb-1">
         <DotFace thinking={step === "thinking"} happy={step === "done"} />
-        <h1 className="text-2xl font-semibold text-[#111111] tracking-tight leading-none">Plan your routine</h1>
+        <h1 className="text-2xl font-semibold text-ink tracking-tight leading-none">Plan your routine</h1>
       </div>
-      <p className="text-sm text-[#777777] mt-2 mb-6">
+      <p className="text-sm text-ink-5 mt-2 mb-6">
         {step === "thinking"
           ? "Dot is putting your split together…"
           : step === "done"
@@ -249,9 +261,9 @@ export default function PlanPage() {
       </p>
 
       {locked && (
-        <div className="bg-[#f0f4f8] border border-[#dbe4ee] rounded-xl px-4 py-3 mb-6 text-sm text-[#111111]">
+        <div className="bg-brand-tint-2 border border-brand-line-2 rounded-xl px-4 py-3 mb-6 text-sm text-ink">
           You&apos;re following a coach&apos;s routine, so it can&apos;t be replaced. Stop training under them on the{" "}
-          <Link href="/exercises" className="font-semibold text-[#1e3a5f] hover:underline">
+          <Link href="/exercises" className="font-semibold text-brand hover:underline">
             Routine
           </Link>{" "}
           page first.
@@ -264,13 +276,13 @@ export default function PlanPage() {
           {dotOn && (
             <button
               onClick={() => setStep("questions")}
-              className="w-full text-left bg-white border border-[#e8e8e8] rounded-xl px-4 py-4 hover:border-[#1e3a5f] transition-colors"
+              className="w-full text-left bg-surface border border-line rounded-xl px-4 py-4 hover:border-brand-line transition-colors"
             >
-              <p className="text-sm font-semibold text-[#111111]">Plan with Dot</p>
-              <p className="text-xs text-[#777777] mt-0.5">
+              <p className="text-sm font-semibold text-ink">Plan with Dot</p>
+              <p className="text-xs text-ink-5 mt-0.5">
                 Answer five quick questions and Dot drafts a split around your current routine.
               </p>
-              <p className="text-[11px] text-[#aaaaaa] mt-2">
+              <p className="text-[11px] text-ink-6 mt-2">
                 {status.remaining > 0
                   ? `${status.remaining} of ${status.limit} plans left today`
                   : "No plans left today. Back tomorrow."}
@@ -279,10 +291,10 @@ export default function PlanPage() {
           )}
           <button
             onClick={() => setStep("paste")}
-            className="w-full text-left bg-white border border-[#e8e8e8] rounded-xl px-4 py-4 hover:border-[#1e3a5f] transition-colors"
+            className="w-full text-left bg-surface border border-line rounded-xl px-4 py-4 hover:border-brand-line transition-colors"
           >
-            <p className="text-sm font-semibold text-[#111111]">Use your own AI</p>
-            <p className="text-xs text-[#777777] mt-0.5">
+            <p className="text-sm font-semibold text-ink">Use your own AI</p>
+            <p className="text-xs text-ink-5 mt-0.5">
               Copy a prompt into ChatGPT, Claude or Gemini, talk it through, and paste the plan back here.
             </p>
           </button>
@@ -299,7 +311,7 @@ export default function PlanPage() {
         <>
           {PLAN_QUESTIONS.map((q) => (
             <div key={q.key} className="mb-5">
-              <p className="text-sm font-semibold text-[#111111] mb-2">{q.question}</p>
+              <p className="text-sm font-semibold text-ink mb-2">{q.question}</p>
               <div className="flex flex-wrap gap-2">
                 {q.options.map((o) => (
                   <button
@@ -314,15 +326,15 @@ export default function PlanPage() {
               </div>
             </div>
           ))}
-          <p className="text-sm font-semibold text-[#111111] mb-2">
-            Anything else? <span className="font-normal text-[#aaaaaa]">Optional</span>
+          <p className="text-sm font-semibold text-ink mb-2">
+            Anything else? <span className="font-normal text-ink-6">Optional</span>
           </p>
           <textarea
             value={note}
             onChange={(e) => setNote(e.target.value.slice(0, PLAN_NOTE_MAX))}
             rows={3}
             placeholder="Injuries, exercises to keep or avoid, muscles to bring up…"
-            className="w-full rounded-xl border border-[#e8e8e8] bg-white px-3 py-2.5 text-sm text-[#111111] outline-none focus:border-[#1e3a5f] resize-none mb-5"
+            className="w-full rounded-xl border border-line bg-surface px-3 py-2.5 text-sm text-ink outline-none focus:border-brand-line resize-none mb-5"
           />
           {dotError && <p className="text-xs text-red-500 mb-3">{dotError}</p>}
           <button
@@ -332,7 +344,7 @@ export default function PlanPage() {
           >
             Make my plan
           </button>
-          <p className="text-[11px] text-[#aaaaaa] mt-2 text-center">
+          <p className="text-[11px] text-ink-6 mt-2 text-center">
             Dot sends only your routine and these answers to its AI model.
           </p>
         </>
@@ -342,7 +354,7 @@ export default function PlanPage() {
       {step === "thinking" && (
         <div className="space-y-2" aria-live="polite">
           {[1, 2, 3].map((i) => (
-            <div key={i} className="h-14 bg-[#f0f0f0] rounded-xl animate-pulse" />
+            <div key={i} className="h-14 bg-surface-3 rounded-xl animate-pulse" />
           ))}
         </div>
       )}
@@ -351,7 +363,7 @@ export default function PlanPage() {
       {step === "paste" && !locked && (
         <>
           <p className={SECTION_LABEL}>1 · Copy the prompt</p>
-          <p className="text-xs text-[#777777] mb-3">
+          <p className="text-xs text-ink-5 mb-3">
             It carries your current routine and the rules the app needs. Paste it into a new chat; the AI asks you a
             few questions, then writes the plan.
           </p>
@@ -365,7 +377,7 @@ export default function PlanPage() {
               onFocus={(e) => e.currentTarget.select()}
               rows={6}
               aria-label="Prompt to copy"
-              className="w-full rounded-xl border border-[#e8e8e8] bg-[#fafafa] px-3 py-2.5 text-[11px] text-[#555555] font-mono mb-2"
+              className="w-full rounded-xl border border-line bg-surface-1 px-3 py-2.5 text-[11px] text-ink-4 font-mono mb-2"
             />
           )}
 
@@ -376,7 +388,7 @@ export default function PlanPage() {
             rows={6}
             placeholder="Paste the AI's whole reply here. The JSON inside is all that's read."
             aria-label="Plan to import"
-            className="w-full rounded-xl border border-[#e8e8e8] bg-white px-3 py-2.5 text-xs text-[#111111] font-mono outline-none focus:border-[#1e3a5f] resize-none mb-3"
+            className="w-full rounded-xl border border-line bg-surface px-3 py-2.5 text-xs text-ink font-mono outline-none focus:border-brand-line resize-none mb-3"
           />
           {pasteErrors.length > 0 && (
             <div className="rounded-xl border border-red-200 bg-red-50 px-3 py-2.5 mb-3">
@@ -424,7 +436,7 @@ export default function PlanPage() {
                 onChange={(e) => setTweak(e.target.value.slice(0, PLAN_NOTE_MAX))}
                 rows={2}
                 placeholder="e.g. Swap leg press for squats, and more back work"
-                className="w-full rounded-xl border border-[#e8e8e8] bg-white px-3 py-2.5 text-sm text-[#111111] outline-none focus:border-[#1e3a5f] resize-none mb-2"
+                className="w-full rounded-xl border border-line bg-surface px-3 py-2.5 text-sm text-ink outline-none focus:border-brand-line resize-none mb-2"
               />
               <button
                 onClick={() => askDot(tweak.trim())}
@@ -434,7 +446,7 @@ export default function PlanPage() {
                 Ask Dot to change it
               </button>
               {status && (
-                <p className="text-[11px] text-[#aaaaaa] mt-2 text-center">
+                <p className="text-[11px] text-ink-6 mt-2 text-center">
                   {status.remaining > 0 ? `${status.remaining} left today` : "No plans left today"}
                 </p>
               )}
@@ -466,7 +478,7 @@ export default function PlanPage() {
 function Changes({ changes, warnings }: { changes: ReturnType<typeof resolvePlan>["changes"]; warnings: string[] }) {
   if (changes.unchanged) {
     return (
-      <div className="rounded-xl bg-[#f7f7f7] px-4 py-3 mb-6 text-sm text-[#555555]">
+      <div className="rounded-xl bg-surface-1 px-4 py-3 mb-6 text-sm text-ink-4">
         This is the same as your current routine.
       </div>
     )
@@ -492,11 +504,11 @@ function Changes({ changes, warnings }: { changes: ReturnType<typeof resolvePlan
   return (
     <div className="mb-6">
       <p className={SECTION_LABEL}>What changes</p>
-      <div className="bg-white border border-[#e8e8e8] rounded-xl divide-y divide-[#f5f5f5]">
+      <div className="bg-surface border border-line rounded-xl divide-y divide-line-soft">
         {rows.map((r) => (
           <div key={r.label} className="px-4 py-2.5">
-            <p className="text-[11px] font-semibold text-[#999999]">{r.label}</p>
-            <p className={`text-[13px] mt-0.5 ${r.tone === "muted" ? "text-[#777777]" : "text-[#111111]"}`}>{r.value}</p>
+            <p className="text-[11px] font-semibold text-ink-6">{r.label}</p>
+            <p className={`text-[13px] mt-0.5 ${r.tone === "muted" ? "text-ink-5" : "text-ink"}`}>{r.value}</p>
           </div>
         ))}
       </div>

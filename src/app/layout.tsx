@@ -7,11 +7,11 @@ import MiniPlayerBar from "@/components/MiniPlayerBar"
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
-  // The app feels like a native one: no pinch or double-tap zoom. iOS Safari ignores
-  // these two for pinch, so globals.css and the gesturestart script below cover it there.
-  maximumScale: 1,
-  userScalable: false,
-  themeColor: "#1e3a5f",
+  // Pinch-zoom stays available: people who need larger text must be able to get it.
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#1e3a5f" },
+    { media: "(prefers-color-scheme: dark)", color: "#0f1113" },
+  ],
   viewportFit: "cover",
 }
 
@@ -33,10 +33,8 @@ export default function RootLayout({
   return (
     <html lang="en">
       <head>
-        <meta name="color-scheme" content="light" />
+        <meta name="color-scheme" content="light dark" />
         <script dangerouslySetInnerHTML={{ __html: `try{var p=screen.orientation.lock('portrait');if(p&&p.catch)p.catch(function(){})}catch(_){}` }} />
-        {/* iOS Safari pinches through user-scalable=no; cancelling its gesture events stops it. */}
-        <script dangerouslySetInnerHTML={{ __html: `addEventListener('gesturestart',function(e){e.preventDefault()},{passive:false})` }} />
         {/*
           Chrome fires beforeinstallprompt once, often before React has hydrated, and the
           event is only usable if it was preventDefault()ed. Stash it here so the install

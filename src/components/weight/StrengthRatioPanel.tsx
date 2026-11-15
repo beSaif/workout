@@ -32,37 +32,37 @@ export default function StrengthRatioPanel({ e1rm, bw, target, goalBw, liftLabel
       : null
 
   return (
-    <section className="mb-4 px-4 py-4 rounded-xl bg-[#f5f5f5] border border-[#e8e8e8]">
-      <p className="text-[10px] font-semibold uppercase tracking-widest text-[#aaaaaa] mb-3">
+    <section className="mb-4 px-4 py-4 rounded-xl bg-surface-2 border border-line">
+      <p className="text-[10px] font-semibold uppercase tracking-widest text-ink-6 mb-3">
         Strength to bodyweight
       </p>
 
       <div className="flex items-baseline gap-1.5 mb-1">
         <span
           className={`text-3xl font-bold leading-none tabular-nums ${
-            current != null ? "text-[#111111]" : "text-[#d8d8d8]"
+            current != null ? "text-ink" : "text-ink-8"
           }`}
         >
           {current != null ? `${current.toFixed(2)}×` : "—"}
         </span>
         {targetRatio != null && (
-          <span className="ml-auto text-[11px] text-[#777777] tabular-nums">
+          <span className="ml-auto text-[11px] text-ink-5 tabular-nums">
             goal {targetRatio.toFixed(2)}×
           </span>
         )}
       </div>
 
-      <p className="text-xs text-[#999999] mb-3">
+      <p className="text-xs text-ink-6 mb-3">
         {e1rm != null && bw != null
           ? `${e1rm}kg ${liftLabel.toLowerCase()} e1RM ÷ ${bw.toFixed(1)}kg bodyweight`
           : "log a session and a weigh-in to see this"}
       </p>
 
       {pct != null && (
-        <div className="h-1.5 rounded-full bg-[#e8e8e8] overflow-hidden">
+        <div className="h-1.5 rounded-full bg-surface-4 overflow-hidden">
           {/* Width comes from data, which Tailwind cannot generate a class for. */}
           <div
-            className="h-full rounded-full bg-[#1e3a5f] transition-all duration-500"
+            className="h-full rounded-full bg-brand-fill transition-all duration-500"
             style={{ width: `${pct}%` }}
           />
         </div>

@@ -2,6 +2,7 @@
 
 import { useState } from "react"
 import { WhatsNewRelease, pendingWhatsNew, loadWhatsNewSeen, markWhatsNewSeen, WHATS_NEW_VERSION } from "@/lib/whatsNew"
+import EscapeKey from "@/components/EscapeKey"
 
 interface WhatsNewModalProps {
   releases: WhatsNewRelease[]
@@ -13,23 +14,24 @@ export default function WhatsNewModal({ releases, onDismiss }: WhatsNewModalProp
   if (items.length === 0) return null
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40">
-      <div className="bg-white w-full max-w-[393px] rounded-t-2xl px-6 pt-6 pb-10 max-h-[90dvh] overflow-y-auto">
+    <div role="dialog" aria-modal="true" className="fixed inset-0 z-50 flex items-end justify-center bg-black/40">
+      <EscapeKey onEscape={onDismiss} />
+      <div className="bg-raised w-full max-w-[393px] rounded-t-2xl px-6 pt-6 pb-10 max-h-[90dvh] overflow-y-auto">
         <div className="flex items-center gap-2 mb-1">
-          <span className="text-[10px] font-semibold uppercase tracking-widest text-[#1e3a5f] bg-[#eff6ff] rounded-full px-2 py-0.5">
+          <span className="text-[10px] font-semibold uppercase tracking-widest text-brand bg-brand-tint rounded-full px-2 py-0.5">
             New
           </span>
-          <p className="text-base font-semibold text-[#111111]">What&apos;s new</p>
+          <p className="text-base font-semibold text-ink">What&apos;s new</p>
         </div>
-        <p className="text-sm text-[#777777] mb-5">A few things changed since you were last here.</p>
+        <p className="text-sm text-ink-5 mb-5">A few things changed since you were last here.</p>
 
         <div className="space-y-4 mb-6">
           {items.map((item) => (
             <div key={item.title} className="flex items-start gap-3">
-              <div className="w-2 h-2 rounded-full bg-[#1e3a5f] mt-1.5 shrink-0" />
+              <div className="w-2 h-2 rounded-full bg-brand-fill mt-1.5 shrink-0" />
               <div>
-                <p className="text-sm font-semibold text-[#111111]">{item.title}</p>
-                <p className="text-sm text-[#777777] mt-0.5">{item.body}</p>
+                <p className="text-sm font-semibold text-ink">{item.title}</p>
+                <p className="text-sm text-ink-5 mt-0.5">{item.body}</p>
               </div>
             </div>
           ))}
@@ -37,7 +39,7 @@ export default function WhatsNewModal({ releases, onDismiss }: WhatsNewModalProp
 
         <button
           onClick={onDismiss}
-          className="w-full bg-[#1e3a5f] text-white text-sm font-semibold rounded-xl py-3.5 hover:bg-[#16304f] active:bg-[#0f2540] transition-colors"
+          className="w-full bg-brand-fill text-white text-sm font-semibold rounded-xl py-3.5 hover:bg-brand-fill-2 active:bg-brand-fill-3 transition-colors"
         >
           Got it
         </button>
