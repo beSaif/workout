@@ -6,7 +6,7 @@
 //
 // Needs the dev server on BASE_URL (default http://localhost:3100) started with
 // the same AUTH_SECRET as below. See SKILL.md.
-import { readFileSync, mkdirSync } from "fs"
+import { readFileSync, mkdirSync, existsSync } from "fs"
 import { execSync } from "child_process"
 import { createRequire } from "module"
 import { encode } from "next-auth/jwt"
@@ -32,7 +32,12 @@ const token = await encode({
   salt: "authjs.session-token",
 })
 
-const browser = await chromium.launch({ executablePath: "/opt/pw-browsers/chromium-1194/chrome-linux/chrome" })
+// The sandbox keeps a symlink to whichever Chromium build it ships, so the path
+// carries no version to go stale. Anywhere else, Playwright finds its own browser.
+const SANDBOX_CHROMIUM = "/opt/pw-browsers/chromium"
+const executablePath =
+  process.env.CHROMIUM_PATH ?? (existsSync(SANDBOX_CHROMIUM) ? SANDBOX_CHROMIUM : undefined)
+const browser = await chromium.launch(executablePath ? { executablePath } : {})
 
 /** "role:button:Train under Omar" → getByRole; anything else is a Playwright selector. */
 function locate(page, target) {
