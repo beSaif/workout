@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server"
 import { PublicProfile, Session, TrainingDay, FriendSessionSummary } from "@/lib/types"
 import { readProfile, readValidSessionsDoc, store } from "@/lib/server/db"
-import { withUser } from "@/lib/server/withUser"
+import { withUser, type UserRouteContext } from "@/lib/server/withUser"
 import {
   friendsKey,
   friendRequestsOutKey,
@@ -29,7 +29,16 @@ import { countAthletes, getCoach, loadPeople, loadRoutineOf } from "@/lib/coach"
  * A stranger gets the aggregated card (streaks and records, never raw sessions)
  * and only the profile fields the card draws.
  */
-export const GET = withUser(async ({ email: myEmail, request }) => {
+export const GET = withUser(async (ctx) => {
+  try {
+    return await profileView(ctx)
+  } catch {
+    // The client only checks `ok`; this keeps a KV outage from reading as a bare 500.
+    return NextResponse.json({ error: "KV read failed" }, { status: 503 })
+  }
+})
+
+async function profileView({ email: myEmail, request }: UserRouteContext<Record<string, never>>): Promise<Response> {
   const { searchParams } = new URL(request.url)
   // No email means "my own card": /me reads the card it would show a gymbro, of
   // the viewer. Everything below is already computed from one user's own data.
@@ -129,4 +138,4 @@ export const GET = withUser(async ({ email: myEmail, request }) => {
   }
 
   return NextResponse.json({ profile, lastSession, lastSessionSummary, card, social, routine })
-})
+}

@@ -146,6 +146,59 @@ describe("readPlanText", () => {
     expect(extractPlanJson("   ")).toEqual({ ok: false, error: "Nothing was pasted." })
     expect(extractPlanJson("Here is your plan!").ok).toBe(false)
   })
+
+  it("skips a ``` and a { mentioned in prose before the real fenced block", () => {
+    fc.assert(
+      fc.property(planArb, fc.boolean(), (plan, pretty) => {
+        const text = [
+          'Sent as a ```json block, shaped like {"groups": [...]}:',
+          "",
+          "```json",
+          JSON.stringify(plan, null, pretty ? 2 : undefined),
+          "```",
+        ].join("\n")
+        const result = readPlanText(text)
+        expect(result.ok).toBe(true)
+        if (result.ok) expect(result.plan).toEqual(normalised(plan))
+      }),
+      { numRuns: 60 }
+    )
+  })
+
+  it("takes the last plan in the text, past JSON fragments that aren't plans", () => {
+    fc.assert(
+      fc.property(planArb, planArb, (older, newer) => {
+        const text = `Before: ${JSON.stringify(older)}\n\nAfter:\n${JSON.stringify(newer, null, 2)}\n\nEach exercise looks like {"name": "Dips", "sets": 3}.`
+        const result = readPlanText(text)
+        expect(result.ok).toBe(true)
+        if (result.ok) expect(result.plan).toEqual(normalised(newer))
+      }),
+      { numRuns: 60 }
+    )
+  })
+
+  it("when no candidate is a plan, says why: cut off, not a plan, or no JSON at all", () => {
+    const cutOff = (json: string) => "Here you go:\n\n```json\n" + json.slice(0, Math.floor(json.length / 2))
+    fc.assert(
+      fc.property(planArb, (plan) => {
+        expect(readPlanText(cutOff(JSON.stringify(plan, null, 2)))).toEqual({
+          ok: false,
+          errors: ["That JSON doesn't parse. It may have been cut off — copy the whole reply and try again."],
+        })
+      }),
+      { numRuns: 60 }
+    )
+    // A parsable object that isn't a plan is handed on so the reply hears what's missing,
+    // even with a smaller non-plan fragment after it.
+    expect(readPlanText('```json\n{"groups": []}\n```\nFor example {"sets": 3}.')).toEqual({
+      ok: false,
+      errors: ['"groups" must be a non-empty list of muscle groups.'],
+    })
+    expect(readPlanText("No braces here, just a ```code``` mention.")).toEqual({
+      ok: false,
+      errors: ["There's no JSON in that. Paste the reply that starts with { and ends with }."],
+    })
+  })
 })
 
 describe("parsePlan limits", () => {
@@ -185,6 +238,78 @@ describe("the copy-and-paste prompt", () => {
     fc.assert(
       fc.property(planArb, fc.option(fc.constant("Bench Press"), { nil: undefined }), (plan, mainLift) => {
         const result = readPlanText(embedded(buildCopyPrompt(plan, { mainLift })))
+        expect(result.ok).toBe(true)
+        if (result.ok) expect(result.plan).toEqual(normalised(plan))
+      }),
+      { numRuns: 60 }
+    )
+  })
+
+  it("reads the reply when the whole conversation is pasted back, prompt and all", () => {
+    const replies: Record<string, (json: string) => string> = {
+      fenced: (j) => "Here's your new routine:\n\n```json\n" + j + "\n```\n\nWant any changes?",
+      bare: (j) => j,
+      "fenced, curly quotes": (j) => "```json\n" + j.replace(/"/g, "“") + "\n```",
+    }
+    fc.assert(
+      fc.property(
+        planArb,
+        planArb,
+        fc.option(fc.constant("Bench Press"), { nil: undefined }),
+        fc.constantFrom(...Object.keys(replies)),
+        fc.boolean(),
+        (current, reply, mainLift, style, pretty) => {
+          const conversation = [
+            buildCopyPrompt(current, { mainLift }),
+            "",
+            "Sure! A few questions first: how many days a week do you train?",
+            "",
+            "4 days, an hour, full gym, muscle, 2 years.",
+            "",
+            replies[style](JSON.stringify(reply, null, pretty ? 2 : undefined)),
+          ].join("\n")
+          const result = readPlanText(conversation)
+          expect(result.ok).toBe(true)
+          if (result.ok) expect(result.plan).toEqual(normalised(reply))
+        }
+      ),
+      { numRuns: 60 }
+    )
+  })
+
+  it("says a reply cut off after the prompt was cut off, instead of importing the prompt's routine", () => {
+    fc.assert(
+      fc.property(planArb, planArb, fc.boolean(), fc.double({ min: 0, max: 0.95, noNaN: true }), (current, reply, fenced, at) => {
+        const json = JSON.stringify(reply, null, 2)
+        const cut = json.slice(0, Math.max(1, Math.floor(json.length * at)))
+        const conversation = [buildCopyPrompt(current, {}), "", "Here's your routine:", "", ...(fenced ? ["```json"] : []), cut].join("\n")
+        expect(readPlanText(conversation)).toEqual({
+          ok: false,
+          errors: ["That JSON doesn't parse. It may have been cut off — copy the whole reply and try again."],
+        })
+      }),
+      { numRuns: 100 }
+    )
+  })
+
+  it("reports what's wrong with a reply after the prompt, instead of importing the prompt's routine", () => {
+    fc.assert(
+      fc.property(planArb, planArb, fc.boolean(), (current, reply, fenced) => {
+        const bad = { ...reply, days: [...reply.days, { name: "Rest And Recovery", groups: ["Forearms"] }] }
+        const json = JSON.stringify(bad, null, 2)
+        const conversation = [buildCopyPrompt(current, {}), "", fenced ? "```json\n" + json + "\n```" : json].join("\n")
+        const expected = parsePlan(bad)
+        expect(expected.ok).toBe(false)
+        expect(readPlanText(conversation)).toEqual(expected)
+      }),
+      { numRuns: 60 }
+    )
+  })
+
+  it("reads the current routine out of the copy prompt pasted back on its own", () => {
+    fc.assert(
+      fc.property(planArb, fc.option(fc.constant("Bench Press"), { nil: undefined }), (plan, mainLift) => {
+        const result = readPlanText(buildCopyPrompt(plan, { mainLift }))
         expect(result.ok).toBe(true)
         if (result.ok) expect(result.plan).toEqual(normalised(plan))
       }),

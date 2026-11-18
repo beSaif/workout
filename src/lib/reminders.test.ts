@@ -189,17 +189,81 @@ describe("one push a day", () => {
     )
   })
 
-  it("a second run on the same day after a weigh-in reminder sends nothing, and never repeats a nudge", () => {
+  it("a second run on the same day sends nothing, whichever reminder went out first", () => {
     fc.assert(
       fc.property(fc.integer({ min: 0, max: 20 }), offsetArb, (gap, offset) => {
         const sessions = [sessionAt(1, new Date(T0 - gap * DAY).toISOString())]
         const log = runDays(sessions, [], zoneOf(offset), 21, true)
-        for (const { kinds } of log) {
-          if (kinds[0] === "weigh-in") expect(kinds).toEqual(["weigh-in"])
-          expect(kinds.filter((k) => k === "inactivity").length).toBeLessThanOrEqual(1)
-        }
+        for (const { kinds } of log) expect(kinds.length).toBeLessThanOrEqual(1)
+        // The rerun doesn't eat anything either: the weigh-in still goes out, on a later day.
+        expect(log.some((l) => l.kinds[0] === "weigh-in")).toBe(true)
       }),
       { numRuns: 60 }
+    )
+  })
+
+  it("a rerun five minutes after the time-off nudge does not send the weigh-in", () => {
+    const sessions = [sessionAt(1, "2026-11-10T18:00:00Z")]
+    const first = decideReminder({ profile: liftProfile, weights: [], sessions, state: {}, now: new Date("2026-11-18T06:00:00Z") })
+    expect(first?.kind).toBe("inactivity")
+    const state = { ...first!.stateUpdate }
+    expect(decideReminder({ profile: liftProfile, weights: [], sessions, state, now: new Date("2026-11-18T06:05:00Z") })).toBeNull()
+    // The next morning the weigh-in gets its turn.
+    expect(decideReminder({ profile: liftProfile, weights: [], sessions, state, now: new Date("2026-11-19T06:00:00Z") })?.kind).toBe("weigh-in")
+  })
+
+  it("any sequence of runs within one local day sends at most one push, whatever the data and state", () => {
+    const stateKeyArb = (offset: number) =>
+      fc.option(fc.integer({ min: -30, max: 30 }).map((d) => localKey(T0 + d * DAY, offset)), { nil: undefined })
+    const weightsArb = (offset: number) =>
+      fc.array(timeArb.map((t): WeightEntry => ({ date: localKey(t, offset), kg: 80, loggedAt: "" })), { maxLength: 3 })
+    // What each run sees can differ: the user may log, delete or weigh in between runs.
+    const runArb = (offset: number) =>
+      fc.record({
+        at: fc.integer({ min: 0, max: DAY - 1 }),
+        sessions: sessionsArb,
+        weights: weightsArb(offset),
+        weighInDaily: fc.constantFrom(true, false, undefined),
+      })
+
+    fc.assert(
+      fc.property(
+        offsetArb.chain((offset) =>
+          fc.record({
+            offset: fc.constant(offset),
+            day: fc.integer({ min: -30, max: 30 }),
+            lastNudgePush: stateKeyArb(offset),
+            lastWeighInPush: stateKeyArb(offset),
+            runs: fc.array(runArb(offset), { minLength: 1, maxLength: 6 }),
+          })
+        ),
+        ({ offset, day, lastNudgePush, lastWeighInPush, runs }) => {
+          const tz = zoneOf(offset)
+          // Local midnight of the chosen day, in UTC: every run below shares its date key.
+          const today = localKey(T0 + day * DAY, offset)
+          const midnight = Date.parse(today) - offset * HOUR
+          let state: ReminderState = { tz, lastNudgePush, lastWeighInPush }
+          let sent = 0
+          for (const run of [...runs].sort((a, b) => a.at - b.at)) {
+            const now = new Date(midnight + run.at)
+            expect(dateKeyInTz(now, tz)).toBe(today)
+            const decision = decideReminder({
+              profile: { ...liftProfile, weighInDaily: run.weighInDaily },
+              weights: run.weights,
+              sessions: toSessions(run.sessions),
+              state,
+              now,
+            })
+            if (!decision) continue
+            sent++
+            state = { ...state, ...decision.stateUpdate }
+          }
+          // A push already recorded for today counts against the day too.
+          const earlier = lastNudgePush === today || lastWeighInPush === today ? 1 : 0
+          expect(sent + earlier).toBeLessThanOrEqual(1)
+        }
+      ),
+      RUNS
     )
   })
 })

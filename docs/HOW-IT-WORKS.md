@@ -6,17 +6,22 @@ Notes on the pieces that aren't obvious from the screens. Configuration for all 
 ## Daily reminders
 
 Two push notifications are sent by a single Vercel cron job declared in `vercel.json`, which
-calls `/api/cron/reminders` once a day at 06:00 UTC.
+calls `/api/cron/reminders` once a day at 06:00 UTC. The job runs daily; each reminder decides
+for itself whether today is its day.
 
-- **Weigh-in reminder**: sent to anyone with daily check-ins switched on who has not logged a
-  bodyweight for the current day. It names the streak once it reaches three days, and says so
-  when a streak broke yesterday.
+- **Weigh-in reminder** (weekly): sent only to users who have switched check-ins on
+  (`profile.weighInDaily`, a name kept from when the reminder was daily), and only once their
+  newest bodyweight reading is at least seven days old (or there is none). Once sent, it
+  waits at least a week before going out again, however long the reading stays missing. It
+  carries no streak count.
 - **Time-off nudge**: sent once the last confirmed session is two days behind, then at most
   weekly until training resumes. Logging a session moves that date forward, which is what
   cancels the pending nudge.
 
-At most one push goes out per user per day; the time-off nudge takes priority and leaves the
-weigh-in reminder for the following day.
+At most one push goes out per user per day. The time-off nudge takes priority and leaves the
+weigh-in reminder for the following day. The guard holds across runs too: the job records the
+day a reminder was sent before sending it, and if either reminder already went out today, a
+second run of the job (a retry or a manual trigger) sends nothing.
 
 The rules live in `src/lib/reminders.ts` and read only stored data, so they work with the app
 closed. Timers held inside the service worker cannot: the browser evicts an idle worker within
@@ -25,9 +30,9 @@ minutes, so `src/lib/swNotify.ts` is only used for the two-hour unfinished-sessi
 To see what today would send you without waiting for the cron, open
 `/api/cron/reminders?preview=1` while signed in. Preview never sends and never writes.
 
-The job asks "did you log today" in each user's own calendar day. The browser reports its IANA
-timezone when it registers a push subscription; users who registered before that existed are
-treated as UTC until their next visit.
+Days are counted in each user's own calendar day. The browser reports its IANA timezone when
+it registers a push subscription; users who registered before that existed are treated as UTC
+until their next visit.
 
 ## Routine planner
 

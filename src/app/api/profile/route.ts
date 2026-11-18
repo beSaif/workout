@@ -80,7 +80,12 @@ async function tryLegacyMigration(email: string): Promise<UserProfile | null> {
 
 export const GET = withUser(async ({ email }) => {
   try {
-    const existing = await readProfile(email)
+    let existing: UserProfile | null
+  try {
+    existing = await readProfile(email)
+  } catch {
+    return NextResponse.json({ error: "KV read failed" }, { status: 503 })
+  }
     if (existing) return NextResponse.json(existing)
 
     const migrated = await tryLegacyMigration(email)
@@ -173,7 +178,12 @@ export const POST = withUser(async ({ email, request }) => {
     if (!targetValid) return NextResponse.json({ error: "target invalid" }, { status: 400 })
   }
 
-  const existing = await readProfile(email)
+  let existing: UserProfile | null
+  try {
+    existing = await readProfile(email)
+  } catch {
+    return NextResponse.json({ error: "KV read failed" }, { status: 503 })
+  }
 
   // This handler rebuilds the profile from scratch, so any field it doesn't name is
   // dropped. The three callers of saveProfile all send the whole profile as they knew
