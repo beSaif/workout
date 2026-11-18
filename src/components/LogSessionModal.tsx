@@ -8,6 +8,7 @@ import {
   ExtraWorkout,
 } from "@/lib/types"
 import { calcE1RM } from "@/lib/e1rm"
+import { type ExerciseGroup, groupId, reorderGroups, withMainFirst } from "@/lib/exerciseOrder"
 import { saveDraft, clearDraft, saveMiniPlayer } from "@/lib/storage"
 import type { SessionDraft } from "@/lib/types"
 import { MuscleGroupConfig, getMuscleLabel, getExercisesForMuscle, getSessionExercisesForMuscle, sortedMuscleGroups, sortedCardioGroups, isCardioMuscle, getDefaultSets, DEFAULT_CARDIO_MINUTES } from "@/lib/exerciseConfig"
@@ -40,7 +41,6 @@ import {
   SortableContext,
   verticalListSortingStrategy,
   useSortable,
-  arrayMove,
 } from "@dnd-kit/sortable"
 import { CSS } from "@dnd-kit/utilities"
 import { DrumRollPicker } from "@/components/DrumRollPicker"
@@ -165,32 +165,6 @@ function cardioSetValues(set: EditableExtraSet) {
 type CarouselItem =
   | { type: "main"; set: EditableSet; globalIndex: number }
   | { type: "extra"; muscle: MuscleGroup; exercise: string; setIndex: number }
-
-type ExerciseGroup =
-  | { kind: "main" }
-  | { kind: "extra"; muscle: MuscleGroup; exercise: string }
-
-function groupId(g: ExerciseGroup): string {
-  return g.kind === "main" ? "main" : `extra-${g.muscle}-${g.exercise}`
-}
-
-/**
- * The main lift opens every session it is in, so it is pinned first. Only Main Lift
- * sessions carry one (see buildDefaultOrder); this also fixes a draft saved before the
- * pin, where it may sit lower.
- */
-function withMainFirst(order: ExerciseGroup[]): ExerciseGroup[] {
-  const i = order.findIndex((g) => g.kind === "main")
-  return i > 0 ? [order[i], ...order.slice(0, i), ...order.slice(i + 1)] : order
-}
-
-/** A drag of one row onto another. The main lift neither moves nor has anything put above it. */
-function reorderGroups(order: ExerciseGroup[], activeId: string, overId: string): ExerciseGroup[] {
-  const from = order.findIndex((g) => groupId(g) === activeId)
-  const to = order.findIndex((g) => groupId(g) === overId)
-  if (from < 0 || to < 0 || order[from].kind === "main" || order[to].kind === "main") return order
-  return arrayMove(order, from, to)
-}
 
 function buildDefaultOrder(
   session: Session,
