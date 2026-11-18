@@ -45,11 +45,11 @@ describe("buildCycleReport, from a hand-logged cycle", () => {
     expect(report).toMatchObject({ number: 1, previousPeak: 100, nextPeak: 102.5, outcome: "raised", change: "volume-up" })
   })
 
-  it("counts sessions, jumped slots and sets by phase, warm-ups excluded", () => {
+  it("counts sessions, jumped slots and lifted sets by phase, warm-ups and misses excluded", () => {
     expect(report.phases).toEqual([
-      { phase: "accumulation", sessions: 2, skipped: 0, sets: 5 },
+      { phase: "accumulation", sessions: 2, skipped: 0, sets: 4 },
       { phase: "transmutation", sessions: 1, skipped: 1, sets: 2 },
-      { phase: "realization", sessions: 3, skipped: 0, sets: 7 },
+      { phase: "realization", sessions: 3, skipped: 0, sets: 6 },
       { phase: "deload", sessions: 0, skipped: 0, sets: 0 },
     ])
     expect(report.missedSets).toBe(2)
@@ -120,7 +120,7 @@ describe("buildCycleReport over simulated programs", () => {
     )
   })
 
-  it("sessions, jumped slots and sets by phase add up to what was logged; missed sets are counted, never as lifted", () => {
+  it("sessions, jumped slots and lifted sets by phase add up to what was logged; missed sets are counted apart, never as lifted", () => {
     fc.assert(
       fc.property(programSetupArb(60), (setup) => {
         const run = simulateProgram(setup)
@@ -134,8 +134,7 @@ describe("buildCycleReport over simulated programs", () => {
             const sets = logged.flatMap((s) => s.sets)
             expect(line.sessions).toBe(logged.length)
             expect(line.skipped).toBe(own.reduce((n, b) => n + (b.skippedSlots?.length ?? 0), 0))
-            expect(line.sets).toBeGreaterThanOrEqual(sets.filter(isLifted).length)
-            expect(line.sets).toBeLessThanOrEqual(sets.filter(isLifted).length + sets.filter(isMissed).length)
+            expect(line.sets).toBe(sets.filter(isLifted).length)
             if (line.phase !== "deload") {
               missed += sets.filter(isMissed).length
               lifted = lifted.concat(sets.filter(isLifted).map((x) => calcE1RM(x.kg, x.reps)!))
@@ -151,7 +150,7 @@ describe("buildCycleReport over simulated programs", () => {
     )
   })
 
-  it("adding missed sets changes only the missed count: never the e1RMs, the effort or a made test single", () => {
+  it("adding missed sets changes only the missed count: never the set counts, the e1RMs, the effort or a made test single", () => {
     fc.assert(
       fc.property(programSetupArb(60), fc.integer({ min: 1, max: 3 }), (setup, extra) => {
         const run = simulateProgram(setup)
@@ -164,6 +163,7 @@ describe("buildCycleReport over simulated programs", () => {
           const after = buildCycleReport(run.blocks, withMisses, c.deload.id)!
           const cycleSessions = run.sessions.filter((s) => c.blocks.some((b) => b.id === s.blockId && b.phase !== "deload"))
           expect(after.missedSets).toBe(before.missedSets + extra * cycleSessions.length)
+          expect(after.phases).toEqual(before.phases)
           expect(after.e1rm).toEqual(before.e1rm)
           expect(after.effort).toEqual(before.effort)
           if (before.test && before.test.reps > 0) expect(after.test).toEqual(before.test)
@@ -188,7 +188,7 @@ describe("buildCycleReport over simulated programs", () => {
     )
   })
 
-  it("suggests a longer cycle after a stalled one, and never a longer one after a raised one", () => {
+  it("suggests a longer cycle after a stalled one, never a longer one after a raised one, and no change after an untested one", () => {
     fc.assert(
       fc.property(programSetupArb(60), (setup) => {
         const run = simulateProgram(setup)
@@ -198,6 +198,7 @@ describe("buildCycleReport over simulated programs", () => {
           const step = order.indexOf(r.suggestedLength) - order.indexOf(r.cycleLength)
           if (r.outcome === "stalled") expect(step).toBe(r.cycleLength === "long" ? 0 : 1)
           if (r.outcome === "raised") expect(step).toBeLessThanOrEqual(0)
+          if (r.outcome === "untested") expect(step).toBe(0)
           expect(r.lengthReason === null).toBe(step === 0)
         }
       }),

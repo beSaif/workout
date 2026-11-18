@@ -234,8 +234,10 @@ const LIGHT_RPE_DROP = 2
 
 /** Load nudges never take the cycle further than this from the anchor's own percentages. */
 const MAX_OFFSET_PCT = 0.075
-/** A new anchor moves at most this far from the old one in a single cycle. */
+/** A new anchor moves at most this far from the old one in a single cycle (see reviewCycle for under 50kg). */
 const MAX_ANCHOR_CHANGE = 0.05
+/** The smallest load change the plates allow. */
+const PLATE = 2.5
 /** Effort assumed for a realization set logged without an RPE: on target, so skipping the RPE is never the faster way up. */
 const ASSUMED_PEAK_RPE = 9.5
 
@@ -265,6 +267,16 @@ export function nextBlockPhase(current: BlockPhase): BlockPhase {
  */
 export function loadStep(anchorWeight: number): number {
   return Math.max(2.5, roundToPlate(anchorWeight * 0.025))
+}
+
+/**
+ * The farthest the in-cycle offset goes either way: the most whole load steps that fit in
+ * 7.5% of the anchor, and never less than one step, so the offset stays on the step grid.
+ * At 217.5kg (5kg steps) that's 15kg, not 17.5; at 20kg it's 2.5kg, all the plates allow.
+ */
+function maxLoadOffset(anchorWeight: number): number {
+  const step = loadStep(anchorWeight)
+  return Math.max(1, Math.floor((anchorWeight * MAX_OFFSET_PCT) / step + 1e-9)) * step
 }
 
 /** Sessions for a new block of a phase at a given benching frequency and cycle length. */
@@ -540,11 +552,13 @@ function adjustOffset(offset: number, rx: Prescription, session: Session, anchor
     if (rated.length > 0) {
       const shown = Math.max(...rated.map((s) => effortE1RM(s.kg, s.reps, s.rpe!)))
       const expected = effortE1RM(rx.weight, rx.reps, rx.rpe)
-      const peak = roundToPlate(((anchorWeight + offset) * shown) / expected)
+      // To the nearest load step, so the offset stays on the same grid the nudges move it on.
+      const scaled = ((anchorWeight + offset) * shown) / expected
+      const peak = anchorWeight + Math.round((scaled - anchorWeight) / step) * step
       next = Math.min(next, peak - anchorWeight)
     }
   }
-  const limit = roundToPlate(anchorWeight * MAX_OFFSET_PCT)
+  const limit = maxLoadOffset(anchorWeight)
   return Math.min(limit, Math.max(-limit, next))
 }
 
@@ -622,8 +636,12 @@ export interface CycleReview {
  * plan raises the peak a step, a fast single raises it by what it showed and a grinder
  * holds it. A single that was only missed (logged at 0 reps) sets the peak a step under
  * the missed weight, never above the old peak: missing 102.5 on a 100 peak holds 100,
- * missing 100 drops it to 97.5. Sets logged without an RPE count as on target. The
- * change is held to 5% either way per cycle, rounded down to the plate.
+ * missing 100 drops it to 97.5. Sets logged without an RPE count as on target.
+ *
+ * The change is held to 5% either way per cycle and rounded to the plate toward the old
+ * peak (a rise down, a drop up), so it never passes 5%. Under a 50kg peak 5% is less than
+ * a plate, so there a made single still raises the peak one plate and a lower showing
+ * drops it exactly one.
  */
 export function reviewCycle(completedRealizationBlock: TrainingBlock, sessions: Session[]): CycleReview {
   const block = completedRealizationBlock
@@ -652,9 +670,17 @@ export function reviewCycle(completedRealizationBlock: TrainingBlock, sessions: 
     if (missedKg.length > 0) best = Math.min(anchor, Math.max(...missedKg) - loadStep(anchor))
   }
 
-  const capped = Math.min(anchor * (1 + MAX_ANCHOR_CHANGE), Math.max(anchor * (1 - MAX_ANCHOR_CHANGE), best))
-  // Down to the plate, never up: a peak is earned, not rounded into.
-  const next = Math.floor(capped / 2.5 + 1e-9) * 2.5
+  const shown = best - anchor
+  const cap = anchor * MAX_ANCHOR_CHANGE
+  let change = 0
+  if (shown > 1e-9) {
+    // Down to the plate, never up: a peak is earned, not rounded into.
+    change = Math.floor(Math.min(shown, cap) / PLATE + 1e-9) * PLATE
+    if (test && !testSkipped && made.length > 0) change = Math.max(change, PLATE)
+  } else if (shown < -1e-9) {
+    change = cap < PLATE ? -PLATE : Math.ceil(Math.max(shown, -cap) / PLATE - 1e-9) * PLATE
+  }
+  const next = anchor + change
   const outcome: CycleOutcome = !test || testSkipped ? "untested" : next > anchor ? "raised" : "stalled"
   return { anchor: next, outcome }
 }
@@ -694,7 +720,8 @@ export function createFirstBlock(
  * Finishing realization closes the cycle. A new peak earns the next cycle a set more
  * accumulation volume (up to MAX_EXTRA_SETS); a cycle that didn't raise it takes the
  * extra volume back off and buys a full deload week, and a second one in a row switches
- * accumulation to the other rep range. A cycle whose test was jumped over changes nothing.
+ * accumulation to the other rep range. A cycle whose test was jumped over changes none of
+ * that, though its doubles and openers can still raise the peak (see reviewCycle).
  */
 export function createNextBlock(
   completedBlock: TrainingBlock,

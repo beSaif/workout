@@ -64,20 +64,26 @@ first cycle peaks at the 1RM given in onboarding.
   days (85% of the step before) come in so heavy days stay near three a week, never two light
   days together.
 - **Within a cycle.** Each logged session can move the loads still to come by one step (2.5%
-  of the peak, at least 2.5kg), up to 7.5% either way. They come down on missed reps or a top
+  of the peak, rounded to the nearest 2.5kg, at least 2.5kg: 150 → 5kg, 250 → 7.5kg), up to
+  the most whole steps that fit in 7.5% of the peak, at least one (217.5 → 15kg, 60 → 2.5kg),
+  so the offset stays a whole number of steps. They come down on missed reps or a top
   set a full RPE over target (from RPE 8). They go up on a top set 1.5 RPE under target (sets of
-  six and up) or 1 under (five and fewer), or on every set beating its reps by two. A Peak-block
-  session that came in harder than planned (effort-adjusted e1RM against the plan's) scales
-  the single down by as much.
+  six and up) or 1 under (five and fewer), or on every set beating its reps by two. Light days
+  move them only on missed reps, never on RPE or extra reps. A Peak-block session that came in
+  harder than planned (effort-adjusted e1RM against the plan's) scales the single down by as
+  much, to the nearest step.
   The offset is replayed from the logs, so editing a session corrects it.
 - **Between cycles.** The next peak is the best effort-adjusted e1RM from the realization
   block. If the single was made at the peak or above at RPE 9.5 or easier (an unlogged RPE
   counts as 9.5), the next peak is at least one step over it. Changes are capped at 5% and
-  rounded down to 2.5kg. A cycle that raises the peak adds a set to heavy accumulation days
-  (up to two, and only while heavy Volume days stay under 20 working sets a week at the
-  cycle's frequency). One that doesn't drops those sets and gets a full deload week. Two in a row
-  switch accumulation between eights-to-sixes and sixes-to-fours. A jumped-over test changes
-  nothing. The deload's header says what happened.
+  rounded to 2.5kg toward the old peak (a rise down, a drop up), so no change passes 5%. Under a
+  50kg peak 5% is less than a plate: there a made single still raises the peak one plate
+  (20 → 22.5) and a lower showing drops it exactly one. A cycle that raises the peak adds a set
+  to heavy accumulation days (up to two, and only while heavy Volume days stay under 20 working
+  sets a week at the cycle's frequency). One that doesn't drops those sets and gets a full
+  deload week. Two in a row switch accumulation between eights-to-sixes and sixes-to-fours. A jumped-over test leaves
+  volume, stalls and rep range as they were; its doubles and openers can still raise the peak
+  (they can show it was too low) but never lower it. The deload's header says what happened.
 - **Missed sets.** The reps picker starts at "miss" (0 reps). A missed set never counts as
   lifted in stats or records. Mid-cycle it takes a step off like any missed rep. A peak single
   that was only missed sets the next peak a step under the missed weight, never above the old
@@ -87,14 +93,14 @@ first cycle peaks at the 1RM given in onboarding.
   cycle's first session, starts the next cycle's Volume block at
   the new peak, with whatever volume the review earned, and opens the cycle report
   (`src/lib/cycleReport.ts`, `CycleReportSheet`): the peak change and test single, best e1RM
-  against before the cycle, sessions and sets by phase, effort against target, how far
+  against before the cycle, sessions and lifted sets by phase, effort against target, how far
   the loads moved, and missed sets, all read from the logs. It then asks what to peak at (the
   suggestion, a step either side, or any value), how many days a week to bench, and how long
-  the cycle should be. It suggests a length: one step longer after a cycle that didn't raise the
-  peak, one step shorter after two cycles in a row that raised it with almost nothing harder
-  than target. Starting the cycle sets the Volume block's peak, length and frequency
-  (`sessionsPerWeek`, `cycleLength`), which the rest of the cycle carries. Deloads saved before
-  reviews existed get one read off the cycle (`cycleReviewFor`): the realization block's peak
+  the cycle should be. It suggests a length: one step longer after a stalled cycle (a test that
+  didn't raise the peak), one step shorter after two cycles in a row that raised it with almost
+  nothing harder than target, and no change after an untested one. Starting the cycle sets the
+  Volume block's peak, length and frequency (`sessionsPerWeek`, `cycleLength`), which the
+  rest of the cycle carries. Deloads saved before reviews existed get one read off the cycle (`cycleReviewFor`): the realization block's peak
   against the deload's, untested when its final slot was jumped over. Until the first Volume session is logged, the peak
   pill's Edit reopens the report. Deload weeks repeat one session; they have no light days.
 - **Versions.** Blocks saved before this carry no `schemeVersion` and run the original, shorter

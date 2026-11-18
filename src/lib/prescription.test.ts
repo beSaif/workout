@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest"
 import fc from "fast-check"
 import type { BlockPhase, Session, TrainingBlock } from "./types"
-import { roundToPlate } from "./e1rm"
+import { calcE1RMFromRepsInTank, roundToPlate } from "./e1rm"
 import {
   MAX_EXTRA_SETS,
   blockLengthFor,
@@ -32,8 +32,13 @@ import {
 const RUNS = { numRuns: 150 }
 const SIM_RUNS = { numRuns: 120 }
 
-/** The farthest the doc lets the in-cycle offset go: 7.5% of the peak, to the nearest plate. */
-const offsetLimit = (anchor: number) => 0.075 * anchor + 1.25
+/** The farthest the doc lets the in-cycle offset go: whole steps within 7.5% of the peak, at least one. */
+const offsetLimit = (anchor: number) => {
+  const step = loadStep(anchor)
+  return Math.max(step, Math.floor((0.075 * anchor) / step + 1e-9) * step)
+}
+/** Whether `kg` is a whole number of `step`s. */
+const onGrid = (kg: number, step: number) => Math.abs(kg / step - Math.round(kg / step)) < 1e-9
 const WEEKS: Record<string, Partial<Record<BlockPhase, number>>> = {
   short: { accumulation: 2, transmutation: 1, realization: 1 },
   standard: { accumulation: 3, transmutation: 2, realization: 1 },
@@ -64,7 +69,7 @@ const plannedBlockArb = fc
       ...program,
       length: blockLengthFor(phase, perWeek, { cycleLength: program.cycleLength }),
     })
-    const offset = Math.max(-roundToPlate(anchor * 0.075), Math.min(roundToPlate(anchor * 0.075), offsetSteps * loadStep(anchor)))
+    const offset = Math.max(-offsetLimit(anchor), Math.min(offsetLimit(anchor), offsetSteps * loadStep(anchor)))
     return { block: b, anchor, perWeek, offset }
   })
 
@@ -276,9 +281,12 @@ describe("cycle shape", () => {
 
 describe("load step", () => {
   it("is 2.5% of the peak to the nearest plate, never under 2.5 kg", () => {
+    expect(loadStep(20)).toBe(2.5)
     expect(loadStep(60)).toBe(2.5)
     expect(loadStep(100)).toBe(2.5)
+    expect(loadStep(150)).toBe(5)
     expect(loadStep(200)).toBe(5)
+    expect(loadStep(250)).toBe(7.5)
     fc.assert(
       fc.property(anchorArb, (anchor) => {
         const step = loadStep(anchor)
@@ -358,25 +366,68 @@ describe("the in-cycle offset", () => {
     expect(offsetAfter([doubles(9)], 100, "realization")).toBe(-2.5)
     // At RPE 10 the doubles show 4.3% under plan: the single drops 5, more than one step.
     expect(offsetAfter([doubles(10)], 100, "realization")).toBe(-5)
+    // At a 200 kg peak steps are 5 kg: the same 1.5% (3 kg) rounds to a whole step, not to 2.5.
+    const heavy = block({ id: 1, phase: "realization", anchorWeight: 200, length: 3 })
+    const hrx = prescribeForBlock(heavy, 0)
+    expect(offsetAfter([session(1, 0, Array.from({ length: hrx.sets }, () => set(hrx.weight, 2, 9)))], 200, "realization")).toBe(-5)
   })
 
   it("steps are 2.5% of the peak: 5 kg at a 200 kg peak", () => {
     expect(offsetAfter(onPlan(200, "accumulation", 1, 0, -1), 200)).toBe(-5)
   })
 
-  it("stays within 7.5% of the peak (to the plate) and on the plate, whatever is logged", () => {
+  it("stops at the most whole steps within 7.5% of the peak, never less than one step", () => {
+    // Volume sessions in a row with missed reps drive it as far down as it goes.
+    const floor = (anchor: number) => offsetAfter(onPlan(anchor, "accumulation", 5, null, -1), anchor)
+    expect(floor(20)).toBe(-2.5) // 7.5% is 1.5 kg: one step is all the plates allow
+    expect(floor(60)).toBe(-2.5) // 4.5 kg: one 2.5 kg step, not 5
+    expect(floor(100)).toBe(-7.5)
+    expect(floor(150)).toBe(-10) // 11.25 kg: two 5 kg steps, not 12.5
+    expect(floor(217.5)).toBe(-15) // 16.3 kg: three 5 kg steps, not 17.5
+    expect(floor(250)).toBe(-15) // 18.75 kg: two 7.5 kg steps, not 20
+    fc.assert(
+      fc.property(anchorArb, (anchor) => {
+        expect(floor(anchor)).toBe(-offsetLimit(anchor))
+      }),
+      { numRuns: 40 }
+    )
+  })
+
+  it("stays on the step grid and within 7.5% of the peak (one step where that's under a step), whatever is logged", () => {
     fc.assert(
       fc.property(programSetupArb(60), (setup) => {
         const run = simulateProgram(setup)
         for (const l of run.logged) {
           const anchor = run.blocks.find((b) => b.id === l.blockId)!.anchorWeight
-          expect(isPlate(l.offset)).toBe(true)
-          expect(Math.abs(l.offset)).toBeLessThanOrEqual(offsetLimit(anchor))
+          const step = loadStep(anchor)
+          expect(onGrid(l.offset, step)).toBe(true)
+          expect(Math.abs(l.offset)).toBeLessThanOrEqual(Math.max(step, anchor * 0.075 + 1e-9))
           expect(isPlate(l.rx.weight)).toBe(true)
         }
       }),
       SIM_RUNS
     )
+  })
+
+  it("light days move it only on missed reps, never on RPE or extra reps", () => {
+    // Six a week at standard length: accumulation has light days between the heavy ones.
+    const b = block({ id: 1, phase: "accumulation", anchorWeight: 100, length: blockLengthFor("accumulation", 6) })
+    const lightSlot = Array.from({ length: getBlockLength(b) }, (_, i) => i).find((i) => prescribeForBlock(b, i).light)!
+    expect(lightSlot).toBeGreaterThan(0)
+    const before = Array.from({ length: lightSlot }, (_, i) => {
+      const rx = prescribeForBlock(b, i)
+      return session(i + 1, i, Array.from({ length: rx.sets }, () => set(rx.weight, rx.reps, rx.rpe)))
+    })
+    const light = (reps: number, rpe: number | null) => {
+      const rx = prescribeForBlock(b, lightSlot)
+      const logged = [...before, session(lightSlot + 1, lightSlot, Array.from({ length: rx.sets }, () => set(rx.weight, rx.reps + reps, rpe)))]
+      const own = { ...b, sessionIds: logged.map((s) => s.id) }
+      return cycleLoadOffset([own], logged, own)
+    }
+    expect(light(0, 10)).toBe(0)
+    expect(light(0, 5)).toBe(0)
+    expect(light(3, null)).toBe(0)
+    expect(light(-1, null)).toBe(-2.5)
   })
 
   it("one Volume or Intensity session moves it by at most one step, and a session with a miss never raises it", () => {
@@ -465,6 +516,15 @@ function testedBlock(anchor: number, test: Session, extra: Partial<TrainingBlock
 }
 
 const floorPlate = (kg: number) => Math.floor(kg / 2.5 + 1e-9) * 2.5
+const ceilPlate = (kg: number) => Math.ceil(kg / 2.5 - 1e-9) * 2.5
+/** Effort-adjusted e1RM of a single, an unlogged RPE read as 9.5. */
+const singleE1RM = (kg: number, rpe: number | null) => calcE1RMFromRepsInTank(kg, 1 + Math.max(0, 10 - (rpe ?? 9.5)))
+
+/** Review of a realization block whose only logged session is the test, `sets` of it. */
+const reviewTest = (anchor: number, sets: Session["sets"]) => {
+  const test = session(1, 1, sets)
+  return reviewCycle(testedBlock(anchor, test), [test])
+}
 
 describe("the next cycle's peak", () => {
   it("doc examples: a missed single never raises the peak", () => {
@@ -483,7 +543,24 @@ describe("the next cycle's peak", () => {
     expect(at(100, 10)).toEqual({ anchor: 100, outcome: "stalled" })
   })
 
-  it("is on the plate, rounded down, and moves at most 5% (plus the round-down)", () => {
+  it("examples: the change is rounded toward the old peak, so it never passes 5%", () => {
+    // Missed at 95 on a 102.5 peak shows 92.5: capped at 97.375, rounded up to 97.5 (not down to 95).
+    expect(reviewTest(102.5, [set(95, 0)])).toEqual({ anchor: 97.5, outcome: "stalled" })
+    // 57.5 at RPE 9 on a 60 peak shows 59.1: less than a plate under, so the peak holds.
+    expect(reviewTest(60, [set(57.5, 1, 9)])).toEqual({ anchor: 60, outcome: "stalled" })
+    // A fast single shows 112.5 on a 100 peak: up 5%, no further.
+    expect(reviewTest(100, [set(100, 1, 6)])).toEqual({ anchor: 105, outcome: "raised" })
+  })
+
+  it("examples: under a 50 kg peak a made single still earns a plate, and a drop is exactly one plate", () => {
+    expect(reviewTest(20, [set(20, 1, 8)])).toEqual({ anchor: 22.5, outcome: "raised" })
+    expect(reviewTest(45, [set(45, 1, 9)])).toEqual({ anchor: 47.5, outcome: "raised" })
+    expect(reviewTest(45, [set(45, 1, 10)])).toEqual({ anchor: 45, outcome: "stalled" })
+    expect(reviewTest(40, [set(40, 0)])).toEqual({ anchor: 37.5, outcome: "stalled" })
+    expect(reviewTest(45, [set(35, 1, 9)])).toEqual({ anchor: 42.5, outcome: "stalled" })
+  })
+
+  it("is on the plate and moves at most 5% from a 50 kg peak up; under it, at most one plate", () => {
     fc.assert(
       fc.property(programSetupArb(60), (setup) => {
         const run = simulateProgram(setup)
@@ -491,8 +568,8 @@ describe("the next cycle's peak", () => {
           const { anchor, outcome } = reviewCycle(real, run.sessions)
           const old = real.anchorWeight
           expect(isPlate(anchor)).toBe(true)
-          expect(anchor).toBeLessThanOrEqual(old * 1.05 + 1e-9)
-          expect(anchor).toBeGreaterThanOrEqual(floorPlate(old * 0.95))
+          if (old >= 50) expect(Math.abs(anchor - old)).toBeLessThanOrEqual(old * 0.05 + 1e-9)
+          else expect([old - 2.5, old, old + 2.5]).toContain(anchor)
           expect(outcome === "raised").toBe(outcome !== "untested" && anchor > old)
           expect(deriveNextAnchor(real, run.sessions)).toBe(anchor)
         }
@@ -501,25 +578,29 @@ describe("the next cycle's peak", () => {
     )
   })
 
-  it("a single made at or over the peak at RPE 9.5 or easier sets the next peak at least a step over it (within the 5% cap)", () => {
+  it("a single made at or over the peak at RPE 9.5 or easier raises it, at any peak: a step over the single, held to 5% rounded down, never under a plate", () => {
     fc.assert(
       fc.property(anchorArb, fc.integer({ min: 0, max: 4 }), fc.option(rpeArb.filter((r) => r <= 9.5), { nil: null }), (anchor, over, rpe) => {
         const kg = anchor + over * 2.5
-        const test = session(1, 1, [set(kg, 1, rpe)])
-        const { anchor: next } = reviewCycle(testedBlock(anchor, test), [test])
-        expect(next).toBeGreaterThanOrEqual(floorPlate(Math.min(anchor * 1.05, kg + loadStep(anchor))))
+        const shown = Math.max(singleE1RM(kg, rpe), kg + loadStep(anchor))
+        const review = reviewTest(anchor, [set(kg, 1, rpe)])
+        expect(review.outcome).toBe("raised")
+        expect(review.anchor).toBe(Math.max(anchor + 2.5, floorPlate(Math.min(shown, anchor * 1.05))))
       }),
       RUNS
     )
   })
 
-  it("from a 50 kg peak up, a single made at the peak to plan is a raised cycle", () => {
+  it("a single made under the peak moves it toward what it showed, rounded toward the old peak (one plate down under 50 kg)", () => {
     fc.assert(
-      fc.property(anchorArb.filter((a) => a >= 50), fc.option(rpeArb.filter((r) => r <= 9.5), { nil: null }), (anchor, rpe) => {
-        const test = session(1, 1, [set(anchor, 1, rpe)])
-        const review = reviewCycle(testedBlock(anchor, test), [test])
-        expect(review.outcome).toBe("raised")
-        expect(review.anchor).toBeGreaterThan(anchor)
+      fc.property(anchorArb, fc.integer({ min: 1, max: 8 }), fc.option(rpeArb, { nil: null }), (anchor, under, rpe) => {
+        const kg = anchor - under * 2.5
+        const shown = singleE1RM(kg, rpe)
+        const review = reviewTest(anchor, [set(kg, 1, rpe)])
+        if (shown >= anchor) expect(review.anchor).toBe(floorPlate(Math.min(shown, anchor * 1.05)))
+        else if (anchor < 50) expect(review.anchor).toBe(anchor - 2.5)
+        else expect(review.anchor).toBe(ceilPlate(Math.max(shown, anchor * 0.95)))
+        expect(review.outcome).toBe(review.anchor > anchor ? "raised" : "stalled")
       }),
       RUNS
     )
@@ -532,10 +613,11 @@ describe("the next cycle's peak", () => {
         const top = Math.max(...misses.map((s) => s.kg))
         const test = session(1, 1, misses)
         const { anchor: next, outcome } = reviewCycle(testedBlock(anchor, test), [test])
+        const shown = top - loadStep(anchor)
         expect(outcome).toBe("stalled")
-        expect(next).toBeLessThanOrEqual(anchor)
-        expect(next).toBeLessThanOrEqual(Math.max(top - loadStep(anchor), floorPlate(anchor * 0.95)))
-        if (top >= anchor + loadStep(anchor)) expect(next).toBe(anchor)
+        if (shown >= anchor) expect(next).toBe(anchor)
+        else if (anchor < 50) expect(next).toBe(anchor - 2.5)
+        else expect(next).toBe(ceilPlate(Math.max(shown, anchor * 0.95)))
         if (top === anchor) expect(next).toBe(anchor - loadStep(anchor))
       }),
       RUNS
@@ -572,6 +654,16 @@ describe("the next cycle's peak", () => {
       }),
       SIM_RUNS
     )
+  })
+
+  it("example: with the test jumped over, doubles that showed more still raise the peak; volume is left alone", () => {
+    const real = block({ id: 3, phase: "realization", anchorWeight: 100, length: 3, sessionIds: [1], skippedSlots: [1, 2], status: "completed", extraSets: 1, stalls: 1 })
+    // 90 × 2 at RPE 6 shows 104.5: up to the plate, 102.5.
+    const easy = [session(1, 1, [set(90, 2, 6), set(90, 2, 6), set(90, 2, 6)])]
+    expect(reviewCycle(real, easy)).toEqual({ anchor: 102.5, outcome: "untested" })
+    expect(createNextBlock(real, easy, 4)).toMatchObject({ anchorWeight: 102.5, extraSets: 1, stalls: 1, review: { outcome: "untested", change: null } })
+    // Doubles that came in hard are no grounds for cutting it.
+    expect(reviewCycle(real, [session(1, 1, [set(90, 2, 10)])])).toEqual({ anchor: 100, outcome: "untested" })
   })
 
   it("a jumped-over test never lowers the peak and leaves volume, stalls and rep range alone", () => {
