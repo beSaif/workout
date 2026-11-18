@@ -277,6 +277,35 @@ describe("the copy-and-paste prompt", () => {
     )
   })
 
+  it("says a reply cut off after the prompt was cut off, instead of importing the prompt's routine", () => {
+    fc.assert(
+      fc.property(planArb, planArb, fc.boolean(), fc.double({ min: 0, max: 0.95, noNaN: true }), (current, reply, fenced, at) => {
+        const json = JSON.stringify(reply, null, 2)
+        const cut = json.slice(0, Math.max(1, Math.floor(json.length * at)))
+        const conversation = [buildCopyPrompt(current, {}), "", "Here's your routine:", "", ...(fenced ? ["```json"] : []), cut].join("\n")
+        expect(readPlanText(conversation)).toEqual({
+          ok: false,
+          errors: ["That JSON doesn't parse. It may have been cut off — copy the whole reply and try again."],
+        })
+      }),
+      { numRuns: 100 }
+    )
+  })
+
+  it("reports what's wrong with a reply after the prompt, instead of importing the prompt's routine", () => {
+    fc.assert(
+      fc.property(planArb, planArb, fc.boolean(), (current, reply, fenced) => {
+        const bad = { ...reply, days: [...reply.days, { name: "Rest And Recovery", groups: ["Forearms"] }] }
+        const json = JSON.stringify(bad, null, 2)
+        const conversation = [buildCopyPrompt(current, {}), "", fenced ? "```json\n" + json + "\n```" : json].join("\n")
+        const expected = parsePlan(bad)
+        expect(expected.ok).toBe(false)
+        expect(readPlanText(conversation)).toEqual(expected)
+      }),
+      { numRuns: 60 }
+    )
+  })
+
   it("reads the current routine out of the copy prompt pasted back on its own", () => {
     fc.assert(
       fc.property(planArb, fc.option(fc.constant("Bench Press"), { nil: undefined }), (plan, mainLift) => {

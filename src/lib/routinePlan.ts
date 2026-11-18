@@ -106,8 +106,13 @@ export function exportPlan(config: MuscleGroupConfig[], days: TrainingDay[]): Ro
  * last one that reads as a plan wins: in a conversation the reply comes last, and a
  * fragment quoted in prose ("shaped like {"groups": …}") never reads as one. Each
  * candidate gets one repair pass for the damage a phone's clipboard and a chatty model
- * do most — curly quotes and trailing commas. When none is a plan, the value handed on
- * is the most plan-like that parsed, so `parsePlan` can say what is wrong with it.
+ * do most — curly quotes and trailing commas.
+ *
+ * A plan is only taken if nothing after it was trying to be one: a reply cut off
+ * mid-stream (a fence or `{` never closed) or a plan-shaped object that fails the checks
+ * reports its own problem, rather than the app quietly importing the routine quoted in
+ * the prompt above it. When no candidate is a plan, the value handed on is the most
+ * plan-like that parsed, so `parsePlan` can say what is wrong with it.
  */
 export function extractPlanJson(text: string): { ok: true; value: unknown } | { ok: false; error: string } {
   const trimmed = text.trim()
@@ -117,20 +122,47 @@ export function extractPlanJson(text: string): { ok: true; value: unknown } | { 
   if (candidates.length === 0) {
     return { ok: false, error: "There's no JSON in that. Paste the reply that starts with { and ends with }." }
   }
+  const parsed = candidates.map((c) => parseLoosely(c.text))
+  const doesNotParse = {
+    ok: false as const,
+    error: "That JSON doesn't parse. It may have been cut off — copy the whole reply and try again.",
+  }
+
+  let chosen = -1
+  for (let i = candidates.length - 1; i >= 0 && chosen === -1; i--) {
+    const p = parsed[i]
+    if (p && parsePlan(p.value).ok) chosen = i
+  }
+
+  if (chosen !== -1) {
+    // The last attempt at a plan that starts after the chosen one ends, if any.
+    let attempt = -1
+    candidates.forEach((c, i) => {
+      if (c.start < candidates[chosen].end) return
+      const failedPlan = parsed[i] ? looksLikePlan(parsed[i]!.value) : !c.complete || mentionsPlanKeys(c.text)
+      if (failedPlan && (attempt === -1 || c.start >= candidates[attempt].start)) attempt = i
+    })
+    if (attempt === -1) return { ok: true, value: parsed[chosen]!.value }
+    return parsed[attempt] ? { ok: true, value: parsed[attempt]!.value } : doesNotParse
+  }
 
   let best: { value: unknown; planLike: boolean } | null = null
   for (let i = candidates.length - 1; i >= 0; i--) {
-    const parsed = parseLoosely(candidates[i])
-    if (!parsed) continue
-    if (parsePlan(parsed.value).ok) return { ok: true, value: parsed.value }
-    const planLike = looksLikePlan(parsed.value)
-    if (!best || (planLike && !best.planLike)) best = { value: parsed.value, planLike }
+    const p = parsed[i]
+    if (!p) continue
+    const planLike = looksLikePlan(p.value)
+    if (!best || (planLike && !best.planLike)) best = { value: p.value, planLike }
   }
-  if (best) return { ok: true, value: best.value }
-  return {
-    ok: false,
-    error: "That JSON doesn't parse. It may have been cut off — copy the whole reply and try again.",
-  }
+  return best ? { ok: true, value: best.value } : doesNotParse
+}
+
+interface Candidate {
+  text: string
+  /** Offsets into the pasted text. */
+  start: number
+  end: number
+  /** False for a fence or `{` still open when the text runs out. */
+  complete: boolean
 }
 
 function parseLoosely(raw: string): { value: unknown } | null {
@@ -144,8 +176,15 @@ function parseLoosely(raw: string): { value: unknown } | null {
   return null
 }
 
+const PLAN_KEYS = ["groups", "days", "muscleGroups", "trainingDays", "plan", "routine"]
+
 function looksLikePlan(v: unknown): boolean {
-  return isObject(v) && ["groups", "days", "muscleGroups", "trainingDays", "plan", "routine"].some((k) => k in v)
+  return isObject(v) && PLAN_KEYS.some((k) => k in v)
+}
+
+/** For text that doesn't parse: does it name a plan's keys, straight or curly quoted? */
+function mentionsPlanKeys(raw: string): boolean {
+  return new RegExp(`["“”](${PLAN_KEYS.join("|")})["“”]\\s*:`).test(raw)
 }
 
 /**
@@ -154,22 +193,25 @@ function looksLikePlan(v: unknown): boolean {
  * doesn't pair up with the real one. A fence still open at the end — a reply cut off
  * mid-stream — runs to the end of the text.
  */
-function fencedBlocks(text: string): string[] {
-  const blocks: string[] = []
-  let open: string[] | null = null
+function fencedBlocks(text: string): Candidate[] {
+  const blocks: Candidate[] = []
+  let start = -1
+  let offset = 0
   for (const line of text.split("\n")) {
-    const isFence = /^\s*```/.test(line)
-    if (open === null) {
-      if (isFence) open = []
-    } else if (isFence) {
-      blocks.push(open.join("\n"))
-      open = null
-    } else {
-      open.push(line)
+    if (/^\s*```/.test(line)) {
+      if (start === -1) {
+        start = offset + line.length + 1
+      } else {
+        blocks.push({ text: text.slice(start, Math.max(start, offset - 1)), start, end: offset, complete: true })
+        start = -1
+      }
     }
+    offset += line.length + 1
   }
-  if (open) blocks.push(open.join("\n"))
-  return blocks.filter((b) => b.includes("{"))
+  if (start !== -1 && start < text.length) {
+    blocks.push({ text: text.slice(start), start, end: text.length, complete: false })
+  }
+  return blocks.filter((b) => b.text.includes("{"))
 }
 
 /**
@@ -180,8 +222,8 @@ function fencedBlocks(text: string): string[] {
  * so a reply cut off mid-stream reads as JSON that doesn't parse. One pass, so a long
  * paste costs no more than its length.
  */
-function objectSpans(text: string): string[] {
-  const spans: string[] = []
+function objectSpans(text: string): Candidate[] {
+  const spans: Candidate[] = []
   let depth = 0
   let start = 0
   let inString = false
@@ -203,9 +245,9 @@ function objectSpans(text: string): string[] {
     }
     if (c === '"') inString = true
     else if (c === "{") depth++
-    else if (c === "}" && --depth === 0) spans.push(text.slice(start, i + 1))
+    else if (c === "}" && --depth === 0) spans.push({ text: text.slice(start, i + 1), start, end: i + 1, complete: true })
   }
-  if (depth > 0) spans.push(text.slice(start))
+  if (depth > 0) spans.push({ text: text.slice(start), start, end: text.length, complete: false })
   return spans
 }
 
