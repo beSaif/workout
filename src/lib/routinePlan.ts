@@ -98,39 +98,115 @@ export function exportPlan(config: MuscleGroupConfig[], days: TrainingDay[]): Ro
 // ─── Extract ──────────────────────────────────────────────────────────────────
 
 /**
- * Pull the JSON out of whatever was pasted: a bare object, a ```json fence, or an
- * object with chatter around it. A first parse failure gets one repair pass for the
- * damage a phone's clipboard and a chatty model do most — curly quotes and trailing
- * commas — before giving up.
+ * Pull the plan's JSON out of whatever was pasted: a bare object, a ```json fence, an
+ * object with chatter around it, or a whole conversation — the copy prompt (which holds
+ * an example and the current routine) followed by the model's reply.
+ *
+ * Every fenced block and every balanced top-level `{…}` span is a candidate, and the
+ * last one that reads as a plan wins: in a conversation the reply comes last, and a
+ * fragment quoted in prose ("shaped like {"groups": …}") never reads as one. Each
+ * candidate gets one repair pass for the damage a phone's clipboard and a chatty model
+ * do most — curly quotes and trailing commas. When none is a plan, the value handed on
+ * is the most plan-like that parsed, so `parsePlan` can say what is wrong with it.
  */
 export function extractPlanJson(text: string): { ok: true; value: unknown } | { ok: false; error: string } {
   const trimmed = text.trim()
   if (!trimmed) return { ok: false, error: "Nothing was pasted." }
 
-  const candidates: string[] = []
-  for (const m of trimmed.matchAll(/```[a-zA-Z]*\s*\n?([\s\S]*?)```/g)) {
-    if (m[1].includes("{")) candidates.push(m[1])
-  }
-  const first = trimmed.indexOf("{")
-  const last = trimmed.lastIndexOf("}")
-  if (first !== -1 && last > first) candidates.push(trimmed.slice(first, last + 1))
+  const candidates = [...fencedBlocks(trimmed), ...objectSpans(trimmed)]
   if (candidates.length === 0) {
     return { ok: false, error: "There's no JSON in that. Paste the reply that starts with { and ends with }." }
   }
 
-  for (const raw of candidates) {
-    for (const attempt of [raw, repairJson(raw)]) {
-      try {
-        return { ok: true, value: JSON.parse(attempt) }
-      } catch {
-        // try the next one
-      }
-    }
+  let best: { value: unknown; planLike: boolean } | null = null
+  for (let i = candidates.length - 1; i >= 0; i--) {
+    const parsed = parseLoosely(candidates[i])
+    if (!parsed) continue
+    if (parsePlan(parsed.value).ok) return { ok: true, value: parsed.value }
+    const planLike = looksLikePlan(parsed.value)
+    if (!best || (planLike && !best.planLike)) best = { value: parsed.value, planLike }
   }
+  if (best) return { ok: true, value: best.value }
   return {
     ok: false,
     error: "That JSON doesn't parse. It may have been cut off — copy the whole reply and try again.",
   }
+}
+
+function parseLoosely(raw: string): { value: unknown } | null {
+  for (const attempt of [raw, repairJson(raw)]) {
+    try {
+      return { value: JSON.parse(attempt) }
+    } catch {
+      // try the repaired text
+    }
+  }
+  return null
+}
+
+function looksLikePlan(v: unknown): boolean {
+  return isObject(v) && ["groups", "days", "muscleGroups", "trainingDays", "plan", "routine"].some((k) => k in v)
+}
+
+/**
+ * The contents of each fenced block that holds a `{`. A fence opens and closes only at
+ * the start of a line, so a ``` mentioned mid-sentence ("send it as a ```json block")
+ * doesn't pair up with the real one. A fence still open at the end — a reply cut off
+ * mid-stream — runs to the end of the text.
+ */
+function fencedBlocks(text: string): string[] {
+  const blocks: string[] = []
+  let open: string[] | null = null
+  for (const line of text.split("\n")) {
+    const isFence = /^\s*```/.test(line)
+    if (open === null) {
+      if (isFence) open = []
+    } else if (isFence) {
+      blocks.push(open.join("\n"))
+      open = null
+    } else {
+      open.push(line)
+    }
+  }
+  if (open) blocks.push(open.join("\n"))
+  return blocks.filter((b) => b.includes("{"))
+}
+
+/**
+ * Each top-level `{…}` span, matching braces outside JSON strings. Quotes only count
+ * inside a span (prose has apostrophes and stray quotes of its own), and a string ends
+ * at a line break, since JSON strings cannot hold one — so an unbalanced quote costs one
+ * line rather than the rest of the text. A span still open at the end is kept as it is,
+ * so a reply cut off mid-stream reads as JSON that doesn't parse. One pass, so a long
+ * paste costs no more than its length.
+ */
+function objectSpans(text: string): string[] {
+  const spans: string[] = []
+  let depth = 0
+  let start = 0
+  let inString = false
+  let escaped = false
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i]
+    if (depth === 0) {
+      if (c === "{") {
+        depth = 1
+        start = i
+      }
+      continue
+    }
+    if (inString) {
+      if (escaped) escaped = false
+      else if (c === "\\") escaped = true
+      else if (c === '"' || c === "\n") inString = false
+      continue
+    }
+    if (c === '"') inString = true
+    else if (c === "{") depth++
+    else if (c === "}" && --depth === 0) spans.push(text.slice(start, i + 1))
+  }
+  if (depth > 0) spans.push(text.slice(start))
+  return spans
 }
 
 function repairJson(raw: string): string {

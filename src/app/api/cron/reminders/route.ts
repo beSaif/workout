@@ -46,9 +46,13 @@ async function processUser(email: string, send: boolean): Promise<UserOutcome> {
     return { email, kind: decision.kind, title: decision.push.title, sent: false }
   }
 
-  await sendPushToUser(email, decision.push)
-  // Recorded after the send so a failed push is retried tomorrow rather than swallowed.
+  // Recorded before the send: today's date in the state is what stops a rerun of the job
+  // sending a second push (see `decideReminder`). Written after, a failed write would
+  // leave a push already delivered and unrecorded, and the rerun would send another. If
+  // this write fails nothing is sent; if the send fails, today's reminder is lost, which
+  // is the cheaper mistake. (`sendPushToUser` already swallows delivery errors.)
   await store.set(reminderStateKey(email), { ...state, ...decision.stateUpdate })
+  await sendPushToUser(email, decision.push)
 
   return { email, kind: decision.kind, title: decision.push.title, sent: true }
 }
