@@ -594,7 +594,8 @@ describe("the next cycle's peak", () => {
   it("a single made under the peak moves it toward what it showed, rounded toward the old peak (one plate down under 50 kg)", () => {
     fc.assert(
       fc.property(anchorArb, fc.integer({ min: 1, max: 8 }), fc.option(rpeArb, { nil: null }), (anchor, under, rpe) => {
-        const kg = anchor - under * 2.5
+        // At least one plate: a 0 kg "single" isn't a lift, and the engine rightly ignores it.
+        const kg = Math.max(2.5, anchor - under * 2.5)
         const shown = singleE1RM(kg, rpe)
         const review = reviewTest(anchor, [set(kg, 1, rpe)])
         if (shown >= anchor) expect(review.anchor).toBe(floorPlate(Math.min(shown, anchor * 1.05)))
