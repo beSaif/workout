@@ -1,5 +1,5 @@
 import { Session, TrainingBlock, BlockPhase, SessionType, RepRange, CycleLength, TrainingAge } from "./types"
-import { roundToPlate } from "./e1rm"
+import { calcE1RMFromRepsInTank, roundToPlate } from "./e1rm"
 
 export interface Prescription {
   weight: number
@@ -603,7 +603,7 @@ export function cycleLoadOffset(
 /** e1RM of one set, effort included: Brzycki run on the reps the set had in it. */
 function effortE1RM(kg: number, reps: number, rpe: number): number {
   const repsInTank = reps + Math.max(0, 10 - rpe)
-  return repsInTank >= 37 ? kg : kg * (36 / (37 - repsInTank))
+  return calcE1RMFromRepsInTank(kg, repsInTank)
 }
 
 /** How a cycle's peak test went. "untested" when the single was jumped over or never logged. */
