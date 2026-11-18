@@ -21,13 +21,11 @@ import {
   measureSessionsPerWeek,
   PHASE_LABEL,
   PHASE_SESSION_TYPE,
-  type Prescription,
 } from "@/lib/prescription"
-import { generateWarmups } from "@/lib/warmup"
-import { closeBlock, jumpToSession, peekNextBlock, JumpTarget } from "@/lib/jump"
+import { jumpToSession, peekNextBlock, JumpTarget } from "@/lib/jump"
 import { getLayoffState, layoffAnchor, restartActiveBlock } from "@/lib/layoff"
 import { scheduleIncompleteSessionReminder, cancelIncompleteSessionReminder } from "@/lib/swNotify"
-import { calcE1RM, roundToPlate } from "@/lib/e1rm"
+import { roundToPlate } from "@/lib/e1rm"
 import { MuscleGroupConfig, DEFAULT_MUSCLE_GROUPS, DEFAULT_TRAINING_DAYS } from "@/lib/exerciseConfig"
 import { TrainingDay } from "@/lib/types"
 import SessionCard from "@/components/SessionCard"
@@ -57,137 +55,23 @@ import { getBestE1RM, getLatestBW } from "@/lib/stats"
 import { suggestNextDay } from "@/lib/balance"
 import { relativeTime } from "@/lib/time"
 import { useConfirm } from "@/components/ConfirmSheet"
+import {
+  getActiveBlock,
+  createUpcomingSession,
+  upcomingMatchesMode,
+  slotLabel,
+  countSkippedSlots,
+  describePrescription,
+  backfillMuscles,
+  sortSessions,
+  skipMainLift,
+  restoreMainLift,
+  blocksAfterConfirm,
+} from "@/lib/upcoming"
 
 const DRAFT_MAX_AGE_MS = 24 * 60 * 60 * 1000
 /** Days away after which Dot is found asleep when the app opens. */
 const DOT_ASLEEP_AFTER_DAYS = 5
-
-function getActiveBlock(blocks: TrainingBlock[]): TrainingBlock | undefined {
-  return blocks.find((b) => b.status === "active")
-}
-
-
-function createUpcomingSession(
-  sessions: Session[],
-  blocks: TrainingBlock[],
-  config: MuscleGroupConfig[],
-  profile: UserProfile,
-  trainingDays: TrainingDay[] = DEFAULT_TRAINING_DAYS
-): Session {
-  const maxIdAll = sessions.length > 0 ? Math.max(...sessions.map((s) => s.id)) : 0
-  const nextDayAll = suggestNextDay(sessions, trainingDays, config)?.day
-
-  // Balanced mode: no main lift, no block. The upcoming card is just the next training day.
-  if (!isLiftFocused(profile)) {
-    return {
-      id: maxIdAll + 1,
-      date: null,
-      type: "Free",
-      bw: null,
-      sets: [],
-      confirmed: false,
-      coachNote: "",
-      selectedTrainingDayId: nextDayAll?.id,
-      selectedMuscleGroups: nextDayAll?.muscleGroupIds ?? [],
-    }
-  }
-
-  const activeBlock = getActiveBlock(blocks)
-
-  let prescription: Prescription
-  let blockId: number | undefined
-
-  if (activeBlock) {
-    const sessionIndexInBlock = blockPosition(activeBlock)
-    prescription = prescribeForBlock(activeBlock, sessionIndexInBlock, cycleLoadOffset(blocks, sessions, activeBlock))
-    blockId = activeBlock.id
-  } else {
-    prescription = prescribeBlockSession("accumulation", 0, profile.anchor ?? 0)
-  }
-
-  const warmups = generateWarmups(prescription.weight, prescription.reps)
-  const workingSets = Array.from({ length: prescription.sets }, (_, i) => ({
-    id: `S${i + 1}`,
-    kg: prescription.weight,
-    reps: prescription.reps,
-    rpe: null as null,
-    e1rm: calcE1RM(prescription.weight, prescription.reps),
-    note: "",
-    isWarmup: false,
-  }))
-  const maxId = sessions.length > 0 ? Math.max(...sessions.map((s) => s.id)) : 0
-
-  const sessionIndex = activeBlock ? blockPosition(activeBlock) : 0
-  const phase = activeBlock?.phase ?? "accumulation"
-  const blockLength = activeBlock ? getBlockLength(activeBlock) : blockLengthFor("accumulation", measureSessionsPerWeek(sessions, null))
-  const effort = prescription.rpe != null ? ` ${prescription.light ? "Light day, aim" : "Aim"} for RPE ${prescription.rpe}.` : ""
-  const coachNote = `[${PHASE_LABEL[phase]} ${sessionIndex + 1}/${blockLength}] ${prescription.weight}kg × ${prescription.reps} × ${prescription.sets}.${effort} Stay tight, drive the bar.`
-
-  const nextDay = suggestNextDay(sessions, trainingDays, config)?.day
-
-  return {
-    id: maxId + 1,
-    date: null,
-    type: prescription.sessionType,
-    bw: null,
-    confirmed: false,
-    coachNote,
-    sets: [...warmups, ...workingSets],
-    selectedTrainingDayId: nextDay?.id,
-    selectedMuscleGroups: nextDay?.muscleGroupIds ?? [],
-    blockId,
-  }
-}
-
-/**
- * The upcoming card must match the current training mode: a Free card in Balanced mode,
- * a prescribed one in lift-focused mode. A mismatch means the user switched modes since
- * the card was generated, so it needs regenerating.
- *
- * A lift-focused card whose main lift was skipped is stored as Free too, but that is a
- * deliberate choice for today rather than a stale card — it stays as it is.
- */
-function upcomingMatchesMode(upcoming: Session | undefined, profile: UserProfile): boolean {
-  if (!upcoming) return false
-  if (isLiftFocused(profile)) return upcoming.skippedMainLift === true || upcoming.type !== "Free"
-  return upcoming.type === "Free"
-}
-
-/** A block slot by phase and place, e.g. "Intensity 3" — what the program calls it. */
-function slotLabel(phase: BlockPhase, index: number): string {
-  const name = phase === "reacclimation" ? PHASE_LABEL[phase] : PHASE_SESSION_TYPE[phase]
-  return `${name} ${index + 1}`
-}
-
-function countSkippedSlots(blocks: TrainingBlock[]): number {
-  return blocks.reduce((n, b) => n + (b.skippedSlots?.length ?? 0), 0)
-}
-
-/** The prescribed opener of an upcoming session, e.g. "62.5kg × 6 × 4". */
-function describePrescription(session: Session): string | null {
-  const working = session.sets.filter((s) => !s.isWarmup)
-  const top = working[0]
-  return top ? `${top.kg}kg × ${top.reps} × ${working.length}` : null
-}
-
-function backfillMuscles(sessions: Session[], config: MuscleGroupConfig[], trainingDays: TrainingDay[] = DEFAULT_TRAINING_DAYS): Session[] {
-  const upcoming = sessions.find((s) => !s.confirmed)
-  if (!upcoming || upcoming.selectedMuscleGroups !== undefined) return sessions
-  const nextDay = suggestNextDay(sessions, trainingDays, config)?.day
-  return sessions.map((s) =>
-    s.id === upcoming.id
-      ? { ...s, selectedTrainingDayId: nextDay?.id, selectedMuscleGroups: nextDay?.muscleGroupIds ?? [] }
-      : s
-  )
-}
-
-function sortSessions(sessions: Session[]): Session[] {
-  return [...sessions].sort((a, b) => {
-    if (!a.confirmed) return -1
-    if (!b.confirmed) return 1
-    return new Date(b.date!).getTime() - new Date(a.date!).getTime()
-  })
-}
 
 export default function Page() {
   const { confirm, confirmSheet } = useConfirm()
@@ -720,36 +604,10 @@ export default function Page() {
     )
     const confirmedSessions = updatedSessions.filter((s) => s.confirmed)
 
-    // Balanced mode never advances a block; whatever blocks exist stay parked for a later
-    // switch back. A session that skipped the main lift doesn't advance one either — the
-    // block stays where it is so the load it was carrying is prescribed again next time.
-    const advancesBlock = isLiftFocused(profile) && !updatedSession.skippedMainLift
-    const activeBlock = advancesBlock ? getActiveBlock(currentBlocks) : undefined
-    let finalBlocks = currentBlocks
-
-    if (activeBlock) {
-      const updatedBlockSessionIds = [...activeBlock.sessionIds, updatedSession.id]
-      const isBlockComplete =
-        blockPosition({ ...activeBlock, sessionIds: updatedBlockSessionIds }) >= getBlockLength(activeBlock)
-
-      if (isBlockComplete) {
-        const completedBlock: TrainingBlock = {
-          ...activeBlock,
-          sessionIds: updatedBlockSessionIds,
-          status: "completed",
-          endDate: updatedSession.date ?? null,
-        }
-        // Re-acclimation finishes by resuming the interrupted block it was rebuilding
-        // toward, rather than advancing into a fresh phase.
-        finalBlocks = closeBlock(currentBlocks, completedBlock, confirmedSessions)
-        // The deload was the cycle's last block: recap it and set up the next one.
-        if (completedBlock.phase === "deload" && cycleReviewFor(currentBlocks, completedBlock)) setCycleReportId(completedBlock.id)
-      } else {
-        finalBlocks = currentBlocks.map((b) =>
-          b.id === activeBlock.id ? { ...b, sessionIds: updatedBlockSessionIds } : b
-        )
-      }
-    }
+    // Balanced mode and a skipped main lift leave the blocks where they are (see blocksAfterConfirm).
+    const { blocks: finalBlocks, completed } = blocksAfterConfirm(currentBlocks, updatedSession, confirmedSessions, profile)
+    // The deload was the cycle's last block: recap it and set up the next one.
+    if (completed?.phase === "deload" && cycleReviewFor(currentBlocks, completed)) setCycleReportId(completed.id)
 
     const newUpcoming = createUpcomingSession(confirmedSessions, finalBlocks, exerciseConfig, profile, trainingDays)
     const final = sortSessions([...confirmedSessions, newUpcoming])
@@ -802,16 +660,7 @@ export default function Page() {
     })
     if (!yes) return
 
-    const skipped: Session = {
-      ...session,
-      type: "Free",
-      sets: [],
-      blockId: undefined,
-      skippedMainLift: true,
-      coachNote: held
-        ? `${liftShort} sat out today — ${held} moves to the next session. Everything else, full effort.`
-        : `${liftShort} sat out today — its load moves to the next session.`,
-    }
+    const skipped = skipMainLift(session, profile)
 
     dropStaleDraft(session.id)
     setSessions((prev) => {
@@ -825,13 +674,7 @@ export default function Page() {
   function handleRestoreMainLift(session: Session) {
     if (!profile) return
     const confirmedSessions = sessions.filter((s) => s.confirmed)
-    const regenerated = createUpcomingSession(confirmedSessions, blocks, exerciseConfig, profile, trainingDays)
-    const restored: Session = {
-      ...regenerated,
-      id: session.id,
-      selectedTrainingDayId: session.selectedTrainingDayId,
-      selectedMuscleGroups: session.selectedMuscleGroups,
-    }
+    const restored = restoreMainLift(session, confirmedSessions, blocks, exerciseConfig, profile, trainingDays)
 
     dropStaleDraft(session.id)
     setSessions((prev) => {
