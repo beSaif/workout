@@ -1,39 +1,28 @@
-import { kv } from "@vercel/kv"
-import { NextRequest, NextResponse } from "next/server"
-import { auth } from "@/auth"
-import { UserProfile, Session, TrainingBlock } from "@/lib/types"
-import { friendsKey, profileKey, sessionsKey } from "@/lib/userKeys"
+import { NextResponse } from "next/server"
+import { UserProfile } from "@/lib/types"
+import { readProfiles, readValidSessionsDocs, store } from "@/lib/server/db"
+import { withUser } from "@/lib/server/withUser"
+import { friendsKey } from "@/lib/userKeys"
 
-interface SessionsData {
-  sessions: Session[]
-  blocks: TrainingBlock[]
-}
-
-export async function GET() {
-  const session = await auth()
-  if (!session?.user?.email) {
-    return NextResponse.json({ error: "unauthorized" }, { status: 401 })
-  }
-  const me = session.user.email.trim().toLowerCase()
+export const GET = withUser(async ({ email }) => {
+  const me = email.trim().toLowerCase()
 
   try {
-    const friendEmails = (await kv.smembers(friendsKey(me))) as string[]
+    const friendEmails = await store.smembers(friendsKey(me))
     if (friendEmails.length === 0) return NextResponse.json([])
 
-    const [profiles, sessionDatas] = await Promise.all([
-      kv.mget<UserProfile[]>(...friendEmails.map(profileKey)),
-      kv.mget<(SessionsData | Session[])[]>(...friendEmails.map(sessionsKey)),
+    // Read-only: a friend's malformed sessions document counts as no sessions.
+    const [profiles, sessionDocs] = await Promise.all([
+      readProfiles(friendEmails),
+      readValidSessionsDocs(friendEmails),
     ])
 
     const lastActiveDates: Record<string, string> = {}
-    friendEmails.forEach((email, i) => {
-      const raw = sessionDatas[i]
-      if (!raw) return
-      const sessions: Session[] = Array.isArray(raw) ? raw : (raw as SessionsData).sessions ?? []
-      const confirmed = sessions
+    friendEmails.forEach((friend, i) => {
+      const confirmed = sessionDocs[i].sessions
         .filter((s) => s.confirmed && s.date)
         .sort((a, b) => new Date(b.date!).getTime() - new Date(a.date!).getTime())
-      if (confirmed[0]) lastActiveDates[email] = confirmed[0].date!
+      if (confirmed[0]) lastActiveDates[friend] = confirmed[0].date!
     })
 
     const valid = profiles
@@ -46,18 +35,14 @@ export async function GET() {
   } catch {
     return NextResponse.json([], { status: 503 })
   }
-}
+})
 
-export async function DELETE(req: NextRequest) {
-  const session = await auth()
-  if (!session?.user?.email) {
-    return NextResponse.json({ error: "unauthorized" }, { status: 401 })
-  }
-  const me = session.user.email.trim().toLowerCase()
+export const DELETE = withUser(async ({ email, request }) => {
+  const me = email.trim().toLowerCase()
 
   let friendEmail: unknown
   try {
-    friendEmail = (await req.json())?.friendEmail
+    friendEmail = (await request.json())?.friendEmail
   } catch {
     return NextResponse.json({ error: "invalid json" }, { status: 400 })
   }
@@ -68,11 +53,11 @@ export async function DELETE(req: NextRequest) {
 
   try {
     await Promise.all([
-      kv.srem(friendsKey(me), friend),
-      kv.srem(friendsKey(friend), me),
+      store.srem(friendsKey(me), friend),
+      store.srem(friendsKey(friend), me),
     ])
     return NextResponse.json({ ok: true })
   } catch {
     return NextResponse.json({ error: "failed" }, { status: 503 })
   }
-}
+})

@@ -1,6 +1,6 @@
-import { kv } from "@vercel/kv"
-import { NextRequest, NextResponse } from "next/server"
-import { auth } from "@/auth"
+import { NextResponse } from "next/server"
+import { store } from "@/lib/server/db"
+import { withUser } from "@/lib/server/withUser"
 import { athletesKey, friendsKey } from "@/lib/userKeys"
 import { loadPeople } from "@/lib/coach"
 
@@ -9,12 +9,8 @@ import { loadPeople } from "@/lib/coach"
  * counts. Private: the counts show on anyone's profile, but only the owner can see
  * who is behind them.
  */
-export async function GET(req: NextRequest) {
-  const session = await auth()
-  const myEmail = session?.user?.email
-  if (!myEmail) return NextResponse.json({ error: "unauthorized" }, { status: 401 })
-
-  const params = req.nextUrl.searchParams
+export const GET = withUser(async ({ email: myEmail, request }) => {
+  const params = request.nextUrl.searchParams
   const email = (params.get("email") ?? myEmail).trim().toLowerCase()
   if (email !== myEmail.trim().toLowerCase()) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 })
@@ -25,11 +21,11 @@ export async function GET(req: NextRequest) {
   }
 
   try {
-    const emails = await kv.smembers(kind === "gymbros" ? friendsKey(email) : athletesKey(email))
+    const emails = await store.smembers(kind === "gymbros" ? friendsKey(email) : athletesKey(email))
     const people = await loadPeople(emails)
     people.sort((a, b) => a.name.localeCompare(b.name))
     return NextResponse.json(people)
   } catch {
     return NextResponse.json([], { status: 503 })
   }
-}
+})

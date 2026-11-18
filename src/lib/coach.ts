@@ -1,5 +1,5 @@
 import "server-only"
-import { kv } from "@vercel/kv"
+import { readProfiles, store } from "./server/db"
 import { TrainingDay, UserProfile } from "./types"
 import {
   MuscleGroupConfig,
@@ -8,7 +8,7 @@ import {
   retireReplacedGroups,
 } from "./exerciseConfig"
 import { RoutineBundle, PersonSummary, buildRoutineBundle } from "./routines"
-import { athletesKey, coachKey, exercisesKey, profileKey, trainingDaysKey } from "./userKeys"
+import { athletesKey, coachKey, exercisesKey, trainingDaysKey } from "./userKeys"
 
 /**
  * The coach / athlete link, server side.
@@ -28,7 +28,7 @@ function normalize(email: string): string {
 }
 
 export async function getCoach(email: string): Promise<string | null> {
-  const coach = await kv.get<string>(coachKey(email))
+  const coach = await store.get<string>(coachKey(email))
   return typeof coach === "string" && coach ? normalize(coach) : null
 }
 
@@ -64,8 +64,8 @@ async function loadStoredSplit(
   email: string
 ): Promise<{ config: MuscleGroupConfig[] | null; days: TrainingDay[] | null }> {
   const [config, days] = await Promise.all([
-    kv.get<MuscleGroupConfig[]>(exercisesKey(email)),
-    kv.get<TrainingDay[]>(trainingDaysKey(email)),
+    store.get<MuscleGroupConfig[]>(exercisesKey(email)),
+    store.get<TrainingDay[]>(trainingDaysKey(email)),
   ])
   return {
     config: Array.isArray(config) && config.length > 0 ? config : null,
@@ -102,10 +102,10 @@ export async function syncAthleteSplit(
 
   const writes: Promise<unknown>[] = []
   if (JSON.stringify(config) !== JSON.stringify(stored.config)) {
-    writes.push(kv.set(exercisesKey(athlete), config))
+    writes.push(store.set(exercisesKey(athlete), config))
   }
   if (JSON.stringify(days) !== JSON.stringify(stored.days)) {
-    writes.push(kv.set(trainingDaysKey(athlete), days))
+    writes.push(store.set(trainingDaysKey(athlete), days))
   }
   await Promise.all(writes)
   return { config, days }
@@ -119,11 +119,11 @@ export async function stopTrainingUnder(athlete: string): Promise<void> {
   const coach = await getCoach(athlete)
   if (!coach) return
   await syncAthleteSplit(athlete)
-  await Promise.all([kv.del(coachKey(athlete)), kv.srem(athletesKey(coach), normalize(athlete))])
+  await Promise.all([store.del(coachKey(athlete)), store.srem(athletesKey(coach), normalize(athlete))])
 }
 
 export async function countAthletes(email: string): Promise<number> {
-  return kv.scard(athletesKey(email))
+  return store.scard(athletesKey(email))
 }
 
 export function toPersonSummary(profile: UserProfile): PersonSummary {
@@ -136,7 +136,7 @@ export function toPersonSummary(profile: UserProfile): PersonSummary {
 /** Summaries for a set of emails, in the order given, skipping accounts that are gone. */
 export async function loadPeople(emails: string[]): Promise<PersonSummary[]> {
   if (emails.length === 0) return []
-  const profiles = await kv.mget<(UserProfile | null)[]>(...emails.map((e) => profileKey(e)))
+  const profiles = await readProfiles(emails)
   return profiles
     .filter((p): p is UserProfile => p !== null && typeof p === "object" && !!p.email)
     .map(toPersonSummary)

@@ -1,17 +1,10 @@
-import { kv } from "@vercel/kv"
 import { NextResponse } from "next/server"
 import { auth } from "@/auth"
 import { sendPushToUser } from "@/lib/pushNotify"
 import { ReminderState, decideReminder } from "@/lib/reminders"
-import { Session, UserProfile, WeightEntry } from "@/lib/types"
-import {
-  emailFromPushSubKey,
-  profileKey,
-  pushSubKey,
-  reminderStateKey,
-  sessionsKey,
-  weightsKey,
-} from "@/lib/userKeys"
+import { readProfile, readValidSessionsDoc, store } from "@/lib/server/db"
+import { WeightEntry } from "@/lib/types"
+import { emailFromPushSubKey, pushSubKey, reminderStateKey, weightsKey } from "@/lib/userKeys"
 
 /**
  * The daily reminder job, run by the Vercel cron declared in `vercel.json`.
@@ -31,26 +24,20 @@ interface UserOutcome {
   sent: boolean
 }
 
-/** Sessions are stored as `{ sessions, blocks }`, but very old records are a bare array. */
-function readSessions(raw: unknown): Session[] {
-  if (Array.isArray(raw)) return raw as Session[]
-  const sessions = (raw as { sessions?: unknown } | null)?.sessions
-  return Array.isArray(sessions) ? (sessions as Session[]) : []
-}
-
 async function processUser(email: string, send: boolean): Promise<UserOutcome> {
-  const [profile, weightsRaw, sessionsRaw, stateRaw] = await Promise.all([
-    kv.get<UserProfile>(profileKey(email)),
-    kv.get<WeightEntry[]>(weightsKey(email)),
-    kv.get(sessionsKey(email)),
-    kv.get<ReminderState>(reminderStateKey(email)),
+  // Read-only, so a malformed sessions document counts as no sessions.
+  const [profile, weightsRaw, sessionsDoc, stateRaw] = await Promise.all([
+    readProfile(email),
+    store.get<WeightEntry[]>(weightsKey(email)),
+    readValidSessionsDoc(email),
+    store.get<ReminderState>(reminderStateKey(email)),
   ])
 
   const state = stateRaw ?? {}
   const decision = decideReminder({
     profile,
     weights: Array.isArray(weightsRaw) ? weightsRaw : [],
-    sessions: readSessions(sessionsRaw),
+    sessions: sessionsDoc.sessions,
     state,
   })
 
@@ -61,7 +48,7 @@ async function processUser(email: string, send: boolean): Promise<UserOutcome> {
 
   await sendPushToUser(email, decision.push)
   // Recorded after the send so a failed push is retried tomorrow rather than swallowed.
-  await kv.set(reminderStateKey(email), { ...state, ...decision.stateUpdate })
+  await store.set(reminderStateKey(email), { ...state, ...decision.stateUpdate })
 
   return { email, kind: decision.kind, title: decision.push.title, sent: true }
 }
@@ -72,7 +59,7 @@ async function processUser(email: string, send: boolean): Promise<UserOutcome> {
  * user out of the job automatically.
  */
 async function runForEveryone(send: boolean): Promise<UserOutcome[]> {
-  const keys = await kv.keys(pushSubKey("*"))
+  const keys = await store.keys(pushSubKey("*"))
   const emails = keys.map(emailFromPushSubKey).filter((e): e is string => e !== null)
 
   // This is a friends-sized app; if the roster ever outgrows one batch, chunk it here.

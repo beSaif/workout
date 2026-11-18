@@ -1,9 +1,9 @@
-import { kv } from "@vercel/kv"
 import { NextResponse } from "next/server"
-import { auth } from "@/auth"
-import { UserProfile, MAIN_LIFT_LABEL } from "@/lib/types"
+import { readProfile, store } from "@/lib/server/db"
+import { withUser } from "@/lib/server/withUser"
+import { MAIN_LIFT_LABEL } from "@/lib/types"
 import { isLiftFocused } from "@/lib/trainingMode"
-import { planUsesKey, profileKey } from "@/lib/userKeys"
+import { planUsesKey } from "@/lib/userKeys"
 import { countAthletes, getCoach, loadRoutineOf } from "@/lib/coach"
 import { completeJson, plannerConfigured } from "@/lib/planner"
 import { PLAN_NOTE_MAX, PlanContext, buildDotMessages, buildRepairMessages, parsePlanAnswers } from "@/lib/planPrompt"
@@ -23,7 +23,7 @@ function today(): string {
 }
 
 async function usesToday(email: string): Promise<number> {
-  return (await kv.get<number>(planUsesKey(email, today()))) ?? 0
+  return (await store.get<number>(planUsesKey(email, today()))) ?? 0
 }
 
 /**
@@ -31,11 +31,7 @@ async function usesToday(email: string): Promise<number> {
  * plan at all, how many plans are left today, and the two states that change what
  * applying a plan means (following a coach; being one).
  */
-export async function GET() {
-  const session = await auth()
-  const email = session?.user?.email
-  if (!email) return NextResponse.json({ error: "unauthorized" }, { status: 401 })
-
+export const GET = withUser(async ({ email }) => {
   try {
     const [coach, athleteCount, used] = await Promise.all([getCoach(email), countAthletes(email), usesToday(email)])
     return NextResponse.json({
@@ -48,7 +44,7 @@ export async function GET() {
   } catch {
     return NextResponse.json({ error: "failed" }, { status: 503 })
   }
-}
+})
 
 /**
  * POST /api/plan { answers, tweak?: { plan, request } } → { plan, warnings, remaining }
@@ -58,10 +54,7 @@ export async function GET() {
  * back for the page to preview, and applying it goes through the ordinary saves.
  * A reply the app can't read gets one repair attempt, which is not counted.
  */
-export async function POST(request: Request) {
-  const session = await auth()
-  const email = session?.user?.email
-  if (!email) return NextResponse.json({ error: "unauthorized" }, { status: 401 })
+export const POST = withUser(async ({ email, request }) => {
   if (!plannerConfigured()) return NextResponse.json({ error: "unavailable" }, { status: 503 })
 
   let body: Record<string, unknown>
@@ -87,11 +80,11 @@ export async function POST(request: Request) {
   const usesKey = planUsesKey(email, today())
   try {
     if (await getCoach(email)) return NextResponse.json({ error: "following" }, { status: 409 })
-    const used = await kv.incr(usesKey)
-    if (used === 1) await kv.expire(usesKey, 60 * 60 * 48)
+    const used = await store.incr(usesKey)
+    if (used === 1) await store.expire(usesKey, 60 * 60 * 48)
     if (used > DAILY_LIMIT) return NextResponse.json({ error: "limit", remaining: 0 }, { status: 429 })
 
-    const [routine, profile] = await Promise.all([loadRoutineOf(email), kv.get<UserProfile>(profileKey(email))])
+    const [routine, profile] = await Promise.all([loadRoutineOf(email), readProfile(email)])
     const ctx: PlanContext = {}
     if (isLiftFocused(profile) && profile?.mainLift) ctx.mainLift = MAIN_LIFT_LABEL[profile.mainLift]
 
@@ -105,7 +98,7 @@ export async function POST(request: Request) {
 
     if (!result?.ok) {
       // Nothing usable came back, so it doesn't count against the user's day.
-      await kv.decr(usesKey)
+      await store.decr(usesKey)
       const busy = !reply.ok && reply.reason === "busy"
       return NextResponse.json({ error: busy ? "busy" : "bad-plan" }, { status: busy ? 503 : 502 })
     }
@@ -117,4 +110,4 @@ export async function POST(request: Request) {
   } catch {
     return NextResponse.json({ error: "failed" }, { status: 503 })
   }
-}
+})

@@ -1,8 +1,8 @@
-import { kv } from "@vercel/kv"
 import { NextResponse } from "next/server"
-import { auth } from "@/auth"
-import { UserProfile, WeightEntry } from "@/lib/types"
-import { profileKey, weightsKey } from "@/lib/userKeys"
+import { readProfile, store, writeProfile } from "@/lib/server/db"
+import { withUser } from "@/lib/server/withUser"
+import { WeightEntry } from "@/lib/types"
+import { weightsKey } from "@/lib/userKeys"
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/
 /** Twenty years of daily weigh-ins. A payload larger than this is a bug, not a user. */
@@ -34,13 +34,9 @@ function sanitize(input: unknown): WeightEntry[] | null {
   return entries.slice(-MAX_ENTRIES)
 }
 
-export async function GET() {
-  const session = await auth()
-  const email = session?.user?.email
-  if (!email) return NextResponse.json({ error: "unauthorized" }, { status: 401 })
-
+export const GET = withUser(async ({ email }) => {
   try {
-    const data = await kv.get<WeightEntry[]>(weightsKey(email))
+    const data = await store.get<WeightEntry[]>(weightsKey(email))
     // null means "never synced" and tells the client to keep whatever it has locally.
     // An empty array is a real state — someone deleted their last entry on another
     // device — and must be sent as such so that deletion propagates.
@@ -48,13 +44,9 @@ export async function GET() {
   } catch {
     return NextResponse.json(null, { status: 503 })
   }
-}
+})
 
-export async function POST(request: Request) {
-  const session = await auth()
-  const email = session?.user?.email
-  if (!email) return NextResponse.json({ error: "unauthorized" }, { status: 401 })
-
+export const POST = withUser(async ({ email, request }) => {
   let body: unknown
   try {
     body = await request.json()
@@ -66,7 +58,7 @@ export async function POST(request: Request) {
   if (!entries) return NextResponse.json({ error: "expected an array of entries" }, { status: 400 })
 
   try {
-    await kv.set(weightsKey(email), entries)
+    await store.set(weightsKey(email), entries)
 
     // `profile.bw` is the number the profile page, ShareCard and getLatestBW read, and
     // before this feature it was whatever was typed at onboarding. Keep it pinned to the
@@ -75,9 +67,9 @@ export async function POST(request: Request) {
     // never rewrites the current bodyweight.
     const newest = entries[entries.length - 1]
     if (newest) {
-      const profile = await kv.get<UserProfile>(profileKey(email))
+      const profile = await readProfile(email)
       if (profile && profile.bw !== newest.kg) {
-        await kv.set(profileKey(email), { ...profile, bw: newest.kg })
+        await writeProfile(email, { ...profile, bw: newest.kg })
       }
     }
 
@@ -85,4 +77,4 @@ export async function POST(request: Request) {
   } catch {
     return NextResponse.json({ error: "KV write failed" }, { status: 503 })
   }
-}
+})

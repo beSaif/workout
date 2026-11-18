@@ -1,8 +1,15 @@
-import { kv } from "@vercel/kv"
 import { NextResponse } from "next/server"
-import { auth } from "@/auth"
-import { Session, TrainingBlock, UserProfile, MainLift, TrainingMode } from "@/lib/types"
+import { UserProfile, MainLift, TrainingMode } from "@/lib/types"
 import { stopTrainingUnder } from "@/lib/coach"
+import {
+  copySessionsDoc,
+  readLegacySessionsDoc,
+  readProfile,
+  store,
+  writeProfile,
+  writeSessionsDoc,
+} from "@/lib/server/db"
+import { withUser } from "@/lib/server/withUser"
 import {
   profileKey,
   sessionsKey,
@@ -19,31 +26,25 @@ import {
   pushSubKey,
   reminderStateKey,
   isLegacyOwner,
-  LEGACY_SESSIONS_KEY,
   LEGACY_EXERCISES_KEY,
 } from "@/lib/userKeys"
 
 const ALLOWED_LIFTS: MainLift[] = ["bench", "deadlift", "squat"]
 const ALLOWED_MODES: TrainingMode[] = ["lift-focused", "balanced"]
 
-interface LegacySessionsData {
-  sessions: Session[]
-  blocks: TrainingBlock[]
-}
-
 async function tryLegacyMigration(email: string): Promise<UserProfile | null> {
   if (!isLegacyOwner(email)) return null
 
-  const [legacySessionsRaw, legacyExercises] = await Promise.all([
-    kv.get(LEGACY_SESSIONS_KEY),
-    kv.get(LEGACY_EXERCISES_KEY),
+  const [legacySessions, legacyExercises] = await Promise.all([
+    readLegacySessionsDoc(),
+    store.get(LEGACY_EXERCISES_KEY),
   ])
 
-  if (!legacySessionsRaw && !legacyExercises) return null
+  if (!legacySessions && !legacyExercises) return null
 
-  const legacy: LegacySessionsData = Array.isArray(legacySessionsRaw)
-    ? { sessions: legacySessionsRaw as Session[], blocks: [] }
-    : ((legacySessionsRaw as LegacySessionsData) ?? { sessions: [], blocks: [] })
+  // Bodyweight and anchor are read from the document only when it validates. It is
+  // copied across as stored either way, so the owner's history is never dropped.
+  const legacy = legacySessions?.valid ?? { sessions: [], blocks: [] }
 
   const confirmed = legacy.sessions.filter((s) => s.confirmed && s.date)
   const latestBW = [...confirmed]
@@ -66,24 +67,20 @@ async function tryLegacyMigration(email: string): Promise<UserProfile | null> {
   }
 
   const writes: Array<Promise<unknown>> = [
-    kv.set(profileKey(email), profile),
-    kv.set(sessionsKey(email), legacy),
+    writeProfile(email, profile),
+    legacySessions ? copySessionsDoc(email, legacySessions) : writeSessionsDoc(email, legacy),
   ]
   if (legacyExercises) {
-    writes.push(kv.set(exercisesKey(email), legacyExercises))
+    writes.push(store.set(exercisesKey(email), legacyExercises))
   }
   await Promise.all(writes)
 
   return profile
 }
 
-export async function GET() {
-  const session = await auth()
-  const email = session?.user?.email
-  if (!email) return NextResponse.json({ error: "unauthorized" }, { status: 401 })
-
+export const GET = withUser(async ({ email }) => {
   try {
-    const existing = await kv.get<UserProfile>(profileKey(email))
+    const existing = await readProfile(email)
     if (existing) return NextResponse.json(existing)
 
     const migrated = await tryLegacyMigration(email)
@@ -93,17 +90,13 @@ export async function GET() {
   } catch {
     return NextResponse.json(null, { status: 503 })
   }
-}
+})
 
-export async function DELETE() {
-  const session = await auth()
-  const email = session?.user?.email
-  if (!email) return NextResponse.json({ error: "unauthorized" }, { status: 401 })
-
+export const DELETE = withUser(async ({ email }) => {
   try {
     // Unlink coaching before the split goes: each athlete keeps the routine they were
     // training as their own, which needs this account's days and groups still there.
-    const athletes = await kv.smembers(athletesKey(email))
+    const athletes = await store.smembers(athletesKey(email))
     for (const athlete of athletes) await stopTrainingUnder(athlete)
     await stopTrainingUnder(email)
 
@@ -111,48 +104,44 @@ export async function DELETE() {
     // inflated and a re-registration with the same email gets the old friends back.
     const me = email.trim().toLowerCase()
     const [friends, requestsIn, requestsOut] = await Promise.all([
-      kv.smembers(friendsKey(me)),
-      kv.smembers(friendRequestsInKey(me)),
-      kv.smembers(friendRequestsOutKey(me)),
+      store.smembers(friendsKey(me)),
+      store.smembers(friendRequestsInKey(me)),
+      store.smembers(friendRequestsOutKey(me)),
     ])
     await Promise.all([
-      ...friends.map((f) => kv.srem(friendsKey(f), me)),
-      ...requestsIn.map((r) => kv.srem(friendRequestsOutKey(r), me)),
+      ...friends.map((f) => store.srem(friendsKey(f), me)),
+      ...requestsIn.map((r) => store.srem(friendRequestsOutKey(r), me)),
       ...requestsOut.flatMap((t) => [
-        kv.srem(friendRequestsInKey(t), me),
-        kv.hdel(friendRequestTimesKey(t), me),
+        store.srem(friendRequestsInKey(t), me),
+        store.hdel(friendRequestTimesKey(t), me),
       ]),
     ])
 
     await Promise.all([
-      kv.del(profileKey(email)),
-      kv.del(sessionsKey(email)),
-      kv.del(exercisesKey(email)),
-      kv.del(trainingDaysKey(email)),
-      kv.del(weightsKey(email)),
-      kv.del(athletesKey(email)),
-      kv.del(friendsKey(email)),
-      kv.del(friendRequestsInKey(email)),
-      kv.del(friendRequestsOutKey(email)),
-      kv.del(friendRequestTimesKey(email)),
-      kv.del(messageInboxKey(email)),
-      kv.del(presenceKey(email)),
+      store.del(profileKey(email)),
+      store.del(sessionsKey(email)),
+      store.del(exercisesKey(email)),
+      store.del(trainingDaysKey(email)),
+      store.del(weightsKey(email)),
+      store.del(athletesKey(email)),
+      store.del(friendsKey(email)),
+      store.del(friendRequestsInKey(email)),
+      store.del(friendRequestsOutKey(email)),
+      store.del(friendRequestTimesKey(email)),
+      store.del(messageInboxKey(email)),
+      store.del(presenceKey(email)),
       // The push subscription is the cron's roster; leaving it would keep reminding
       // a deleted account.
-      kv.del(pushSubKey(email)),
-      kv.del(reminderStateKey(email)),
+      store.del(pushSubKey(email)),
+      store.del(reminderStateKey(email)),
     ])
     return NextResponse.json({ ok: true })
   } catch {
     return NextResponse.json({ error: "KV delete failed" }, { status: 503 })
   }
-}
+})
 
-export async function POST(request: Request) {
-  const session = await auth()
-  const email = session?.user?.email
-  if (!email) return NextResponse.json({ error: "unauthorized" }, { status: 401 })
-
+export const POST = withUser(async ({ email, request }) => {
   let body: Partial<UserProfile>
   try {
     body = await request.json()
@@ -184,7 +173,7 @@ export async function POST(request: Request) {
     if (!targetValid) return NextResponse.json({ error: "target invalid" }, { status: 400 })
   }
 
-  const existing = await kv.get<UserProfile>(profileKey(email))
+  const existing = await readProfile(email)
 
   // This handler rebuilds the profile from scratch, so any field it doesn't name is
   // dropped. The three callers of saveProfile all send the whole profile as they knew
@@ -218,9 +207,9 @@ export async function POST(request: Request) {
   }
 
   try {
-    await kv.set(profileKey(email), profile)
+    await writeProfile(email, profile)
     return NextResponse.json(profile)
   } catch {
     return NextResponse.json({ error: "KV write failed" }, { status: 503 })
   }
-}
+})
