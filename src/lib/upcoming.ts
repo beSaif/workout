@@ -200,12 +200,32 @@ export function restoreMainLift(
 }
 
 /**
+ * Lift-focused, no main-lift sets, yet not marked as skipped. The logger can't remove
+ * the main lift any more, but a draft saved by an older version still can, and such a
+ * session must not use up the block slot it was prescribed for.
+ */
+function droppedMainLift(session: Session, profile: UserProfile): boolean {
+  return isLiftFocused(profile) && !session.skippedMainLift && session.sets.length === 0
+}
+
+/**
+ * The session as Home stores it once logged. One that lost its main lift is filed the
+ * way Skip on the up-next card files it (accessories only, outside the block), so the
+ * current stretch and History show it as a skip. The user's notes stay as written.
+ */
+export function asLoggedSession(session: Session, profile: UserProfile): Session {
+  if (!droppedMainLift(session, profile)) return session
+  return { ...session, type: "Free", sets: [], blockId: undefined, skippedMainLift: true }
+}
+
+/**
  * The blocks once `session` is logged: it joins the active block, which closes (and
  * hands over to the next) when that fills it. `completed` is the block that just closed.
  *
  * Balanced mode never advances a block; whatever blocks exist stay parked for a later
  * switch back. A session that skipped the main lift doesn't advance one either — the
  * block stays where it is so the load it was carrying is prescribed again next time.
+ * Nor does one logged without any main-lift sets: that is a skip, however it got here.
  */
 export function blocksAfterConfirm(
   blocks: TrainingBlock[],
@@ -213,7 +233,7 @@ export function blocksAfterConfirm(
   confirmedSessions: Session[],
   profile: UserProfile
 ): { blocks: TrainingBlock[]; completed: TrainingBlock | null } {
-  const advancesBlock = isLiftFocused(profile) && !session.skippedMainLift
+  const advancesBlock = isLiftFocused(profile) && !session.skippedMainLift && !droppedMainLift(session, profile)
   const activeBlock = advancesBlock ? getActiveBlock(blocks) : undefined
   if (!activeBlock) return { blocks, completed: null }
 

@@ -16,6 +16,7 @@ import { restartActiveBlock } from "./layoff"
 import { suggestNextDay } from "./balance"
 import { DEFAULT_MUSCLE_GROUPS, DEFAULT_TRAINING_DAYS } from "./exerciseConfig"
 import {
+  asLoggedSession,
   backfillMuscles,
   blocksAfterConfirm,
   countSkippedSlots,
@@ -47,6 +48,7 @@ interface World {
 
 type Action =
   | { kind: "log"; repsDelta: number; rpe: number | null; gapDays: number }
+  | { kind: "log-without-main"; gapDays: number }
   | { kind: "skip" }
   | { kind: "restore" }
   | { kind: "jump"; phase: BlockPhase; index: number }
@@ -71,17 +73,30 @@ function performed(upcoming: Session, date: Date, repsDelta: number, rpe: number
   }
 }
 
+/**
+ * What the logger handed back before the main lift was protected there: accessories
+ * only, the main lift removed, and no Skip on record. Drafts saved then can still do it.
+ */
+function performedWithoutMain(upcoming: Session, date: Date): Session {
+  return { ...performed(upcoming, date, 0, null), sets: [] }
+}
+
+/** handleConfirmSession: the session is stored as asLoggedSession files it, then the block moves on (or not). */
+function confirm(w: World, fromLogger: Session, gapDays: number): World {
+  const logged = asLoggedSession(fromLogger, w.profile)
+  const confirmed = [...w.confirmed, logged]
+  const { blocks } = blocksAfterConfirm(w.blocks, logged, confirmed, w.profile)
+  const now = later(w.now, gapDays)
+  return { ...w, confirmed, blocks, now, upcoming: upcomingFor({ ...w, confirmed, blocks, now }) }
+}
+
 /** One user action, as Home's handlers carry it out. Actions the UI wouldn't offer are no-ops. */
 function step(w: World, action: Action): World {
   switch (action.kind) {
-    case "log": {
-      // handleConfirmSession
-      const logged = performed(w.upcoming, w.now, action.repsDelta, action.rpe)
-      const confirmed = [...w.confirmed, logged]
-      const { blocks } = blocksAfterConfirm(w.blocks, logged, confirmed, w.profile)
-      const now = later(w.now, action.gapDays)
-      return { ...w, confirmed, blocks, now, upcoming: upcomingFor({ ...w, confirmed, blocks, now }) }
-    }
+    case "log":
+      return confirm(w, performed(w.upcoming, w.now, action.repsDelta, action.rpe), action.gapDays)
+    case "log-without-main":
+      return confirm(w, performedWithoutMain(w.upcoming, w.now), action.gapDays)
     case "skip":
       // handleSkipMainLift: only offered on a card that still has its main lift
       if (w.upcoming.skippedMainLift) return w
@@ -203,6 +218,10 @@ const actionArb: fc.Arbitrary<Action> = fc.oneof(
       gapDays: fc.integer({ min: 1, max: 4 }),
     }),
   },
+  {
+    weight: 2,
+    arbitrary: fc.record({ kind: fc.constant("log-without-main" as const), gapDays: fc.integer({ min: 1, max: 4 }) }),
+  },
   { weight: 2, arbitrary: fc.constant<Action>({ kind: "skip" }) },
   { weight: 1, arbitrary: fc.constant<Action>({ kind: "restore" }) },
   {
@@ -313,6 +332,68 @@ describe("Main Lift mode: the main lift opens every upcoming session", () => {
     )
   })
 
+  it("a session logged with the main lift removed counts as a skip: the load carries over, the block stays put", () => {
+    fc.assert(
+      fc.property(
+        liftHistoryArb,
+        fc.array(fc.record({ viaSkip: fc.boolean(), gapDays: fc.integer({ min: 1, max: 4 }) }), { minLength: 1, maxLength: 4 }),
+        (states, logs) => {
+          let w = last(states)
+          if (w.upcoming.skippedMainLift) w = step(w, { kind: "restore" })
+          const held = w.upcoming
+          const blocksBefore = w.blocks
+
+          for (const { viaSkip, gapDays } of logs) {
+            if (viaSkip) w = step(w, { kind: "skip" })
+            w = step(w, { kind: "log-without-main", gapDays })
+
+            // Filed exactly as a skipped session is, whichever way it got there.
+            const logged = last(w.confirmed)
+            expect(logged).toMatchObject({ type: "Free", sets: [], skippedMainLift: true, confirmed: true })
+            expect(logged.blockId).toBeUndefined()
+            expect(w.blocks.some((b) => b.sessionIds.includes(logged.id))).toBe(false)
+
+            const next = w.upcoming
+            expect(next.skippedMainLift).toBeUndefined()
+            expect(next.id).toBeGreaterThan(held.id)
+            expect(next.type).toBe(held.type)
+            expect(next.sets).toEqual(held.sets)
+            expect(next.blockId).toBe(held.blockId)
+            expect(next.coachNote).toBe(held.coachNote)
+            expect(w.blocks).toEqual(blocksBefore)
+          }
+        }
+      )
+    )
+  })
+
+  it("deadlift: removing the main lift and logging keeps Accumulation 1 on deck", () => {
+    const profile: UserProfile = {
+      email: "sam@example.com", name: "Sam", bw: 90, trainingMode: "lift-focused",
+      mainLift: "deadlift", anchor: 100, target: 140, createdAt: "2026-01-01T00:00:00.000Z",
+    }
+    const now = new Date("2026-03-02T18:00:00.000Z")
+    const blocks = [createFirstBlock(1, 100, [])]
+    const upcoming = createUpcomingSession([], blocks, CONFIG, profile, DEFAULT_TRAINING_DAYS, now)
+    expect(upcoming.coachNote).toMatch(/^\[Accumulation 1\/9\] 67\.5kg × 8 × 4\. Aim for RPE 6\./)
+
+    const fromLogger = performedWithoutMain(upcoming, now)
+    // Without the guard this joined the block and Accumulation 2 (67.5 × 8 × 5 @6.5) came next.
+    const logged = asLoggedSession(fromLogger, profile)
+    expect(logged).toEqual({ ...fromLogger, type: "Free", blockId: undefined, skippedMainLift: true })
+    const { blocks: after, completed } = blocksAfterConfirm(blocks, logged, [logged], profile)
+    expect(after).toBe(blocks)
+    expect(after[0].sessionIds).toEqual([])
+    expect(completed).toBeNull()
+    // Even a caller that skips asLoggedSession doesn't advance the block.
+    expect(blocksAfterConfirm(blocks, fromLogger, [fromLogger], profile).blocks).toBe(blocks)
+
+    const next = createUpcomingSession([logged], after, CONFIG, profile, DEFAULT_TRAINING_DAYS, later(now, 2))
+    expect(next.coachNote).toBe(upcoming.coachNote)
+    expect(describePrescription(next)).toBe("67.5kg × 8 × 4")
+    expect(next.blockId).toBe(1)
+  })
+
   it("Restore puts back exactly the card that was skipped", () => {
     fc.assert(
       fc.property(liftHistoryArb, (states) => {
@@ -332,6 +413,7 @@ describe("Main Lift mode: the main lift opens every upcoming session", () => {
         if (w.upcoming.skippedMainLift) w = step(w, { kind: "restore" })
         const active = getActiveBlock(w.blocks)
         const logged = performed(w.upcoming, w.now, 0, null)
+        expect(asLoggedSession(logged, w.profile)).toBe(logged)
         const confirmed = [...w.confirmed, logged]
         const { blocks, completed } = blocksAfterConfirm(w.blocks, logged, confirmed, w.profile)
 
@@ -384,6 +466,8 @@ describe("Balanced mode", () => {
         expect(upcomingMatchesMode(u, balanced)).toBe(true)
 
         const logged = { ...u, confirmed: true, date: w.now.toISOString() }
+        // No main lift is expected in Balanced mode, so an empty one isn't a skip.
+        expect(asLoggedSession(logged, balanced)).toBe(logged)
         const result = blocksAfterConfirm(w.blocks, logged, [...w.confirmed, logged], balanced)
         expect(result.blocks).toBe(w.blocks)
         expect(result.completed).toBeNull()

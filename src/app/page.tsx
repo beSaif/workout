@@ -67,6 +67,7 @@ import {
   skipMainLift,
   restoreMainLift,
   blocksAfterConfirm,
+  asLoggedSession,
 } from "@/lib/upcoming"
 
 const DRAFT_MAX_AGE_MS = 24 * 60 * 60 * 1000
@@ -582,8 +583,10 @@ export default function Page() {
     setCheckIn({ day: dateKey(), prompted: false })
   }
 
-  function handleConfirmSession(incoming: Session) {
+  function handleConfirmSession(logged: Session) {
     if (!profile) return
+    // A session that lost its main lift is stored as a skip, matching blocksAfterConfirm.
+    const incoming = asLoggedSession(logged, profile)
 
     // Fill in the bodyweight this session was trained at, from that day's check-in.
     // The field has always existed and is already rendered by SessionCard, the session
