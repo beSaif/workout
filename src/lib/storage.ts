@@ -1,8 +1,21 @@
-import { Session, TrainingBlock, STORAGE_KEY, BLOCKS_KEY, SessionDraft, DRAFT_KEY, EXERCISES_KEY, PROFILE_KEY, PRESENCES_KEY, FRIENDS_KEY, TRAINING_DAYS_KEY, LAYOFF_DISMISS_KEY, EXERCISES_MIGRATION_KEY, WEIGHTS_KEY, WEIGH_IN_SKIP_KEY, WHATS_NEW_SEEN_KEY, PENDING_SYNC_KEY, ROUTINE_UNDO_KEY, UserProfile, UserPresence, TrainingDay, WeightEntry } from "./types"
+import { Session, TrainingBlock, STORAGE_KEY, BLOCKS_KEY, SessionDraft, DRAFT_KEY, EXERCISES_KEY, PROFILE_KEY, PRESENCES_KEY, FRIENDS_KEY, TRAINING_DAYS_KEY, LAYOFF_DISMISS_KEY, EXERCISES_MIGRATION_KEY, WEIGHTS_KEY, WEIGH_IN_SKIP_KEY, WHATS_NEW_SEEN_KEY, PENDING_SYNC_KEY, ROUTINE_UNDO_KEY, PENDING_ONBOARDING_KEY, INSTALL_GUIDE_DISMISSED_KEY, UserProfile, UserPresence, TrainingDay, WeightEntry } from "./types"
 import { MuscleGroupConfig, DEFAULT_MUSCLE_GROUPS, DEFAULT_TRAINING_DAYS, EXERCISE_CONFIG_MIGRATION, migrateExerciseConfig, retireReplacedGroups } from "./exerciseConfig"
 import { PersonSummary } from "./routines"
+import { localSource, notifyLocalChange } from "./useLocalValue"
 
 type StoredData = { sessions: Session[]; blocks: TrainingBlock[] }
+
+// Every write goes through these two so components reading via useLocalValue re-render:
+// the browser's own `storage` event never fires in the tab that made the change.
+function writeItem(key: string, value: string): void {
+  localStorage.setItem(key, value)
+  notifyLocalChange()
+}
+
+function removeItem(key: string): void {
+  localStorage.removeItem(key)
+  notifyLocalChange()
+}
 
 /**
  * Writes to KV are fire-and-forget, so a save made offline (or while KV is down) only
@@ -24,8 +37,8 @@ function readPending(): Partial<Record<SyncTarget, string>> {
 
 function writePending(map: Partial<Record<SyncTarget, string>>): void {
   try {
-    if (Object.keys(map).length === 0) localStorage.removeItem(PENDING_SYNC_KEY)
-    else localStorage.setItem(PENDING_SYNC_KEY, JSON.stringify(map))
+    if (Object.keys(map).length === 0) removeItem(PENDING_SYNC_KEY)
+    else writeItem(PENDING_SYNC_KEY, JSON.stringify(map))
   } catch {
     // Private mode / quota — the write is simply not retried.
   }
@@ -100,7 +113,7 @@ function exerciseMigrationPending(): boolean {
 
 function markExerciseMigrationDone(): void {
   try {
-    localStorage.setItem(EXERCISES_MIGRATION_KEY, String(EXERCISE_CONFIG_MIGRATION))
+    writeItem(EXERCISES_MIGRATION_KEY, String(EXERCISE_CONFIG_MIGRATION))
   } catch {
     // Private mode / quota — the migration just no-ops next load, since by then the
     // config it repaired already carries the exercise it would add.
@@ -134,20 +147,33 @@ export function loadProfileLocal(): UserProfile | null {
   }
 }
 
+/**
+ * The cached copies above as sources for useLocalValue / useCachedState, which is how
+ * a component reads them: during render, without a hydration mismatch.
+ */
+export const sessionsCache = localSource([STORAGE_KEY], loadSessionsLocal)
+export const blocksCache = localSource([BLOCKS_KEY], loadBlocksLocal)
+export const profileCache = localSource([PROFILE_KEY], loadProfileLocal)
+// The migration marker changes what loadExerciseConfigLocal returns, so it is watched too.
+export const exerciseConfigCache = localSource([EXERCISES_KEY, EXERCISES_MIGRATION_KEY], loadExerciseConfigLocal)
+export const trainingDaysCache = localSource([TRAINING_DAYS_KEY], loadTrainingDaysLocal)
+export const weightsCache = localSource([WEIGHTS_KEY], loadWeightsLocal)
+export const routineSnapshotCache = localSource([ROUTINE_UNDO_KEY], loadRoutineSnapshot)
+
 function saveLocal(sessions: Session[]): void {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(sessions))
+  writeItem(STORAGE_KEY, JSON.stringify(sessions))
 }
 
 function saveBlocksLocal(blocks: TrainingBlock[]): void {
-  localStorage.setItem(BLOCKS_KEY, JSON.stringify(blocks))
+  writeItem(BLOCKS_KEY, JSON.stringify(blocks))
 }
 
 function saveExerciseConfigLocal(config: MuscleGroupConfig[]): void {
-  localStorage.setItem(EXERCISES_KEY, JSON.stringify(config))
+  writeItem(EXERCISES_KEY, JSON.stringify(config))
 }
 
 function saveProfileLocal(profile: UserProfile): void {
-  localStorage.setItem(PROFILE_KEY, JSON.stringify(profile))
+  writeItem(PROFILE_KEY, JSON.stringify(profile))
 }
 
 export async function loadProfile(): Promise<UserProfile | null> {
@@ -196,7 +222,7 @@ export function loadTrainingDaysLocal(): TrainingDay[] {
 }
 
 function saveTrainingDaysLocal(days: TrainingDay[]): void {
-  localStorage.setItem(TRAINING_DAYS_KEY, JSON.stringify(days))
+  writeItem(TRAINING_DAYS_KEY, JSON.stringify(days))
 }
 
 /**
@@ -241,7 +267,7 @@ export function loadWeightsLocal(): WeightEntry[] {
 }
 
 function saveWeightsLocal(entries: WeightEntry[]): void {
-  localStorage.setItem(WEIGHTS_KEY, JSON.stringify(entries))
+  writeItem(WEIGHTS_KEY, JSON.stringify(entries))
 }
 
 /**
@@ -289,7 +315,7 @@ export function loadWeighInSkipLocal(): string | null {
 
 export function saveWeighInSkipLocal(day: string): void {
   try {
-    localStorage.setItem(WEIGH_IN_SKIP_KEY, day)
+    writeItem(WEIGH_IN_SKIP_KEY, day)
   } catch {
     // Private mode / quota — the prompt just reappears on the next load.
   }
@@ -321,24 +347,34 @@ export function saveWeights(entries: WeightEntry[]): void {
   void pushTracked("weights", "/api/weights", entries)
 }
 
-/** Wipe all per-user local data — call on sign out. */
+/**
+ * Wipe all per-user local data — call on sign out. Device preferences (Dot, haptics,
+ * the dismissed install guide) belong to the phone, not the account, and stay.
+ */
 export function wipeLocalUserData(): void {
-  localStorage.removeItem(STORAGE_KEY)
-  localStorage.removeItem(BLOCKS_KEY)
-  localStorage.removeItem(EXERCISES_KEY)
-  localStorage.removeItem(PROFILE_KEY)
-  localStorage.removeItem(DRAFT_KEY)
-  localStorage.removeItem(TRAINING_DAYS_KEY)
-  localStorage.removeItem(LAYOFF_DISMISS_KEY)
-  localStorage.removeItem(WEIGHTS_KEY)
-  localStorage.removeItem(WEIGH_IN_SKIP_KEY)
-  localStorage.removeItem(MINI_PLAYER_KEY)
-  localStorage.removeItem(PRESENCES_KEY)
-  localStorage.removeItem(FRIENDS_KEY)
-  localStorage.removeItem(FRIEND_LAST_ACTIVE_KEY)
-  localStorage.removeItem(WHATS_NEW_SEEN_KEY)
-  localStorage.removeItem(PENDING_SYNC_KEY)
-  localStorage.removeItem(ROUTINE_UNDO_KEY)
+  for (const key of [
+    STORAGE_KEY,
+    BLOCKS_KEY,
+    EXERCISES_KEY,
+    PROFILE_KEY,
+    DRAFT_KEY,
+    TRAINING_DAYS_KEY,
+    LAYOFF_DISMISS_KEY,
+    WEIGHTS_KEY,
+    WEIGH_IN_SKIP_KEY,
+    MINI_PLAYER_KEY,
+    PRESENCES_KEY,
+    FRIENDS_KEY,
+    FRIEND_LAST_ACTIVE_KEY,
+    WHATS_NEW_SEEN_KEY,
+    PENDING_SYNC_KEY,
+    ROUTINE_UNDO_KEY,
+    // Name and lifts typed before sign-in; consumed straight after it, so normally gone.
+    PENDING_ONBOARDING_KEY,
+  ]) {
+    localStorage.removeItem(key)
+  }
+  notifyLocalChange()
 }
 
 /**
@@ -356,7 +392,7 @@ export function loadLayoffDismissLocal(): string | null {
 
 export function saveLayoffDismissLocal(key: string): void {
   try {
-    localStorage.setItem(LAYOFF_DISMISS_KEY, key)
+    writeItem(LAYOFF_DISMISS_KEY, key)
   } catch {
     // Private mode / quota — the banner just reappears next load.
   }
@@ -514,7 +550,7 @@ export function applyRoutinePlan(
 ): void {
   const snapshot: RoutineSnapshot = { ...previous, savedAt: new Date().toISOString() }
   try {
-    localStorage.setItem(ROUTINE_UNDO_KEY, JSON.stringify(snapshot))
+    writeItem(ROUTINE_UNDO_KEY, JSON.stringify(snapshot))
   } catch {
     // Private mode / quota: the plan still applies, there is just no undo.
   }
@@ -536,7 +572,7 @@ export function loadRoutineSnapshot(): RoutineSnapshot | null {
 
 export function clearRoutineSnapshot(): void {
   try {
-    localStorage.removeItem(ROUTINE_UNDO_KEY)
+    removeItem(ROUTINE_UNDO_KEY)
   } catch {
     // nothing to clear
   }
@@ -564,7 +600,7 @@ export function saveAll(sessions: Session[], blocks: TrainingBlock[]): void {
 }
 
 export function saveDraft(draft: SessionDraft): void {
-  localStorage.setItem(DRAFT_KEY, JSON.stringify(draft))
+  writeItem(DRAFT_KEY, JSON.stringify(draft))
 }
 
 export function loadDraft(): SessionDraft | null {
@@ -578,7 +614,7 @@ export function loadDraft(): SessionDraft | null {
 }
 
 export function clearDraft(): void {
-  localStorage.removeItem(DRAFT_KEY)
+  removeItem(DRAFT_KEY)
 }
 
 export function loadPresencesLocal(): UserPresence[] {
@@ -593,7 +629,7 @@ export function loadPresencesLocal(): UserPresence[] {
 }
 
 export function savePresencesLocal(presences: UserPresence[]): void {
-  localStorage.setItem(PRESENCES_KEY, JSON.stringify(presences))
+  writeItem(PRESENCES_KEY, JSON.stringify(presences))
 }
 
 export function loadFriendEmailsLocal(): string[] {
@@ -608,7 +644,7 @@ export function loadFriendEmailsLocal(): string[] {
 }
 
 export function saveFriendEmailsLocal(emails: string[]): void {
-  localStorage.setItem(FRIENDS_KEY, JSON.stringify(emails))
+  writeItem(FRIENDS_KEY, JSON.stringify(emails))
 }
 
 const FRIEND_LAST_ACTIVE_KEY = "bench_friend_last_active"
@@ -625,7 +661,7 @@ export function loadFriendLastActiveLocal(): Record<string, string> {
 }
 
 export function saveFriendLastActiveLocal(dates: Record<string, string>): void {
-  localStorage.setItem(FRIEND_LAST_ACTIVE_KEY, JSON.stringify(dates))
+  writeItem(FRIEND_LAST_ACTIVE_KEY, JSON.stringify(dates))
 }
 
 const MINI_PLAYER_KEY = 'lift-tracker-mini-player'
@@ -639,7 +675,7 @@ export interface MiniPlayerState {
 }
 
 export function saveMiniPlayer(state: MiniPlayerState): void {
-  localStorage.setItem(MINI_PLAYER_KEY, JSON.stringify(state))
+  writeItem(MINI_PLAYER_KEY, JSON.stringify(state))
 }
 
 export function loadMiniPlayer(): MiniPlayerState | null {
@@ -653,5 +689,48 @@ export function loadMiniPlayer(): MiniPlayerState | null {
 }
 
 export function clearMiniPlayer(): void {
-  localStorage.removeItem(MINI_PLAYER_KEY)
+  removeItem(MINI_PLAYER_KEY)
+}
+
+/** Drop the cached sessions and blocks, leaving KV alone. A /dev tool. */
+export function clearSessionsLocal(): void {
+  removeItem(STORAGE_KEY)
+  removeItem(BLOCKS_KEY)
+}
+
+/** Whether the add-to-home-screen guide was dismissed on this device. */
+export function loadInstallGuideDismissed(): boolean {
+  try {
+    return !!localStorage.getItem(INSTALL_GUIDE_DISMISSED_KEY)
+  } catch {
+    return false
+  }
+}
+
+export function saveInstallGuideDismissed(): void {
+  try {
+    writeItem(INSTALL_GUIDE_DISMISSED_KEY, "1")
+  } catch {
+    // Private mode / quota — the guide just offers itself again next time.
+  }
+}
+
+/**
+ * Onboarding answers typed before Google sign-in, which leaves the page. They are kept
+ * here across the redirect and read back once, on the way in.
+ */
+export function savePendingOnboarding(pending: unknown): void {
+  writeItem(PENDING_ONBOARDING_KEY, JSON.stringify(pending))
+}
+
+/** The stashed answers, removed as they are read. Null when there are none or they don't parse. */
+export function takePendingOnboarding<T>(): T | null {
+  const raw = localStorage.getItem(PENDING_ONBOARDING_KEY)
+  if (!raw) return null
+  removeItem(PENDING_ONBOARDING_KEY)
+  try {
+    return JSON.parse(raw) as T
+  } catch {
+    return null
+  }
 }

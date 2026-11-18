@@ -1,4 +1,5 @@
 import { DOT_KEY, MainLift, Session } from "./types"
+import { localSource, notifyLocalChange } from "./useLocalValue"
 import { haptic } from "./haptics"
 
 /**
@@ -28,8 +29,12 @@ export function saveDotEnabled(on: boolean): void {
   } catch {
     // Private mode: the switch just will not stick past this page.
   }
+  notifyLocalChange()
   window.dispatchEvent(new Event(DOT_CHANGE_EVENT))
 }
+
+/** The switch, for useLocalValue. */
+export const dotEnabledSource = localSource([DOT_KEY], loadDotEnabled)
 
 /**
  * A finished set, as Dot sees it. A new best outranks a grinder, which outranks a tick.

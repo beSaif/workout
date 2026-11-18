@@ -4,7 +4,7 @@ import { useState, useEffect, useLayoutEffect } from "react"
 import { useRouter } from "next/navigation"
 import { signIn } from "next-auth/react"
 import { MainLift, MAIN_LIFT_LABEL, TrainingMode, TRAINING_MODE_LABEL, TRAINING_MODE_DESC, TrainingAge } from "@/lib/types"
-import { loadProfile, saveProfile } from "@/lib/storage"
+import { loadProfile, saveProfile, savePendingOnboarding, takePendingOnboarding } from "@/lib/storage"
 import { markWhatsNewSeen } from "@/lib/whatsNew"
 
 // 0 name · 1 bodyweight · 2 hook · 3 two parts · 4 training focus
@@ -24,7 +24,6 @@ const BALANCED_STEPS: Step[] = [0, 1, 2, 3, 4, 9]
 
 const LIFTS: MainLift[] = ["bench", "deadlift", "squat"]
 const MODES: TrainingMode[] = ["lift-focused", "balanced"]
-const PENDING_KEY = "lift-tracker-pending-onboarding"
 const TIMED_STEPS = new Set([2, 3, 6, 9])
 
 interface PendingOnboarding {
@@ -68,17 +67,11 @@ export default function OnboardingPage() {
     const isPostAuth = params.get("auth") === "1"
 
     if (isPostAuth) {
-      const raw = localStorage.getItem(PENDING_KEY)
-      if (raw) {
-        try {
-          const d = JSON.parse(raw) as PendingOnboarding
-          localStorage.removeItem(PENDING_KEY)
-          // Payloads saved before the mode existed carry no mode field; they were lift-focused.
-          autoFinish({ ...d, mode: d.mode ?? "lift-focused" })
-          return
-        } catch {
-          localStorage.removeItem(PENDING_KEY)
-        }
+      const d = takePendingOnboarding<PendingOnboarding>()
+      if (d) {
+        // Payloads saved before the mode existed carry no mode field; they were lift-focused.
+        autoFinish({ ...d, mode: d.mode ?? "lift-focused" })
+        return
       }
     }
 
@@ -153,7 +146,7 @@ export default function OnboardingPage() {
 
   async function handleGoogleSignIn() {
     const pending: PendingOnboarding = { name, bw, mode: mode ?? "lift-focused", lift, anchor, target, trainingAge, weighInDaily }
-    localStorage.setItem(PENDING_KEY, JSON.stringify(pending))
+    savePendingOnboarding(pending)
     await signIn("google", { callbackUrl: "/onboarding?auth=1" })
   }
 

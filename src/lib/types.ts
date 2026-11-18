@@ -199,6 +199,10 @@ export const ROUTINE_UNDO_KEY = "lift-tracker-routine-undo"
  */
 export const DOT_KEY = "lift-tracker-dot"
 export const HAPTICS_KEY = "lift-tracker-haptics"
+/** Set once the add-to-home-screen guide is dismissed. Device-only, like the two above; predates the prefix. */
+export const INSTALL_GUIDE_DISMISSED_KEY = "installGuideDismissed"
+/** Onboarding answers held across the Google sign-in redirect. */
+export const PENDING_ONBOARDING_KEY = "lift-tracker-pending-onboarding"
 
 export interface SessionDraft {
   sessionId: number

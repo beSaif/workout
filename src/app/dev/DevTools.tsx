@@ -3,7 +3,8 @@
 import { useState, useEffect, useSyncExternalStore } from "react"
 import Link from "next/link"
 import { signOut } from "next-auth/react"
-import { loadSessionsLocal, loadBlocksLocal, saveAll, wipeLocalUserData } from "@/lib/storage"
+import { blocksCache, clearSessionsLocal, saveAll, sessionsCache, wipeLocalUserData } from "@/lib/storage"
+import { useLocalValue } from "@/lib/useLocalValue"
 import { recalibrate } from "@/lib/recalibrate"
 import { resetToFirstBlock } from "@/lib/layoff"
 import { Session, TrainingBlock } from "@/lib/types"
@@ -22,14 +23,15 @@ interface StoredData {
 }
 
 export default function DevTools() {
-  const [localData, setLocalData] = useState<StoredData>({ sessions: [], blocks: [] })
+  // Read straight from localStorage, so every button below that writes it shows here.
+  const localSessions = useLocalValue(sessionsCache)
+  const localBlocks = useLocalValue(blocksCache)
+  const localData: StoredData = { sessions: localSessions ?? [], blocks: localBlocks ?? [] }
   const [kvData, setKvData] = useState<StoredData | null>(null)
   const [kvStatus, setKvStatus] = useState<KvStatus>("loading")
   const [copied, setCopied] = useState<Copied>(null)
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- localStorage is only readable after mount
-    setLocalData({ sessions: loadSessionsLocal(), blocks: loadBlocksLocal() })
     fetch("/api/sessions")
       .then((r) => r.json())
       .then((data) => {
@@ -53,15 +55,12 @@ export default function DevTools() {
 
   function clearLocal() {
     if (!confirm("Clear localStorage? This cannot be undone.")) return
-    localStorage.removeItem("lift-tracker-sessions")
-    localStorage.removeItem("lift-tracker-blocks")
-    setLocalData({ sessions: [], blocks: [] })
+    clearSessionsLocal()
   }
 
   function pullFromKV() {
     if (!kvData) return
     saveAll(kvData.sessions, kvData.blocks)
-    setLocalData(kvData)
   }
 
   function pushToKV() {
@@ -83,7 +82,6 @@ export default function DevTools() {
     if (!confirm("Recalibrate? This fixes block/session bookkeeping, re-derives rebuild loads from what you actually lifted, and regenerates the upcoming session.")) return
     const { sessions, blocks, notes } = recalibrate(localData.sessions, localData.blocks)
     saveAll(sessions, blocks)
-    setLocalData({ sessions, blocks })
     setRecalNotes(notes)
   }
 
@@ -100,7 +98,6 @@ export default function DevTools() {
       return
     const { sessions, blocks, notes } = resetToFirstBlock(localData.sessions, localData.blocks)
     saveAll(sessions, blocks)
-    setLocalData({ sessions, blocks })
     setResetNotes(notes)
   }
 
