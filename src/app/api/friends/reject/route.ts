@@ -1,18 +1,14 @@
-import { kv } from "@vercel/kv"
-import { NextRequest, NextResponse } from "next/server"
-import { auth } from "@/auth"
+import { NextResponse } from "next/server"
+import { store } from "@/lib/server/db"
+import { withUser } from "@/lib/server/withUser"
 import { friendRequestsInKey, friendRequestsOutKey, friendRequestTimesKey } from "@/lib/userKeys"
 
-export async function POST(req: NextRequest) {
-  const session = await auth()
-  if (!session?.user?.email) {
-    return NextResponse.json({ error: "unauthorized" }, { status: 401 })
-  }
-  const me = session.user.email.trim().toLowerCase()
+export const POST = withUser(async ({ email, request }) => {
+  const me = email.trim().toLowerCase()
 
   let requesterEmail: unknown
   try {
-    requesterEmail = (await req.json())?.requesterEmail
+    requesterEmail = (await request.json())?.requesterEmail
   } catch {
     return NextResponse.json({ error: "invalid json" }, { status: 400 })
   }
@@ -23,12 +19,12 @@ export async function POST(req: NextRequest) {
 
   try {
     await Promise.all([
-      kv.srem(friendRequestsInKey(me), requester),
-      kv.srem(friendRequestsOutKey(requester), me),
-      kv.hdel(friendRequestTimesKey(me), requester),
+      store.srem(friendRequestsInKey(me), requester),
+      store.srem(friendRequestsOutKey(requester), me),
+      store.hdel(friendRequestTimesKey(me), requester),
     ])
     return NextResponse.json({ ok: true })
   } catch {
     return NextResponse.json({ error: "failed" }, { status: 503 })
   }
-}
+})

@@ -1,6 +1,6 @@
 import "server-only"
 import webpush from "web-push"
-import { kv } from "@vercel/kv"
+import { store } from "./server/db"
 import { pushSubKey } from "./userKeys"
 
 interface PushPayload {
@@ -22,13 +22,13 @@ function getVapidConfigured(): boolean {
 
 export async function sendPushToUser(email: string, payload: PushPayload): Promise<void> {
   if (!getVapidConfigured()) return
-  const sub = await kv.get<webpush.PushSubscription>(pushSubKey(email))
+  const sub = await store.get<webpush.PushSubscription>(pushSubKey(email))
   if (!sub) return
   try {
     await webpush.sendNotification(sub, JSON.stringify(payload))
   } catch (err: unknown) {
     if ((err as { statusCode?: number }).statusCode === 410) {
-      await kv.del(pushSubKey(email))
+      await store.del(pushSubKey(email))
     }
   }
 }

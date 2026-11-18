@@ -1,30 +1,22 @@
-import { kv } from "@vercel/kv"
 import { NextResponse } from "next/server"
-import { auth } from "@/auth"
-import { sessionsKey } from "@/lib/userKeys"
+import { readSessionsDoc, writeSessionsDoc } from "@/lib/server/db"
+import { withUser } from "@/lib/server/withUser"
 import { parseSessionsPayload } from "@/lib/validate"
 
-export async function GET() {
-  const session = await auth()
-  const email = session?.user?.email
-  if (!email) return NextResponse.json({ error: "unauthorized" }, { status: 401 })
-
+export const GET = withUser(async ({ email }) => {
   try {
-    const data = await kv.get(sessionsKey(email))
+    const doc = await readSessionsDoc(email)
     // null means "never synced" — the client falls back to localStorage for migration
-    if (!data) return NextResponse.json(null)
-    if (Array.isArray(data)) return NextResponse.json({ sessions: data, blocks: [] })
-    return NextResponse.json(data)
+    // and uploads it over ours. So a stored document goes back as stored even when it
+    // fails validation: answering null for it would get the user's data overwritten.
+    if (!doc) return NextResponse.json(null)
+    return NextResponse.json(doc.stored)
   } catch {
     return NextResponse.json(null, { status: 503 })
   }
-}
+})
 
-export async function POST(request: Request) {
-  const session = await auth()
-  const email = session?.user?.email
-  if (!email) return NextResponse.json({ error: "unauthorized" }, { status: 401 })
-
+export const POST = withUser(async ({ email, request }) => {
   let body: unknown
   try {
     body = await request.json()
@@ -35,9 +27,9 @@ export async function POST(request: Request) {
   if (!payload) return NextResponse.json({ error: "expected { sessions, blocks }" }, { status: 400 })
 
   try {
-    await kv.set(sessionsKey(email), payload)
+    await writeSessionsDoc(email, payload)
     return NextResponse.json({ ok: true })
   } catch {
     return NextResponse.json({ error: "KV write failed" }, { status: 503 })
   }
-}
+})
