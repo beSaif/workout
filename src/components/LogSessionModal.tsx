@@ -1,12 +1,11 @@
 "use client"
 
-import { useState, useEffect, useRef } from "react"
+import { useState, useEffect, useRef, type CSSProperties, type HTMLAttributes } from "react"
 import {
   Session,
   MainLiftSet,
   MuscleGroup,
   ExtraWorkout,
-  MAIN_LIFT_LABEL,
 } from "@/lib/types"
 import { calcE1RM } from "@/lib/e1rm"
 import { saveDraft, clearDraft, saveMiniPlayer } from "@/lib/storage"
@@ -175,6 +174,24 @@ function groupId(g: ExerciseGroup): string {
   return g.kind === "main" ? "main" : `extra-${g.muscle}-${g.exercise}`
 }
 
+/**
+ * The main lift opens every session it is in, so it is pinned first. Only Main Lift
+ * sessions carry one (see buildDefaultOrder); this also fixes a draft saved before the
+ * pin, where it may sit lower.
+ */
+function withMainFirst(order: ExerciseGroup[]): ExerciseGroup[] {
+  const i = order.findIndex((g) => g.kind === "main")
+  return i > 0 ? [order[i], ...order.slice(0, i), ...order.slice(i + 1)] : order
+}
+
+/** A drag of one row onto another. The main lift neither moves nor has anything put above it. */
+function reorderGroups(order: ExerciseGroup[], activeId: string, overId: string): ExerciseGroup[] {
+  const from = order.findIndex((g) => groupId(g) === activeId)
+  const to = order.findIndex((g) => groupId(g) === overId)
+  if (from < 0 || to < 0 || order[from].kind === "main" || order[to].kind === "main") return order
+  return arrayMove(order, from, to)
+}
+
 function buildDefaultOrder(
   session: Session,
   exerciseConfig: MuscleGroupConfig[],
@@ -231,17 +248,7 @@ function buildCarouselItems(
   })
 }
 
-function SortableGroupRow({
-  id,
-  group,
-  sets,
-  extraState,
-  completedSets,
-  exerciseConfig,
-  mainLiftLabel,
-  onDelete,
-}: {
-  id: string
+interface GroupRowProps {
   group: ExerciseGroup
   sets: EditableSet[]
   extraState: ExtraWorkoutState
@@ -249,11 +256,43 @@ function SortableGroupRow({
   exerciseConfig: MuscleGroupConfig[]
   mainLiftLabel: string
   onDelete?: () => void
-}) {
+}
+
+function SortableGroupRow({ id, ...row }: GroupRowProps & { id: string }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id })
-  const style = { transform: CSS.Transform.toString(transform), transition }
+  return (
+    <GroupRow
+      {...row}
+      sortable={{
+        ref: setNodeRef,
+        style: { transform: CSS.Transform.toString(transform), transition },
+        isDragging,
+        handleProps: { ...attributes, ...listeners },
+      }}
+    />
+  )
+}
 
+/** One row of the exercise list. Without `sortable` it is pinned: a lock where the drag handle goes. */
+function GroupRow({
+  group,
+  sets,
+  extraState,
+  completedSets,
+  exerciseConfig,
+  mainLiftLabel,
+  onDelete,
+  sortable,
+}: GroupRowProps & {
+  sortable?: {
+    ref: (node: HTMLElement | null) => void
+    style: CSSProperties
+    isDragging: boolean
+    handleProps: HTMLAttributes<HTMLButtonElement>
+  }
+}) {
+  const isDragging = sortable?.isDragging ?? false
   const label =
     group.kind === "main"
       ? mainLiftLabel
@@ -303,27 +342,35 @@ function SortableGroupRow({
 
   return (
     <div
-      ref={setNodeRef}
-      style={style}
+      ref={sortable?.ref}
+      style={sortable?.style}
       className={`flex items-center gap-3 py-3.5 px-1 border-b border-line-soft select-none ${
         isDragging ? "bg-surface-1 shadow-sm rounded-lg z-10 relative" : ""
       }`}
     >
-      <button
-        {...attributes}
-        {...listeners}
-        className="text-ink-7 touch-none cursor-grab active:cursor-grabbing p-1 shrink-0"
-        aria-label="Drag to reorder"
-      >
-        <svg width="12" height="16" viewBox="0 0 12 16" fill="currentColor">
-          <circle cx="3" cy="3" r="1.5" />
-          <circle cx="9" cy="3" r="1.5" />
-          <circle cx="3" cy="8" r="1.5" />
-          <circle cx="9" cy="8" r="1.5" />
-          <circle cx="3" cy="13" r="1.5" />
-          <circle cx="9" cy="13" r="1.5" />
-        </svg>
-      </button>
+      {!sortable ? (
+        <span className="text-ink-7 p-1 shrink-0" role="img" aria-label="Main lift stays first">
+          <svg width="12" height="16" viewBox="0 0 12 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+            <rect x="1.5" y="7" width="9" height="7" rx="1.5" />
+            <path d="M3.5 7V5a2.5 2.5 0 0 1 5 0v2" />
+          </svg>
+        </span>
+      ) : (
+        <button
+          {...sortable.handleProps}
+          className="text-ink-7 touch-none cursor-grab active:cursor-grabbing p-1 shrink-0"
+          aria-label="Drag to reorder"
+        >
+          <svg width="12" height="16" viewBox="0 0 12 16" fill="currentColor">
+            <circle cx="3" cy="3" r="1.5" />
+            <circle cx="9" cy="3" r="1.5" />
+            <circle cx="3" cy="8" r="1.5" />
+            <circle cx="9" cy="8" r="1.5" />
+            <circle cx="3" cy="13" r="1.5" />
+            <circle cx="9" cy="13" r="1.5" />
+          </svg>
+        </button>
+      )}
       <div className="flex-1 min-w-0">
         <p className="text-sm font-medium text-ink truncate">{label}</p>
         <div className="flex items-center gap-1 mt-1 flex-wrap">
@@ -529,14 +576,16 @@ export default function LogSessionModal({
     initialDraft?.currentSetIndex ?? 0
   )
   const [exerciseOrder, setExerciseOrder] = useState<ExerciseGroup[]>(
-    () => initialDraft?.exerciseOrder ?? buildDefaultOrder(session, exerciseConfig, duplicateOfMainLift)
+    () => withMainFirst(initialDraft?.exerciseOrder ?? buildDefaultOrder(session, exerciseConfig, duplicateOfMainLift))
   )
   const [showExercisesSheet, setShowExercisesSheet] = useState(false)
   const [exercisesSheetTab, setExercisesSheetTab] = useState<"current" | "add">("current")
   const [swapFromMuscle, setSwapFromMuscle] = useState<string | null>(null)
   const [pendingSwap, setPendingSwap] = useState<{ from: string; to: string } | null>(null)
+  // Accessories only: the main lift can't be removed here. Not doing it today is the
+  // explicit Skip on the up-next card, which carries its load to the next session.
   const [pendingDeleteExercise, setPendingDeleteExercise] = useState<
-    { kind: "main" } | { kind: "extra"; muscle: string; exercise: string } | null
+    { muscle: string; exercise: string } | null
   >(null)
 
   const sensors = useSensors(
@@ -1161,32 +1210,10 @@ export default function LogSessionModal({
     setPendingDeleteExercise(null)
   }
 
-  function deleteMainExercise() {
-    if (mainLiftLabel === MAIN_LIFT_LABEL.bench) {
-      setPendingDeleteExercise(null)
-      return
-    }
-    setSets([])
-    setCompletedSets((prev) => {
-      const next = new Set<string>()
-      for (const key of prev) {
-        if (key.startsWith("extra-")) next.add(key)
-      }
-      return next
-    })
-    setExerciseOrder((prev) => prev.filter(g => g.kind !== "main"))
-    setCurrentSetIndex(0)
-    setPendingDeleteExercise(null)
-  }
-
   function handleDragEnd(event: DragEndEvent) {
     const { active, over } = event
     if (!over || active.id === over.id) return
-    setExerciseOrder((prev) => {
-      const oldIdx = prev.findIndex((g) => groupId(g) === active.id)
-      const newIdx = prev.findIndex((g) => groupId(g) === over.id)
-      return arrayMove(prev, oldIdx, newIdx)
-    })
+    setExerciseOrder((prev) => reorderGroups(prev, String(active.id), String(over.id)))
   }
 
   function closeExercisesSheet() {
@@ -1365,30 +1392,35 @@ export default function LogSessionModal({
                 collisionDetection={closestCenter}
                 onDragEnd={handleDragEnd}
               >
+                {/* The main lift sits outside the sortable list, so nothing can be dragged
+                    above it and it can't be dragged itself. */}
+                {hasMain && (
+                  <GroupRow
+                    group={{ kind: "main" }}
+                    sets={sets}
+                    extraState={extraState}
+                    completedSets={completedSets}
+                    exerciseConfig={exerciseConfig}
+                    mainLiftLabel={mainLiftLabel}
+                  />
+                )}
                 <SortableContext
-                  items={exerciseOrder.map(groupId)}
+                  items={exerciseOrder.filter((g) => g.kind === "extra").map(groupId)}
                   strategy={verticalListSortingStrategy}
                 >
-                  {exerciseOrder.map((group) => {
-                    const isBenchMain = group.kind === "main" && mainLiftLabel === MAIN_LIFT_LABEL.bench
-                    return (
-                      <SortableGroupRow
-                        key={groupId(group)}
-                        id={groupId(group)}
-                        group={group}
-                        sets={sets}
-                        extraState={extraState}
-                        completedSets={completedSets}
-                        exerciseConfig={exerciseConfig}
-                        mainLiftLabel={mainLiftLabel}
-                        onDelete={isBenchMain
-                          ? undefined
-                          : group.kind === "extra"
-                            ? () => setPendingDeleteExercise({ kind: "extra", muscle: group.muscle, exercise: group.exercise })
-                            : () => setPendingDeleteExercise({ kind: "main" })}
-                      />
-                    )
-                  })}
+                  {exerciseOrder.map((group) => group.kind === "extra" && (
+                    <SortableGroupRow
+                      key={groupId(group)}
+                      id={groupId(group)}
+                      group={group}
+                      sets={sets}
+                      extraState={extraState}
+                      completedSets={completedSets}
+                      exerciseConfig={exerciseConfig}
+                      mainLiftLabel={mainLiftLabel}
+                      onDelete={() => setPendingDeleteExercise({ muscle: group.muscle, exercise: group.exercise })}
+                    />
+                  ))}
                 </SortableContext>
               </DndContext>
             </div>
@@ -1513,14 +1545,6 @@ export default function LogSessionModal({
                   <p className="text-[10px] uppercase tracking-widest text-ink-6 font-medium">
                     {mainLiftLabel}
                   </p>
-                  {mainLiftLabel !== MAIN_LIFT_LABEL.bench && (
-                    <button
-                      onClick={() => setPendingDeleteExercise({ kind: "main" })}
-                      className="text-xs text-ink-7 hover:text-red-400 transition-colors px-1"
-                    >
-                      Remove
-                    </button>
-                  )}
                 </div>
                 <div className="space-y-2">
                   {sets.map((set, idx) => (
@@ -1595,7 +1619,7 @@ export default function LogSessionModal({
                         <div className="flex items-center justify-between mb-2">
                           <p className="text-sm font-medium text-ink-2">{exercise}</p>
                           <button
-                            onClick={() => setPendingDeleteExercise({ kind: "extra", muscle: muscleId, exercise })}
+                            onClick={() => setPendingDeleteExercise({ muscle: muscleId, exercise })}
                             className="text-[10px] uppercase tracking-wide text-ink-7 hover:text-red-400 transition-colors"
                           >
                             Delete
@@ -1706,29 +1730,18 @@ export default function LogSessionModal({
               <div className="absolute inset-0 bg-black/30 z-30" onClick={() => setPendingDeleteExercise(null)} />
               <div className="absolute bottom-0 left-0 right-0 bg-raised rounded-t-2xl shadow-[0_-4px_24px_rgba(0,0,0,0.15)] z-40 p-5">
                 <p className="text-sm font-semibold text-ink mb-1">Remove exercise?</p>
-                {pendingDeleteExercise.kind === "main" ? (
-                  <>
-                    <p className="text-base font-bold text-ink">{mainLiftLabel}</p>
+                <p className="text-base font-bold text-ink">{pendingDeleteExercise.exercise}</p>
+                {(() => {
+                  const p = pendingDeleteExercise
+                  const willBeEmpty = Object.keys(extraState[p.muscle] ?? {}).filter(e => e !== p.exercise).length === 0
+                  return willBeEmpty ? (
                     <p className="text-xs text-ink-6 mt-1 mb-4">
-                      All sets will be removed. This session will have no main lift.
+                      This will also remove the {getMuscleLabel(exerciseConfig, p.muscle)} group.
                     </p>
-                  </>
-                ) : (
-                  <>
-                    <p className="text-base font-bold text-ink">{pendingDeleteExercise.exercise}</p>
-                    {(() => {
-                      const p = pendingDeleteExercise
-                      const willBeEmpty = Object.keys(extraState[p.muscle] ?? {}).filter(e => e !== p.exercise).length === 0
-                      return willBeEmpty ? (
-                        <p className="text-xs text-ink-6 mt-1 mb-4">
-                          This will also remove the {getMuscleLabel(exerciseConfig, p.muscle)} group.
-                        </p>
-                      ) : (
-                        <div className="mb-4" />
-                      )
-                    })()}
-                  </>
-                )}
+                  ) : (
+                    <div className="mb-4" />
+                  )
+                })()}
                 <div className="flex gap-3">
                   <button
                     onClick={() => setPendingDeleteExercise(null)}
@@ -1737,10 +1750,7 @@ export default function LogSessionModal({
                     Cancel
                   </button>
                   <button
-                    onClick={() => pendingDeleteExercise.kind === "main"
-                      ? deleteMainExercise()
-                      : deleteExercise(pendingDeleteExercise.muscle, pendingDeleteExercise.exercise)
-                    }
+                    onClick={() => deleteExercise(pendingDeleteExercise.muscle, pendingDeleteExercise.exercise)}
                     className="flex-1 rounded-xl py-3 text-sm font-semibold bg-red-500 text-white hover:bg-red-600 transition-colors"
                   >
                     Remove
@@ -1924,14 +1934,6 @@ export default function LogSessionModal({
                           >
                             Delete set
                           </button>
-                          {mainLiftLabel !== MAIN_LIFT_LABEL.bench && (
-                            <button
-                              onClick={() => setPendingDeleteExercise({ kind: "main" })}
-                              className="text-xs text-ink-7 hover:text-red-400 transition-colors px-1"
-                            >
-                              Delete exercise
-                            </button>
-                          )}
                         </div>
                         <button
                           onClick={() => addSetAfterCurrent(item.globalIndex)}
@@ -2084,7 +2086,7 @@ export default function LogSessionModal({
                             Delete set
                           </button>
                           <button
-                            onClick={() => setPendingDeleteExercise({ kind: "extra", muscle: item.muscle, exercise: item.exercise })}
+                            onClick={() => setPendingDeleteExercise({ muscle: item.muscle, exercise: item.exercise })}
                             className="text-xs text-ink-7 hover:text-red-400 transition-colors px-1"
                           >
                             Delete exercise
@@ -2178,28 +2180,17 @@ export default function LogSessionModal({
             <div className="absolute inset-0 bg-black/30 z-30" onClick={() => setPendingDeleteExercise(null)} />
             <div className="absolute bottom-0 left-0 right-0 bg-raised rounded-t-2xl shadow-[0_-4px_24px_rgba(0,0,0,0.15)] z-40 p-5">
               <p className="text-sm font-semibold text-ink mb-1">Remove exercise?</p>
-              {pendingDeleteExercise.kind === "main" ? (
-                <>
-                  <p className="text-base font-bold text-ink">{mainLiftLabel}</p>
+              <p className="text-base font-bold text-ink">{pendingDeleteExercise.exercise}</p>
+              {(() => {
+                const willBeEmpty = Object.keys(extraState[pendingDeleteExercise.muscle] ?? {}).filter(e => e !== pendingDeleteExercise.exercise).length === 0
+                return willBeEmpty ? (
                   <p className="text-xs text-ink-6 mt-1 mb-4">
-                    All sets will be removed. This session will have no main lift.
+                    This will also remove the {getMuscleLabel(exerciseConfig, pendingDeleteExercise.muscle)} group.
                   </p>
-                </>
-              ) : (
-                <>
-                  <p className="text-base font-bold text-ink">{pendingDeleteExercise.exercise}</p>
-                  {(() => {
-                    const willBeEmpty = Object.keys(extraState[pendingDeleteExercise.muscle] ?? {}).filter(e => e !== pendingDeleteExercise.exercise).length === 0
-                    return willBeEmpty ? (
-                      <p className="text-xs text-ink-6 mt-1 mb-4">
-                        This will also remove the {getMuscleLabel(exerciseConfig, pendingDeleteExercise.muscle)} group.
-                      </p>
-                    ) : (
-                      <div className="mb-4" />
-                    )
-                  })()}
-                </>
-              )}
+                ) : (
+                  <div className="mb-4" />
+                )
+              })()}
               <div className="flex gap-3">
                 <button
                   onClick={() => setPendingDeleteExercise(null)}
@@ -2208,10 +2199,7 @@ export default function LogSessionModal({
                   Cancel
                 </button>
                 <button
-                  onClick={() => pendingDeleteExercise.kind === "main"
-                    ? deleteMainExercise()
-                    : deleteExercise(pendingDeleteExercise.muscle, pendingDeleteExercise.exercise)
-                  }
+                  onClick={() => deleteExercise(pendingDeleteExercise.muscle, pendingDeleteExercise.exercise)}
                   className="flex-1 rounded-xl py-3 text-sm font-semibold bg-red-500 text-white hover:bg-red-600 active:bg-red-700 transition-colors"
                 >
                   Remove
