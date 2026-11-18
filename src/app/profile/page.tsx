@@ -1,21 +1,22 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { useRouter } from "next/navigation"
 import { signOut } from "next-auth/react"
 import Link from "next/link"
-import { Session, UserProfile, WeightEntry, TRAINING_MODE_LABEL } from "@/lib/types"
+import { UserProfile, TRAINING_MODE_LABEL } from "@/lib/types"
 import { isLiftFocused, getMainLiftLabel, getTrainingMode } from "@/lib/trainingMode"
 import {
   loadProfile,
-  loadProfileLocal,
+  profileCache,
   saveProfile,
   loadAll,
-  loadSessionsLocal,
+  sessionsCache,
   loadWeights,
-  loadWeightsLocal,
+  weightsCache,
   wipeLocalUserData,
 } from "@/lib/storage"
+import { useCachedState } from "@/lib/useLocalValue"
 import { getBestE1RM, getBestWeight, getLatestBW } from "@/lib/stats"
 import ProgressBar from "@/components/ProgressBar"
 import { formatDay, latestEntry } from "@/lib/weight"
@@ -28,18 +29,42 @@ function formatJoined(iso: string): string {
   return d.toLocaleDateString(undefined, { month: "long", year: "numeric" })
 }
 
+interface ProfileForm {
+  name: string
+  bw: string
+  target: string
+  weighInDaily: boolean
+}
+
+function formFor(p: UserProfile | null): ProfileForm {
+  return {
+    name: p?.name ?? "",
+    bw: p ? String(p.bw) : "",
+    target: p?.target != null ? String(p.target) : "",
+    // Never asked reads as off here; the home screen is what does the asking.
+    weighInDaily: p?.weighInDaily === true,
+  }
+}
+
 export default function ProfilePage() {
   const router = useRouter()
-  const [mounted, setMounted] = useState(false)
-  const [profile, setProfile] = useState<UserProfile | null>(null)
-  const [sessions, setSessions] = useState<Session[]>([])
+  // The cached copies paint at once; the network replies replace them.
+  const [cachedProfile, setProfile] = useCachedState(profileCache)
+  const [cachedSessions, setSessions] = useCachedState(sessionsCache)
+  const [cachedWeights, setWeights] = useCachedState(weightsCache)
+  const profile = cachedProfile ?? null
+  const sessions = cachedSessions ?? []
+  const weights = cachedWeights ?? []
 
-  const [name, setName] = useState("")
-  const [bw, setBw] = useState("")
-  const [target, setTarget] = useState("")
-  const [weighInDaily, setWeighInDaily] = useState(false)
-
-  const [weights, setWeights] = useState<WeightEntry[]>([])
+  /** The form as edited; null shows the profile as it stands. */
+  const [draft, setDraft] = useState<ProfileForm | null>(null)
+  const { name, bw, target, weighInDaily } = draft ?? formFor(profile)
+  function edit(change: Partial<ProfileForm> | ((form: ProfileForm) => Partial<ProfileForm>)) {
+    setDraft((d) => {
+      const form = d ?? formFor(profile)
+      return { ...form, ...(typeof change === "function" ? change(form) : change) }
+    })
+  }
 
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
@@ -48,26 +73,16 @@ export default function ProfilePage() {
   const [showDelete, setShowDelete] = useState(false)
   const [deleting, setDeleting] = useState(false)
 
-  function seedForm(p: UserProfile) {
-    setProfile(p)
-    setName(p.name)
-    setBw(String(p.bw))
-    setTarget(p.target != null ? String(p.target) : "")
-    // Never asked reads as off here; the home screen is what does the asking.
-    setWeighInDaily(p.weighInDaily === true)
-  }
+  const seedForm = useCallback(
+    (p: UserProfile) => {
+      setProfile(p)
+      setDraft(null)
+    },
+    [setProfile]
+  )
 
   useEffect(() => {
     let cancelled = false
-
-    const cached = loadProfileLocal()
-    if (cached) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect -- localStorage is only readable after mount
-      seedForm(cached)
-      setSessions(loadSessionsLocal())
-      setWeights(loadWeightsLocal())
-      setMounted(true)
-    }
 
     loadWeights().then((data) => {
       if (!cancelled) setWeights(data)
@@ -80,7 +95,6 @@ export default function ProfilePage() {
         return
       }
       seedForm(p)
-      setMounted(true)
     })
 
     loadAll().then(({ sessions: data }) => {
@@ -91,7 +105,7 @@ export default function ProfilePage() {
     return () => {
       cancelled = true
     }
-  }, [router])
+  }, [router, seedForm, setSessions, setWeights])
 
   const liftFocused = isLiftFocused(profile)
   const bwVal = parseFloat(bw)
@@ -147,7 +161,7 @@ export default function ProfilePage() {
     signOut({ callbackUrl: "/welcome" })
   }
 
-  if (!mounted || !profile) {
+  if (!profile) {
     return (
       <main className="mx-auto w-full max-w-[393px] px-4 pt-[calc(1.5rem+env(safe-area-inset-top))] pb-[calc(4rem+env(safe-area-inset-bottom))]">
         <div className="h-8 w-32 bg-surface-4 rounded animate-pulse mb-6" />
@@ -195,7 +209,7 @@ export default function ProfilePage() {
         <label className="block text-sm text-ink-5 mb-1.5">Name</label>
         <input
           value={name}
-          onChange={(e) => setName(e.target.value)}
+          onChange={(e) => edit({ name: e.target.value })}
           placeholder="Saif"
           className="w-full text-lg font-semibold text-ink border-b-2 border-line focus:border-brand-line outline-none bg-transparent pb-2 mb-5"
         />
@@ -223,7 +237,7 @@ export default function ProfilePage() {
               inputMode="decimal"
               step="0.1"
               value={bw}
-              onChange={(e) => setBw(e.target.value)}
+              onChange={(e) => edit({ bw: e.target.value })}
               placeholder="60"
               className="flex-1 text-lg font-semibold text-ink outline-none bg-transparent"
             />
@@ -255,7 +269,7 @@ export default function ProfilePage() {
             inputMode="decimal"
             step="2.5"
             value={target}
-            onChange={(e) => setTarget(e.target.value)}
+            onChange={(e) => edit({ target: e.target.value })}
             placeholder="140"
             className="flex-1 text-lg font-semibold text-ink outline-none bg-transparent"
           />
@@ -289,7 +303,7 @@ export default function ProfilePage() {
             role="switch"
             aria-checked={weighInDaily}
             aria-label="Weekly weight check-in"
-            onClick={() => setWeighInDaily((v) => !v)}
+            onClick={() => edit((f) => ({ weighInDaily: !f.weighInDaily }))}
             className={`relative w-11 h-6 shrink-0 rounded-full transition-colors ${
               weighInDaily ? "bg-brand-fill" : "bg-surface-5"
             }`}

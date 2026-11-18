@@ -2,19 +2,19 @@
 
 import { useEffect, useMemo, useState } from "react"
 import Link from "next/link"
-import { MuscleGroupConfig } from "@/lib/exerciseConfig"
-import { TrainingDay, MAIN_LIFT_LABEL } from "@/lib/types"
+import { MAIN_LIFT_LABEL } from "@/lib/types"
 import { isLiftFocused } from "@/lib/trainingMode"
 import {
   applyRoutinePlan,
+  exerciseConfigCache,
   loadExerciseConfig,
-  loadExerciseConfigLocal,
-  loadProfileLocal,
-  loadRoutineSnapshot,
   loadTrainingDays,
-  loadTrainingDaysLocal,
+  profileCache,
+  routineSnapshotCache,
+  trainingDaysCache,
   undoRoutinePlan,
 } from "@/lib/storage"
+import { useCachedState, useHydrated, useLocalValue } from "@/lib/useLocalValue"
 import { RoutinePlan, exportPlan, readPlanText, resolvePlan } from "@/lib/routinePlan"
 import { PLAN_NOTE_MAX, PLAN_QUESTIONS, PlanAnswers, PlanContext, buildCopyPrompt } from "@/lib/planPrompt"
 import { afterHapticTap, haptic } from "@/lib/haptics"
@@ -78,10 +78,18 @@ function nameList(names: string[], max = 5): string {
 export default function PlanPage() {
   const { confirm, confirmSheet } = useConfirm()
   useOnboardingGuard()
-  const [mounted, setMounted] = useState(false)
-  const [config, setConfig] = useState<MuscleGroupConfig[]>([])
-  const [days, setDays] = useState<TrainingDay[]>([])
-  const [ctx, setCtx] = useState<PlanContext>({})
+  const mounted = useHydrated()
+  const [cachedConfig, setConfig] = useCachedState(exerciseConfigCache)
+  const [cachedDays, setDays] = useCachedState(trainingDaysCache)
+  const config = useMemo(() => cachedConfig ?? [], [cachedConfig])
+  const days = useMemo(() => cachedDays ?? [], [cachedDays])
+  const profile = useLocalValue(profileCache)
+  const ctx = useMemo<PlanContext>(
+    () => (isLiftFocused(profile ?? null) && profile?.mainLift ? { mainLift: MAIN_LIFT_LABEL[profile.mainLift] } : {}),
+    [profile]
+  )
+  // Applying a plan saves the snapshot and undoing clears it, so this follows by itself.
+  const canUndo = useLocalValue(routineSnapshotCache) != null
   const [status, setStatus] = useState<PlannerStatus | null>(null)
   const [step, setStep] = useState<Step>("start")
 
@@ -94,23 +102,15 @@ export default function PlanPage() {
   const [pasted, setPasted] = useState("")
   const [pasteErrors, setPasteErrors] = useState<string[]>([])
   const [copied, setCopied] = useState<"idle" | "done" | "failed">("idle")
-  const [canUndo, setCanUndo] = useState(false)
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- localStorage is only readable after mount
-    setConfig(loadExerciseConfigLocal())
-    setDays(loadTrainingDaysLocal())
-    const profile = loadProfileLocal()
-    if (isLiftFocused(profile) && profile?.mainLift) setCtx({ mainLift: MAIN_LIFT_LABEL[profile.mainLift] })
-    setCanUndo(loadRoutineSnapshot() !== null)
-    setMounted(true)
     loadExerciseConfig().then(setConfig)
     loadTrainingDays().then(setDays)
     fetch("/api/plan")
       .then((res) => (res.ok ? res.json() : null))
       .then((data: PlannerStatus | null) => setStatus(data))
       .catch(() => setStatus(null))
-  }, [])
+  }, [setConfig, setDays])
 
   const resolved = useMemo(
     () => (proposal ? resolvePlan(proposal.plan, config, days) : null),
@@ -199,7 +199,6 @@ export default function PlanPage() {
     afterHapticTap(() => {
       setConfig(resolved.config)
       setDays(resolved.days)
-      setCanUndo(true)
       setStep("done")
     })
   }
@@ -216,7 +215,6 @@ export default function PlanPage() {
     if (!restored) return
     setConfig(restored.config)
     setDays(restored.days)
-    setCanUndo(false)
     setProposal(null)
     setStep("start")
   }

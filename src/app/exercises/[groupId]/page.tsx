@@ -12,7 +12,7 @@ import {
   retireReplacedGroups,
 } from "@/lib/exerciseConfig"
 import {
-  loadExerciseConfigLocal,
+  exerciseConfigCache,
   loadExerciseConfig,
   saveExerciseConfig,
   loadTrainingDays,
@@ -21,6 +21,7 @@ import {
 } from "@/lib/storage"
 import { PersonSummary } from "@/lib/routines"
 import { useOnboardingGuard } from "@/lib/useOnboardingGuard"
+import { useCachedState, useHydrated } from "@/lib/useLocalValue"
 import BackButton from "@/components/BackButton"
 import { useConfirm } from "@/components/ConfirmSheet"
 
@@ -38,8 +39,9 @@ export default function GroupPage() {
   const router = useRouter()
   const groupId = String(params.groupId)
 
-  const [config, setConfig] = useState<MuscleGroupConfig[]>(DEFAULT_MUSCLE_GROUPS)
-  const [mounted, setMounted] = useState(false)
+  const [cachedConfig, setConfig] = useCachedState(exerciseConfigCache)
+  const config = cachedConfig ?? DEFAULT_MUSCLE_GROUPS
+  const mounted = useHydrated()
   const [coach, setCoach] = useState<PersonSummary | null>(null)
   const [editing, setEditing] = useState(false)
 
@@ -50,12 +52,9 @@ export default function GroupPage() {
   const addInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- localStorage is only readable after mount
-    setConfig(loadExerciseConfigLocal())
-    setMounted(true)
     loadExerciseConfig().then(setConfig)
     loadCoach().then(setCoach)
-  }, [])
+  }, [setConfig])
 
   useEffect(() => {
     if (addingExercise) addInputRef.current?.focus()

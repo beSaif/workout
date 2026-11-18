@@ -3,9 +3,8 @@
 import { useState } from "react"
 
 import { useNativeInstallPrompt } from "@/lib/installPrompt"
+import { loadInstallGuideDismissed, saveInstallGuideDismissed } from "@/lib/storage"
 import EscapeKey from "@/components/EscapeKey"
-
-const STORAGE_KEY = "installGuideDismissed"
 
 type Platform = "ios" | "android" | "other"
 
@@ -163,7 +162,7 @@ export default function InstallGuideModal({ onDismiss }: InstallGuideModalProps)
   const [installing, setInstalling] = useState(false)
 
   function dismiss() {
-    localStorage.setItem(STORAGE_KEY, "1")
+    saveInstallGuideDismissed()
     onDismiss()
   }
 
@@ -275,12 +274,12 @@ export function useInstallGuide() {
   function trigger() {
     if (typeof window === "undefined") return
     if (isStandalone()) return
-    if (localStorage.getItem(STORAGE_KEY)) return
+    if (loadInstallGuideDismissed()) return
     setShow(true)
   }
 
   function dismiss() {
-    localStorage.setItem(STORAGE_KEY, "1")
+    saveInstallGuideDismissed()
     setShow(false)
   }
 

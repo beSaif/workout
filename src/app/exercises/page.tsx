@@ -13,10 +13,10 @@ import { TrainingDay } from "@/lib/types"
 import TrainingModeSelector from "@/components/TrainingModeSelector"
 import DotFace from "@/components/buddy/DotFace"
 import {
-  loadExerciseConfigLocal,
+  exerciseConfigCache,
   loadExerciseConfig,
   saveExerciseConfig,
-  loadTrainingDaysLocal,
+  trainingDaysCache,
   loadTrainingDays,
   saveTrainingDays,
   loadCoach,
@@ -24,6 +24,7 @@ import {
 } from "@/lib/storage"
 import { PersonSummary } from "@/lib/routines"
 import { useOnboardingGuard } from "@/lib/useOnboardingGuard"
+import { useCachedState, useHydrated } from "@/lib/useLocalValue"
 import BackButton from "@/components/BackButton"
 import { useConfirm } from "@/components/ConfirmSheet"
 
@@ -60,9 +61,11 @@ function chipClass(on: boolean) {
 export default function ExercisesPage() {
   const { confirm, confirmSheet } = useConfirm()
   useOnboardingGuard()
-  const [config, setConfig] = useState<MuscleGroupConfig[]>(DEFAULT_MUSCLE_GROUPS)
-  const [trainingDays, setTrainingDays] = useState<TrainingDay[]>(DEFAULT_TRAINING_DAYS)
-  const [mounted, setMounted] = useState(false)
+  const [cachedConfig, setConfig] = useCachedState(exerciseConfigCache)
+  const [cachedTrainingDays, setTrainingDays] = useCachedState(trainingDaysCache)
+  const config = cachedConfig ?? DEFAULT_MUSCLE_GROUPS
+  const trainingDays = cachedTrainingDays ?? DEFAULT_TRAINING_DAYS
+  const mounted = useHydrated()
   /** Who this account trains under. While set, the split is theirs and read-only here. */
   const [coach, setCoach] = useState<PersonSummary | null>(null)
   const [stopping, setStopping] = useState(false)
@@ -85,14 +88,10 @@ export default function ExercisesPage() {
   const addDayInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- localStorage is only readable after mount
-    setConfig(loadExerciseConfigLocal())
-    setTrainingDays(loadTrainingDaysLocal())
-    setMounted(true)
     loadExerciseConfig().then(setConfig)
     loadTrainingDays().then(setTrainingDays)
     loadCoach().then(setCoach)
-  }, [])
+  }, [setConfig, setTrainingDays])
 
   async function stopFollowing() {
     if (!coach) return

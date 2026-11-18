@@ -1,4 +1,5 @@
 import { HAPTICS_KEY } from "./types"
+import { localSource, notifyLocalChange } from "./useLocalValue"
 
 /**
  * The five buzzes the app makes for Dot's moments, on both phones.
@@ -59,8 +60,12 @@ export function saveHapticsEnabled(on: boolean): void {
   } catch {
     // Private mode: the switch just will not stick past this page.
   }
+  notifyLocalChange()
   window.dispatchEvent(new Event(HAPTICS_CHANGE_EVENT))
 }
+
+/** The switch, for useLocalValue. */
+export const hapticsEnabledSource = localSource([HAPTICS_KEY], loadHapticsEnabled)
 
 export function haptic(kind: HapticKind): void {
   if (typeof window === "undefined" || !loadHapticsEnabled()) return

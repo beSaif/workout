@@ -1,11 +1,12 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useEffect } from "react"
 import { useParams } from "next/navigation"
-import { Session, MainLiftSet, TrainingDay, UserProfile, isCardioSet } from "@/lib/types"
+import { MainLiftSet, isCardioSet } from "@/lib/types"
 import { getMainLiftLabel, getMainLiftShortLabel, getSessionLabel } from "@/lib/trainingMode"
-import { loadAll, loadSessionsLocal, loadExerciseConfigLocal, loadExerciseConfig, loadProfile, loadProfileLocal, loadTrainingDaysLocal } from "@/lib/storage"
-import { MuscleGroupConfig, DEFAULT_TRAINING_DAYS, getMuscleLabel } from "@/lib/exerciseConfig"
+import { loadAll, sessionsCache, exerciseConfigCache, loadExerciseConfig, loadProfile, profileCache, trainingDaysCache } from "@/lib/storage"
+import { useCachedState, useHydrated, useLocalValue } from "@/lib/useLocalValue"
+import { DEFAULT_MUSCLE_GROUPS, DEFAULT_TRAINING_DAYS, getMuscleLabel } from "@/lib/exerciseConfig"
 import { formatCardioSet } from "@/lib/cardio"
 import BackButton from "@/components/BackButton"
 
@@ -50,28 +51,22 @@ export default function SessionDetailPage() {
   const params = useParams()
   const id = Number(params.id)
 
-  const [session, setSession] = useState<Session | null>(null)
-  const [exerciseConfig, setExerciseConfig] = useState<MuscleGroupConfig[]>(loadExerciseConfigLocal)
-  const [profile, setProfile] = useState<UserProfile | null>(loadProfileLocal)
-  const [trainingDays, setTrainingDays] = useState<TrainingDay[]>(DEFAULT_TRAINING_DAYS)
-  const [mounted, setMounted] = useState(false)
+  // The whole list is held, not just this session, so a change of id needs no reload.
+  const [cachedSessions, setSessions] = useCachedState(sessionsCache)
+  const [cachedConfig, setExerciseConfig] = useCachedState(exerciseConfigCache)
+  const [cachedProfile, setProfile] = useCachedState(profileCache)
+  const cachedTrainingDays = useLocalValue(trainingDaysCache)
+  const session = cachedSessions?.find((s) => s.id === id) ?? null
+  const exerciseConfig = cachedConfig ?? DEFAULT_MUSCLE_GROUPS
+  const profile = cachedProfile ?? null
+  const trainingDays = cachedTrainingDays ?? DEFAULT_TRAINING_DAYS
+  const mounted = useHydrated()
 
   useEffect(() => {
-    const local = loadSessionsLocal()
-    const found = local.find((s) => s.id === id) ?? null
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- localStorage is only readable after mount
-    setSession(found)
-    setTrainingDays(loadTrainingDaysLocal())
-    setMounted(true)
-
     loadExerciseConfig().then(setExerciseConfig)
     loadProfile().then((p) => { if (p) setProfile(p) })
-
-    loadAll().then(({ sessions }) => {
-      const updated = sessions.find((s) => s.id === id) ?? null
-      setSession(updated)
-    })
-  }, [id])
+    loadAll().then(({ sessions }) => setSessions(sessions))
+  }, [id, setExerciseConfig, setProfile, setSessions])
 
   if (!mounted) {
     return (

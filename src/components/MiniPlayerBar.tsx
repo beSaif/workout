@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
-import { loadMiniPlayer, clearMiniPlayer, MiniPlayerState } from "@/lib/storage"
+import { loadMiniPlayer, clearMiniPlayer, saveResumeRequest, MiniPlayerState } from "@/lib/storage"
 
 function formatSeconds(s: number): string {
   const m = Math.floor(s / 60)
@@ -46,8 +46,8 @@ export default function MiniPlayerBar() {
     setMiniState(null)
     // Fire event first so home page can handle it if already mounted
     window.dispatchEvent(new CustomEvent("mini-player-resume", { detail: { sessionId } }))
-    // Also set sessionStorage as fallback for cross-page navigation
-    sessionStorage.setItem("lift-tracker-resume", sessionId)
+    // Fallback for when Home isn't mounted yet and picks it up after navigating
+    saveResumeRequest(sessionId)
     router.push("/")
   }
 

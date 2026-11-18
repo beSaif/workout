@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from "react"
 import { useRouter } from "next/navigation"
 import { Session, TrainingBlock, BlockPhase, MuscleGroup, UserProfile, UserPresence, GymbroMessage, WeightEntry, CycleLength } from "@/lib/types"
 import { isLiftFocused, getMainLiftLabel, getMainLiftShortLabel, countConsecutiveSkips, currentStretchSkips } from "@/lib/trainingMode"
-import { loadSessionsLocal, loadBlocksLocal, loadExerciseConfigLocal, loadTrainingDaysLocal, loadAll, loadExerciseConfig, loadTrainingDays, saveAll, loadDraft, clearDraft, loadProfile, loadProfileLocal, loadPresencesLocal, savePresencesLocal, loadFriendEmailsLocal, saveFriendEmailsLocal, loadFriendLastActiveLocal, saveFriendLastActiveLocal, clearMiniPlayer, loadLayoffDismissLocal, saveLayoffDismissLocal, loadWeights, loadWeightsLocal, saveWeights, loadWeighInSkipLocal, saveWeighInSkipLocal } from "@/lib/storage"
+import { loadSessionsLocal, loadBlocksLocal, loadExerciseConfigLocal, loadTrainingDaysLocal, loadAll, loadExerciseConfig, loadTrainingDays, saveAll, loadDraft, clearDraft, loadProfile, loadProfileLocal, loadPresencesLocal, savePresencesLocal, loadFriendEmailsLocal, saveFriendEmailsLocal, loadFriendLastActiveLocal, saveFriendLastActiveLocal, clearMiniPlayer, loadLayoffDismissLocal, saveLayoffDismissLocal, loadWeights, loadWeightsLocal, saveWeights, loadWeighInSkipLocal, saveWeighInSkipLocal, takeResumeRequest } from "@/lib/storage"
 import type { SessionDraft } from "@/lib/types"
 import {
   prescribeBlockSession,
@@ -291,7 +291,7 @@ export default function Page() {
     function handleResumeEvent(e: Event) {
       const sessionId = (e as CustomEvent<{ sessionId: string }>).detail?.sessionId
       if (!sessionId) return
-      sessionStorage.removeItem('lift-tracker-resume')
+      takeResumeRequest()
       const target = sessionsRef.current.find(s => s.id.toString() === sessionId)
       const draft = loadDraft()
       if (target && draft && draft.sessionId.toString() === sessionId) {
@@ -307,9 +307,8 @@ export default function Page() {
   // Resume from sessionStorage once sessions are loaded (cross-page navigation case)
   useEffect(() => {
     if (sessions.length === 0) return
-    const resumeId = sessionStorage.getItem('lift-tracker-resume')
+    const resumeId = takeResumeRequest()
     if (!resumeId) return
-    sessionStorage.removeItem('lift-tracker-resume')
     const target = sessions.find(s => s.id.toString() === resumeId)
     const draft = loadDraft()
     if (target && draft && draft.sessionId.toString() === resumeId) {
