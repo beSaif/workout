@@ -37,6 +37,7 @@ import SessionCard from "@/components/SessionCard"
 import PreviewSessionRow from "@/components/PreviewSessionRow"
 import CycleReportSheet from "@/components/CycleReportSheet"
 import RestartCycleSheet from "@/components/RestartCycleSheet"
+import ManageCycleSheet from "@/components/ManageCycleSheet"
 import { buildCycleReport, cycleReviewFor } from "@/lib/cycleReport"
 import ProgramTimeline from "@/components/ProgramTimeline"
 import ProgressCard from "@/components/ProgressCard"
@@ -224,6 +225,9 @@ export default function Page() {
   /** The deload whose cycle report is open: shown once that cycle's last session is logged. */
   const [cycleReportId, setCycleReportId] = useState<number | null>(null)
   const [restartCycleOpen, setRestartCycleOpen] = useState(false)
+  const [manageCycleOpen, setManageCycleOpen] = useState(false)
+  /** A finished cycle's report opened from Manage, to look back at: no setup questions. */
+  const [pastReportId, setPastReportId] = useState<number | null>(null)
   const [lastConfirmed, setLastConfirmed] = useState<Session | null>(null)
   const [lastPR, setLastPR] = useState<{ e1rm: number; previous: number } | null>(null)
   const [shareSession, setShareSession] = useState<Session | null>(null)
@@ -1232,6 +1236,13 @@ export default function Page() {
   })()
   const cycleReport = cycleReportId != null ? buildCycleReport(blocks, confirmed, cycleReportId) : null
   const cycleStart = currentCycleStart(blocks)
+  const pastReport = pastReportId != null ? buildCycleReport(blocks, confirmed, pastReportId) : null
+  // The last cycle with a report: the newest deload that has one, this cycle's own once it's in its deload.
+  const lastReportDeload = activeBlock
+    ? [...blocks]
+        .filter((b) => b.phase === "deload" && b.id <= activeBlock.id && cycleReviewFor(blocks, b))
+        .sort((a, b) => b.id - a.id)[0]
+    : undefined
   const currentPhaseName = !activeBlock
     ? "current block"
     : activeBlock.phase === "reacclimation"
@@ -1440,12 +1451,11 @@ export default function Page() {
               setViewingUpcomingPhase(phase)
               setViewingBlockId(null)
             }}
-            onEditPeak={
-              // Before a new cycle's first session, Edit reopens the cycle report, which sets
-              // the peak and the days a week together. Otherwise it edits the peak alone.
-              reportableDeload ? () => setCycleReportId(reportableDeload.id) : handleEditAnchor
+            onManageCycle={
+              // Before a new cycle's first session, Manage reopens the cycle report, which sets
+              // the peak, days a week and length together. Otherwise it opens the cycle's options.
+              reportableDeload ? () => setCycleReportId(reportableDeload.id) : () => setManageCycleOpen(true)
             }
-            onRestartCycle={canRestartCycle(blocks) ? () => setRestartCycleOpen(true) : undefined}
             upcomingLength={(phase) => blockLengthFor(phase, planPerWeek, { cycleLength: activeBlock?.cycleLength })}
           />
         )}
@@ -1710,6 +1720,41 @@ export default function Page() {
       )}
 
       {/* Cycle report: after the deload that closes a cycle, before the next one starts */}
+      {manageCycleOpen && activeBlock && (
+        <ManageCycleSheet
+          peak={activeBlock.anchorWeight}
+          nextCycle={activeBlock.phase === "deload"}
+          onChangePeak={() => {
+            setManageCycleOpen(false)
+            handleEditAnchor()
+          }}
+          lastReport={
+            lastReportDeload
+              ? {
+                  label: `Cycle ${blocks.filter((b) => b.phase === "deload" && b.id <= lastReportDeload.id).length}`,
+                  open: () => {
+                    setManageCycleOpen(false)
+                    setPastReportId(lastReportDeload.id)
+                  },
+                }
+              : undefined
+          }
+          onRestart={
+            canRestartCycle(blocks)
+              ? () => {
+                  setManageCycleOpen(false)
+                  setRestartCycleOpen(true)
+                }
+              : undefined
+          }
+          onClose={() => setManageCycleOpen(false)}
+        />
+      )}
+
+      {pastReport && (
+        <CycleReportSheet report={pastReport} liftShort={liftShort} onClose={() => setPastReportId(null)} />
+      )}
+
       {restartCycleOpen && cycleStart && (
         <RestartCycleSheet
           liftShort={liftShort}

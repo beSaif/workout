@@ -21,7 +21,7 @@ export const WHATS_NEW: WhatsNewRelease[] = [
     items: [
       {
         title: "Restart a cycle",
-        body: "Tap Restart cycle under your peak on Home to go back to Volume session 1. Pick the peak, days a week and cycle length again first. Sessions you logged stay in your history; they just stop moving the plan.",
+        body: "Tap Manage next to your peak on Home, then Restart cycle, to go back to Volume session 1. You pick the peak, days a week and cycle length again first. Manage also has the last cycle's report. Sessions you logged stay in your history; they just stop moving the plan.",
       },
     ],
   },

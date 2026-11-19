@@ -12,8 +12,11 @@ interface CycleReportSheetProps {
   report: CycleReport
   /** Lift name for the copy, e.g. "Bench". */
   liftShort: string
-  /** Start the next cycle at this peak, weekly frequency and length. */
-  onStart: (peak: number, sessionsPerWeek: number, cycleLength: CycleLength) => void
+  /**
+   * Start the next cycle at this peak, weekly frequency and length. Absent when the report
+   * is only being looked back at: the setup questions are left out.
+   */
+  onStart?: (peak: number, sessionsPerWeek: number, cycleLength: CycleLength) => void
   /** Close without changing anything: the next cycle keeps its suggested peak. */
   onClose: () => void
   /** What the next cycle is set to now, when the report is reopened after a change. */
@@ -159,49 +162,62 @@ export default function CycleReportSheet({ report, liftShort, onStart, onClose, 
         </div>
 
         {/* Next cycle */}
-        <div className="px-6 mt-6 pt-5 border-t border-line-soft">
-          <p className="text-base font-semibold text-ink">Set up cycle {report.number + 1}</p>
+        {onStart ? (
+          <>
+            <div className="px-6 mt-6 pt-5 border-t border-line-soft">
+              <p className="text-base font-semibold text-ink">Set up cycle {report.number + 1}</p>
 
-          <p className="text-sm text-ink-4 mt-4 mb-2">What do you want to peak at?</p>
-          <div className="grid grid-cols-3 gap-2">
-            {peakOptions.map((o) => (
+              <p className="text-sm text-ink-4 mt-4 mb-2">What do you want to peak at?</p>
+              <div className="grid grid-cols-3 gap-2">
+                {peakOptions.map((o) => (
+                  <button
+                    key={o.label}
+                    onClick={() => setPeak(o.kg)}
+                    className={`rounded-xl border px-2 py-2.5 text-center transition-colors ${
+                      peak === o.kg ? "border-brand-line bg-brand-tint" : "border-line bg-surface"
+                    }`}
+                  >
+                    <span className="block text-base font-semibold text-ink tabular-nums">{o.kg}kg</span>
+                    <span className="block text-[11px] text-ink-5">{o.label}</span>
+                  </button>
+                ))}
+              </div>
+              <CycleSetupFields
+                liftShort={liftShort}
+                peak={peak}
+                onPeak={setPeak}
+                minPeak={step}
+                perWeek={perWeek}
+                onPerWeek={setPerWeek}
+                length={length}
+                onLength={setLength}
+                suggestedLength={report.suggestedLength}
+                lengthReason={report.lengthReason}
+              />
+            </div>
+
+            <div className="px-6 pt-5 pb-10">
               <button
-                key={o.label}
-                onClick={() => setPeak(o.kg)}
-                className={`rounded-xl border px-2 py-2.5 text-center transition-colors ${
-                  peak === o.kg ? "border-brand-line bg-brand-tint" : "border-line bg-surface"
-                }`}
+                onClick={() => onStart(peak, perWeek, length)}
+                className="w-full bg-brand-fill text-white text-sm font-semibold rounded-xl py-3.5 active:bg-brand-fill-3 transition-colors"
               >
-                <span className="block text-base font-semibold text-ink tabular-nums">{o.kg}kg</span>
-                <span className="block text-[11px] text-ink-5">{o.label}</span>
+                Start cycle {report.number + 1} · peak {peak}kg
               </button>
-            ))}
+              <button onClick={onClose} className="w-full text-sm text-ink-5 py-3 mt-1 active:opacity-70">
+                Later
+              </button>
+            </div>
+          </>
+        ) : (
+          <div className="px-6 pt-6 pb-10">
+            <button
+              onClick={onClose}
+              className="w-full border border-line text-ink-3 text-sm font-semibold rounded-xl py-3.5 active:opacity-70"
+            >
+              Close
+            </button>
           </div>
-          <CycleSetupFields
-            liftShort={liftShort}
-            peak={peak}
-            onPeak={setPeak}
-            minPeak={step}
-            perWeek={perWeek}
-            onPerWeek={setPerWeek}
-            length={length}
-            onLength={setLength}
-            suggestedLength={report.suggestedLength}
-            lengthReason={report.lengthReason}
-          />
-        </div>
-
-        <div className="px-6 pt-5 pb-10">
-          <button
-            onClick={() => onStart(peak, perWeek, length)}
-            className="w-full bg-brand-fill text-white text-sm font-semibold rounded-xl py-3.5 active:bg-brand-fill-3 transition-colors"
-          >
-            Start cycle {report.number + 1} · peak {peak}kg
-          </button>
-          <button onClick={onClose} className="w-full text-sm text-ink-5 py-3 mt-1 active:opacity-70">
-            Later
-          </button>
-        </div>
+        )}
       </div>
     </div>
   )

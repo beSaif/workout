@@ -28,15 +28,13 @@ interface ProgramTimelineProps {
   onBlockSelect: (block: TrainingBlock | null) => void
   selectedUpcomingPhase?: BlockPhase | null
   onUpcomingPhaseSelect?: (phase: BlockPhase | null) => void
-  /** Opens the sheet that edits the cycle's peak. */
-  onEditPeak?: () => void
-  /** Opens the sheet that sends the cycle back to Volume session 1. Absent when there's nothing to restart. */
-  onRestartCycle?: () => void
+  /** Opens what can be done to the cycle: its peak, the last report, a restart. */
+  onManageCycle?: () => void
   /** Sessions a phase still to come will have, for the count under its step. */
   upcomingLength?: (phase: BlockPhase) => number
 }
 
-export default function ProgramTimeline({ blocks, selectedBlockId, onBlockSelect, selectedUpcomingPhase, onUpcomingPhaseSelect, onEditPeak, onRestartCycle, upcomingLength }: ProgramTimelineProps) {
+export default function ProgramTimeline({ blocks, selectedBlockId, onBlockSelect, selectedUpcomingPhase, onUpcomingPhaseSelect, onManageCycle, upcomingLength }: ProgramTimelineProps) {
   const sorted = [...blocks].sort((a, b) => a.id - b.id)
   const activeBlock = sorted.find((b) => b.status === "active")
   if (!activeBlock) return null
@@ -140,22 +138,14 @@ export default function ProgramTimeline({ blocks, selectedBlockId, onBlockSelect
       {/* The peak belongs to the whole cycle, so it is shown once here, not on every phase.
           By the deload the next cycle's peak is already set. */}
       <button
-        onClick={onEditPeak}
-        disabled={!onEditPeak}
+        onClick={onManageCycle}
+        disabled={!onManageCycle}
         className="mt-3 mx-auto flex items-center gap-1.5 rounded-full bg-surface-2 px-3 py-1 text-[11px] text-ink-5 active:opacity-70"
       >
         <span>{anchorBlock.phase === "deload" ? "Next cycle peaks at" : "This cycle peaks at"}</span>
         <span className="font-semibold text-ink">{anchorBlock.anchorWeight}kg</span>
-        {onEditPeak && <span className="font-semibold text-brand">· Edit</span>}
+        {onManageCycle && <span className="font-semibold text-brand">· Manage</span>}
       </button>
-      {onRestartCycle && (
-        <button
-          onClick={onRestartCycle}
-          className="mt-1.5 mx-auto block px-3 py-1 text-[11px] font-semibold text-ink-5 underline underline-offset-2 active:opacity-70"
-        >
-          Restart cycle
-        </button>
-      )}
     </div>
   )
 }
