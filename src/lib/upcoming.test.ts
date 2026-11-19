@@ -19,10 +19,12 @@ import {
   asLoggedSession,
   backfillMuscles,
   blocksAfterConfirm,
+  blocksWithoutSession,
   countSkippedSlots,
   createUpcomingSession,
   describePrescription,
   getActiveBlock,
+  removedMainLift,
   restoreMainLift,
   skipMainLift,
   slotLabel,
@@ -73,10 +75,7 @@ function performed(upcoming: Session, date: Date, repsDelta: number, rpe: number
   }
 }
 
-/**
- * What the logger handed back before the main lift was protected there: accessories
- * only, the main lift removed, and no Skip on record. Drafts saved then can still do it.
- */
+/** What the logger hands back when the main lift was removed there: accessories only, no Skip on record. */
 function performedWithoutMain(upcoming: Session, date: Date): Session {
   return { ...performed(upcoming, date, 0, null), sets: [] }
 }
@@ -404,6 +403,61 @@ describe("Main Lift mode: the main lift opens every upcoming session", () => {
         expect(restored).toEqual(before)
       })
     )
+  })
+
+  it("removing the main lift from the session just logged ends exactly where logging it without would have", () => {
+    fc.assert(
+      fc.property(liftHistoryArb, fc.integer({ min: 1, max: 4 }), (states, gapDays) => {
+        let w = last(states)
+        if (w.upcoming.skippedMainLift) w = step(w, { kind: "restore" })
+
+        // handleSaveEdit on the session just logged, its main lift removed.
+        const logged = step(w, { kind: "log", repsDelta: 0, rpe: 8, gapDays })
+        const original = last(logged.confirmed)
+        const dropped = removedMainLift(original, { ...original, sets: [] })
+        expect(dropped).not.toBeNull()
+        const confirmed = [...logged.confirmed.slice(0, -1), dropped!.session]
+        const blocks = blocksWithoutSession(logged.blocks, original)
+
+        const without = step(w, { kind: "log-without-main", gapDays })
+        expect(dropped!.session).toEqual(last(without.confirmed))
+        expect(blocks).toEqual(without.blocks)
+        expect(upcomingFor({ ...logged, confirmed, blocks })).toEqual(without.upcoming)
+      })
+    )
+  })
+
+  it("removedMainLift only fires when an edit takes every main-lift set out of a session that had them", () => {
+    const profile: UserProfile = {
+      email: "sam@example.com", name: "Sam", bw: 90, trainingMode: "lift-focused", mainLift: "bench",
+      anchor: 100, target: 120, createdAt: "2026-01-01T00:00:00.000Z",
+    }
+    const now = new Date("2026-03-02T18:00:00.000Z")
+    const card = createUpcomingSession([], [createFirstBlock(1, 100, [])], CONFIG, profile, DEFAULT_TRAINING_DAYS, now)
+    const session = performed(card, now, 0, 8)
+    expect(removedMainLift(session, { ...session, sets: session.sets.slice(1) })).toBeNull()
+    const skipped: Session = { ...session, type: "Free", sets: [], blockId: undefined, skippedMainLift: true }
+    expect(removedMainLift(session, { ...session, sets: [] })).toEqual({ session: skipped })
+    expect(removedMainLift(skipped, skipped)).toBeNull()
+  })
+
+  it("blocksWithoutSession reopens the block a session just completed, and only unlinks an older one", () => {
+    const block = (id: number, sessionIds: number[], status: TrainingBlock["status"]): TrainingBlock => ({
+      ...createFirstBlock(id, 100, []), sessionIds, status, endDate: status === "completed" ? "2026-03-01" : null,
+    })
+    const s = (id: number, blockId?: number) => ({ id, blockId }) as Session
+    // Session 3 completed block 1 and block 2 has nothing yet: block 1 reopens, block 2 goes.
+    expect(blocksWithoutSession([block(1, [1, 2, 3], "completed"), block(2, [], "active")], s(3, 1))).toEqual([
+      block(1, [1, 2], "active"),
+    ])
+    // Block 2 already holds training: block 1 only loses the session.
+    expect(blocksWithoutSession([block(1, [1, 2, 3], "completed"), block(2, [4], "active")], s(2, 1))).toEqual([
+      block(1, [1, 3], "completed"),
+      block(2, [4], "active"),
+    ])
+    // A session outside any block changes nothing.
+    const blocks = [block(1, [1], "active")]
+    expect(blocksWithoutSession(blocks, s(9))).toBe(blocks)
   })
 
   it("logging the main lift moves the block on by exactly one slot", () => {

@@ -214,8 +214,57 @@ function droppedMainLift(session: Session, profile: UserProfile): boolean {
  * current stretch and History show it as a skip. The user's notes stay as written.
  */
 export function asLoggedSession(session: Session, profile: UserProfile): Session {
-  if (!droppedMainLift(session, profile)) return session
+  return droppedMainLift(session, profile) ? asSkipped(session) : session
+}
+
+/** `session` filed the way Skip on the up-next card files it: accessories only, outside any block. */
+function asSkipped(session: Session): Session {
   return { ...session, type: "Free", sets: [], blockId: undefined, skippedMainLift: true }
+}
+
+/**
+ * An edit that took the main lift out of a logged session, or null when it didn't. The
+ * session is then a skipped main-lift session, like one logged that way; the caller
+ * also takes it out of its block (`blocksWithoutSession`) so that slot comes round again.
+ * Judged on the sessions themselves, not the current mode: an old Main Lift session
+ * edited after a switch to Balanced is filed the same way.
+ */
+export function removedMainLift(original: Session, edited: Session): { session: Session } | null {
+  if (original.skippedMainLift || original.sets.length === 0 || edited.sets.length > 0) return null
+  return { session: asSkipped(edited) }
+}
+
+/**
+ * The blocks once `session` no longer counts toward the one it was logged in (unlogged,
+ * or its main lift removed). If nothing has been logged since it, the block reopens and
+ * the empty follow-on blocks its completion created go; anything older only unlinks the
+ * session, since later blocks hold real training and must survive.
+ */
+export function blocksWithoutSession(blocks: TrainingBlock[], session: Session): TrainingBlock[] {
+  const blockId = session.blockId
+  if (blockId === undefined) return blocks
+  // Session ids grow with time; block ids don't quite (a resumed block is older than the
+  // re-acclimation it resumed after), so "logged since" is read off the sessions.
+  const own = blocks.find((b) => b.id === blockId)
+  const canRewind =
+    own?.status === "completed" && blocks.every((b) => b.id === blockId || b.sessionIds.every((id) => id < session.id))
+  // A finished re-acclimation handed back to the block it interrupted (closeBlock);
+  // reopening it hands that block back to being interrupted.
+  const resumed = canRewind && own.phase === "reacclimation" ? own.resumeBlockId : undefined
+  let next = blocks
+    // The re-acclimation that resumed this block predates it, so it isn't a follow-on.
+    .filter((b) => !(canRewind && b.id > blockId && b.sessionIds.length === 0 && b.resumeBlockId !== blockId))
+    .map((b) => {
+      if (b.id === resumed && b.status === "active") return { ...b, status: "interrupted" as const }
+      if (b.id !== blockId) return b
+      const sessionIds = b.sessionIds.filter((id) => id !== session.id)
+      return canRewind ? { ...b, sessionIds, status: "active" as const, endDate: null } : { ...b, sessionIds }
+    })
+  if (!getActiveBlock(next) && next.length > 0) {
+    const last = next[next.length - 1]
+    next = next.map((b) => (b.id === last.id ? { ...b, status: "active" as const } : b))
+  }
+  return next
 }
 
 /**

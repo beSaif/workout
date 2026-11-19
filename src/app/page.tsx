@@ -68,6 +68,8 @@ import {
   restoreMainLift,
   blocksAfterConfirm,
   asLoggedSession,
+  blocksWithoutSession,
+  removedMainLift,
 } from "@/lib/upcoming"
 
 const DRAFT_MAX_AGE_MS = 24 * 60 * 60 * 1000
@@ -799,7 +801,15 @@ export default function Page() {
     setEditingSession(JSON.parse(JSON.stringify(session)))
   }
 
-  function handleSaveEdit(updatedSession: Session) {
+  function handleSaveEdit(edited: Session) {
+    // Removing the main lift from a logged session turns it into a skipped one: filed
+    // like Skip, and out of its block so that slot is prescribed again.
+    const original = sessions.find((s) => s.id === edited.id)
+    const dropped = original ? removedMainLift(original, edited) : null
+    const updatedSession = dropped?.session ?? edited
+    const nextBlocks = original && dropped ? blocksWithoutSession(blocks, original) : blocks
+    if (dropped) setBlocks(nextBlocks)
+
     setSessions((prev) => {
       let updated = prev.map((s) =>
         s.id === updatedSession.id ? updatedSession : s
@@ -809,7 +819,7 @@ export default function Page() {
       const upcoming = updated.find((s) => !s.confirmed)
       if (profile && isLiftFocused(profile) && upcoming && !upcoming.skippedMainLift) {
         const confirmed = updated.filter((s) => s.confirmed)
-        const regenerated = createUpcomingSession(confirmed, blocks, exerciseConfig, profile, trainingDays)
+        const regenerated = createUpcomingSession(confirmed, nextBlocks, exerciseConfig, profile, trainingDays)
         updated = sortSessions([
           ...confirmed,
           {
@@ -821,7 +831,7 @@ export default function Page() {
           },
         ])
       }
-      saveAll(updated, blocks)
+      saveAll(updated, nextBlocks)
       return updated
     })
     setEditingSession(null)
@@ -851,30 +861,7 @@ export default function Page() {
 
     const remaining = sessions.filter((s) => s.confirmed && s.id !== session.id)
 
-    const sessionBlockId = session.blockId
-    // Unlogging the session that just completed a block (nothing logged in any later
-    // block yet) rewinds into it: the empty follow-on blocks go and it reopens. Anything
-    // older only unlinks the session — later blocks hold real training and must survive.
-    const canRewind =
-      sessionBlockId !== undefined &&
-      blocks.every((b) => b.id <= sessionBlockId || b.sessionIds.length === 0)
-    let newBlocks = sessionBlockId === undefined ? blocks : blocks
-      .filter((b) => !(canRewind && b.id > sessionBlockId))
-      .map((b) => {
-        if (b.id !== sessionBlockId) return b
-        const sessionIds = b.sessionIds.filter((id) => id !== session.id)
-        return canRewind
-          ? { ...b, sessionIds, status: "active" as const, endDate: null }
-          : { ...b, sessionIds }
-      })
-
-    if (sessionBlockId !== undefined && !getActiveBlock(newBlocks) && newBlocks.length > 0) {
-      const lastBlock = newBlocks[newBlocks.length - 1]
-      newBlocks = newBlocks.map((b) =>
-        b.id === lastBlock.id ? { ...b, status: "active" as const } : b
-      )
-    }
-
+    const newBlocks = blocksWithoutSession(blocks, session)
     const newUpcoming = createUpcomingSession(remaining, newBlocks, exerciseConfig, profile, trainingDays)
     const final = sortSessions([...remaining, newUpcoming])
 

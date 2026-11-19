@@ -1,6 +1,6 @@
 ## Bench Coaching Context
 Workout is a training log built around one main lift (bench press by default), with a Balanced mode for general workouts.
-- In Main Lift mode the main lift is the first exercise of every session, non-negotiable. The one exception is an explicit "Skip Bench" on the up-next card, which logs accessories only and carries the prescribed load to the next session. Enforced by `src/lib/upcoming.test.ts`
+- In Main Lift mode the main lift is the first exercise of every session and can't be moved down. Not doing it makes the session a skipped main-lift session (accessories only, prescribed load carried to the next session), whether by "Skip Bench" on the up-next card or by deleting the main lift in the logger, while logging or when editing a logged session. Enforced by `src/lib/upcoming.test.ts`
 - Sessions only hardcoded after explicit user confirmation
 - e1RM via Brzycki: weight × (36 / (37 − reps)), only from `src/lib/e1rm.ts` (lint-enforced)
 - `docs/HOW-IT-WORKS.md` is the spec for the program, reminders and planner; `src/lib/*.test.ts` checks the code against it. Never change prescribed loads to make a test pass: report the disagreement
