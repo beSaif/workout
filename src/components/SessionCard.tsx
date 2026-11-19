@@ -124,6 +124,9 @@ export default function SessionCard({
   const topWeight = working[0]?.kg ?? null
   const topReps = working[0]?.reps ?? null
   const setCount = working.length
+  // A heavy day opens with one heavier single; the sets after it are its back-offs.
+  const backOffs = working.length > 1 && working[0].kg > working[1].kg ? working.slice(1) : null
+  const backOffLine = backOffs ? `${backOffs[0].kg}kg × ${backOffs[0].reps} × ${backOffs.length}` : null
 
   // Muscles trained in a completed session (for its training-day card). Cardio is not a
   // muscle, and older sessions stored it among the groups; it only shows when a session
@@ -172,7 +175,9 @@ export default function SessionCard({
                 {topReps === 0 ? "missed" : `${topReps} ${topReps === 1 ? "rep" : "reps"}`}
               </span>
             )}
-            {setCount > 0 && (
+            {backOffLine ? (
+              <span className="text-sm font-medium text-ink-6 leading-none tabular-nums">then {backOffLine}</span>
+            ) : setCount > 0 && (
               <span className="text-base font-medium text-ink-6 leading-none">
                 {setCount} {setCount === 1 ? "set" : "sets"}
               </span>
@@ -305,7 +310,9 @@ export default function SessionCard({
     const lift =
       topWeight != null
         ? topReps === 0
-          ? "missed"
+          ? backOffLine ? `missed · ${backOffLine}` : "missed"
+          : backOffLine
+          ? `× ${topReps} · ${backOffLine}`
           : `${topReps} × ${setCount}`
         : null
     const where = confirmedDay

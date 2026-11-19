@@ -237,7 +237,7 @@ export default function CycleReportSheet({ report, liftShort, onStart, onClose, 
           {report.lengthReason && <p className="text-xs text-brand-soft mt-2">{report.lengthReason}</p>}
           <p className="text-xs text-ink-6 mt-2">
             {nextLength} sessions, about {nextWeeks} weeks
-            {perWeek >= 4 ? ", with light days between the heavy ones" : ""}.
+. Volume and Intensity run heavy, light, medium, in that order.
           </p>
         </div>
 

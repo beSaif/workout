@@ -8,9 +8,20 @@ export interface Prescription {
   sessionType: SessionType
   /** The effort the working sets should feel like. Null where effort doesn't steer the load (deload, rebuild). */
   rpe: number | null
-  /** A lighter repeat of the step before it, slotted in when the user benches often enough to need one. */
+  /** A light day: the load only moves on missed reps. Version 3 light days are paused bench. */
   light: boolean
+  /** Version 3 Volume and Intensity sessions: where the session sits in the heavy / light / medium week. */
+  day?: DayRole
+  /** Heavy days open with one heavy single before the working sets, which are then back-off sets. */
+  topSet?: { weight: number; reps: number; rpe: number }
+  /** Three-second pause on the chest every rep. */
+  paused?: boolean
 }
+
+/** The three sessions of a version 3 week, in the order they come. */
+export type DayRole = "heavy" | "light" | "medium"
+const WEEK_ORDER: DayRole[] = ["heavy", "light", "medium"]
+export const DAY_LABEL: Record<DayRole, string> = { heavy: "Heavy", light: "Light", medium: "Medium" }
 
 interface SchemeEntry {
   pct: number
@@ -45,10 +56,164 @@ const BLOCK_PHASE_ORDER: BlockPhase[] = ["accumulation", "transmutation", "reali
 // Target RPEs are what each load works out to on the RTS effort chart, so a session
 // that lands on its target is going exactly to plan.
 
+// ─── Version 3: the heavy / light / medium week ───────────────────────────────
+// Volume and Intensity run in weeks of three sessions, in the order they are logged:
+// a heavy day (one top single at about RPE 7–8, then back-off sets), a light day (paused
+// bench) and a medium day (the volume work). Each week climbs a step. Peak and Deload are
+// shared with version 2: a taper into the test, then an easy week.
+
+interface DayEntry {
+  pct: number
+  reps: number
+  sets: number
+  rpe: number
+}
+
+interface WeekEntry {
+  /** The single that opens the heavy day, before its back-off sets. */
+  top: { pct: number; rpe: number }
+  heavy: DayEntry
+  light: DayEntry
+  medium: DayEntry
+}
+
+/** Light days are paused bench, aimed this easy. */
+const LIGHT_DAY_RPE = 6
+
+/** Volume, default rep range: back-offs in sixes, the medium day in eights and sevens. */
+const V3_VOLUME_MODERATE: WeekEntry[] = [
+  {
+    top: { pct: 0.875, rpe: 6.5 },
+    heavy: { pct: 0.725, reps: 6, sets: 4, rpe: 6 },
+    light: { pct: 0.650, reps: 5, sets: 4, rpe: LIGHT_DAY_RPE },
+    medium: { pct: 0.675, reps: 8, sets: 5, rpe: 6 },
+  },
+  {
+    top: { pct: 0.900, rpe: 7.5 },
+    heavy: { pct: 0.750, reps: 6, sets: 4, rpe: 6.5 },
+    light: { pct: 0.650, reps: 5, sets: 4, rpe: LIGHT_DAY_RPE },
+    medium: { pct: 0.700, reps: 8, sets: 5, rpe: 7 },
+  },
+  {
+    top: { pct: 0.900, rpe: 7.5 },
+    heavy: { pct: 0.775, reps: 6, sets: 4, rpe: 7.5 },
+    light: { pct: 0.675, reps: 5, sets: 4, rpe: LIGHT_DAY_RPE },
+    medium: { pct: 0.725, reps: 7, sets: 5, rpe: 7 },
+  },
+]
+
+/** Volume after two cycles without a new peak: a rep lower and 2.5–5% heavier across the week. */
+const V3_VOLUME_HEAVY: WeekEntry[] = [
+  {
+    top: { pct: 0.875, rpe: 6.5 },
+    heavy: { pct: 0.750, reps: 5, sets: 4, rpe: 6 },
+    light: { pct: 0.675, reps: 4, sets: 4, rpe: LIGHT_DAY_RPE },
+    medium: { pct: 0.725, reps: 6, sets: 5, rpe: 6 },
+  },
+  {
+    top: { pct: 0.900, rpe: 7.5 },
+    heavy: { pct: 0.775, reps: 5, sets: 4, rpe: 6.5 },
+    light: { pct: 0.675, reps: 4, sets: 4, rpe: LIGHT_DAY_RPE },
+    medium: { pct: 0.750, reps: 6, sets: 5, rpe: 6.5 },
+  },
+  {
+    top: { pct: 0.900, rpe: 7.5 },
+    heavy: { pct: 0.800, reps: 5, sets: 4, rpe: 7.5 },
+    light: { pct: 0.700, reps: 4, sets: 4, rpe: LIGHT_DAY_RPE },
+    medium: { pct: 0.775, reps: 6, sets: 5, rpe: 7.5 },
+  },
+]
+
+const V3_INTENSITY: WeekEntry[] = [
+  {
+    top: { pct: 0.900, rpe: 7.5 },
+    heavy: { pct: 0.800, reps: 4, sets: 4, rpe: 7 },
+    light: { pct: 0.700, reps: 3, sets: 4, rpe: LIGHT_DAY_RPE },
+    medium: { pct: 0.775, reps: 5, sets: 5, rpe: 6.5 },
+  },
+  {
+    top: { pct: 0.925, rpe: 8 },
+    heavy: { pct: 0.825, reps: 4, sets: 4, rpe: 7.5 },
+    light: { pct: 0.725, reps: 3, sets: 4, rpe: LIGHT_DAY_RPE },
+    medium: { pct: 0.800, reps: 5, sets: 5, rpe: 7.5 },
+  },
+]
+
+/** The weeks a version 3 block runs, or null for a phase that keeps the version 2 scheme. */
+function v3Weeks(phase: BlockPhase, repRange: RepRange | undefined): WeekEntry[] | null {
+  if (phase === "accumulation") return repRange === "heavy" ? V3_VOLUME_HEAVY : V3_VOLUME_MODERATE
+  if (phase === "transmutation") return V3_INTENSITY
+  return null
+}
+
+/**
+ * Which week of the scheme a slot trains, and which day of it. Slots run heavy, light,
+ * medium, heavy, ... in the order they are logged. A block with more weeks than the
+ * scheme repeats its early weeks; one with fewer drops the middle ones, so it always
+ * finishes on the heaviest week.
+ */
+function weekSlot(weeks: number, blockLength: number, index: number): { week: number; day: DayRole } {
+  const i = Math.max(0, index)
+  const blockWeeks = Math.max(1, Math.ceil(Math.max(1, blockLength) / WEEK_ORDER.length))
+  const w = Math.min(Math.floor(i / WEEK_ORDER.length), blockWeeks - 1)
+  return { week: spreadIndex(w, blockWeeks, weeks), day: WEEK_ORDER[i % WEEK_ORDER.length] }
+}
+
+/** Index `k` of `from` evenly onto `to`, first onto first and last onto last. */
+function spreadIndex(k: number, from: number, to: number): number {
+  return to <= 1 || k >= from - 1 ? to - 1 : Math.floor((k * (to - 1)) / (from - 1))
+}
+
+/** Hard sets a version 3 Volume block carries before extra sets: heavy and medium days. Light days aren't hard sets. */
+function v3HardSets(weeks: WeekEntry[], blockLength: number): { sets: number; mediumDays: number } {
+  let sets = 0
+  let mediumDays = 0
+  for (let i = 0; i < blockLength; i++) {
+    const { week, day } = weekSlot(weeks.length, blockLength, i)
+    if (day === "heavy") sets += weeks[week].heavy.sets + 1
+    if (day === "medium") {
+      sets += weeks[week].medium.sets
+      mediumDays++
+    }
+  }
+  return { sets, mediumDays }
+}
+
+function prescribeV3(
+  phase: BlockPhase,
+  weeks: WeekEntry[],
+  index: number,
+  anchorWeight: number,
+  blockLength: number,
+  loadOffset: number,
+  program: BlockProgram
+): Prescription {
+  const { week, day } = weekSlot(weeks.length, blockLength, index)
+  const entry = weeks[week][day]
+  const extra = phase === "accumulation" && day === "medium" ? extraSetsAllowed(phase, blockLength, program) : 0
+  const top = weeks[week].top
+  return {
+    weight: roundToPlate(roundToPlate(anchorWeight * entry.pct) + loadOffset),
+    reps: entry.reps,
+    sets: entry.sets + extra,
+    sessionType: PHASE_SESSION_TYPE[phase],
+    rpe: entry.rpe,
+    light: day === "light",
+    day,
+    ...(day === "heavy"
+      ? { topSet: { weight: roundToPlate(roundToPlate(anchorWeight * top.pct) + loadOffset), reps: 1, rpe: top.rpe } }
+      : {}),
+    ...(day === "light" ? { paused: true } : {}),
+  }
+}
+
+// ─── Older schemes, kept to read what was logged on them ──────────────────────
+// No new block is planned on these. Blocks made on them keep them for the sessions
+// already logged, so the load replay and the cycle reports judge each session against
+// what it was actually given.
+
 // ─── Version 1 ────────────────────────────────────────────────────────────────
-// The schemes blocks were planned with before cycles were lengthened. Blocks saved
-// without a schemeVersion keep running them, so a block in progress is never re-planned
-// under the user, and the RPE replay reads its sessions against what they were given.
+// The schemes blocks were planned with before cycles were lengthened.
 
 /** Volume and intensity both climb: reps per session go 32 → 40 before the loads take over. */
 const V1_ACCUMULATION: SchemeEntry[] = [
@@ -94,6 +259,7 @@ const V1_SCHEMES: Record<BlockPhase, SchemeEntry[]> = {
 // ─── Version 2 ────────────────────────────────────────────────────────────────
 // Three weeks of volume, two of intensity, one of taper at three sessions a week, one
 // scheme step per session. Volume climbs a set before each load step, then resets.
+// Its Peak and Deload schemes are still the current ones.
 
 /** Eights, sevens and sixes: the default accumulation. */
 const V2_ACCUMULATION_MODERATE: SchemeEntry[] = [
@@ -141,7 +307,7 @@ function v2Schemes(repRange: RepRange): Record<BlockPhase, SchemeEntry[]> {
 }
 
 /** The scheme version new blocks are made with. */
-export const SCHEME_VERSION = 2
+export const SCHEME_VERSION = 3
 
 /** What a block's sessions are planned from, beyond its phase and peak. */
 export type BlockProgram = Partial<Pick<TrainingBlock, "schemeVersion" | "repRange" | "extraSets" | "cycleLength">>
@@ -149,6 +315,7 @@ export type BlockProgram = Partial<Pick<TrainingBlock, "schemeVersion" | "repRan
 /** The program a block made today starts on: current schemes, default rep range, no extra volume. */
 const FRESH_PROGRAM: BlockProgram = { schemeVersion: SCHEME_VERSION }
 
+/** Version 1's and 2's step schemes; version 3 keeps version 2's for Peak and Deload. */
 function schemesFor(program: BlockProgram): Record<BlockPhase, SchemeEntry[]> {
   return (program.schemeVersion ?? 1) >= 2 ? v2Schemes(program.repRange ?? "moderate") : V1_SCHEMES
 }
@@ -276,6 +443,11 @@ export function blockLengthFor(
   const { weeks, min } =
     phase === "deload" && opts.deloadWeek ? DELOAD_WEEK : PHASE_WEEKS[opts.cycleLength ?? "standard"][phase]
   const perWeek = Math.min(6, Math.max(2, Math.round(sessionsPerWeek)))
+  // Volume and Intensity run in whole heavy / light / medium weeks.
+  if (v3Weeks(phase, undefined)) {
+    const n = WEEK_ORDER.length
+    return n * Math.max(Math.ceil(min / n), Math.round((weeks * perWeek) / n))
+  }
   return Math.max(min, Math.round(weeks * perWeek))
 }
 
@@ -341,12 +513,21 @@ function heavySlots(phase: BlockPhase, schemeLength: number, blockLength: number
 }
 
 /**
- * Extra sets a heavy accumulation day may carry: what the cycle earned, held so heavy
- * days stay under WEEKLY_HEAVY_SET_CAP working sets a week.
+ * Extra sets an accumulation day may carry: what the cycle earned, held so the block's
+ * hard sets stay under WEEKLY_HEAVY_SET_CAP a week. Version 3 puts them on the medium
+ * days, version 2 on every heavy day.
  */
-function extraSetsAllowed(scheme: SchemeEntry[], blockLength: number, program: BlockProgram): number {
+function extraSetsAllowed(phase: BlockPhase, blockLength: number, program: BlockProgram): number {
   const earned = Math.max(0, program.extraSets ?? 0)
-  if (earned === 0) return 0
+  if (earned === 0 || phase !== "accumulation") return 0
+  const weeks = (program.schemeVersion ?? 1) >= 3 ? v3Weeks(phase, program.repRange) : null
+  if (weeks) {
+    const { sets, mediumDays } = v3HardSets(weeks, blockLength)
+    if (mediumDays === 0) return 0
+    const budget = WEEKLY_HEAVY_SET_CAP * phaseWeeks(phase, program.cycleLength) - sets
+    return Math.max(0, Math.min(earned, Math.floor(budget / mediumDays)))
+  }
+  const scheme = schemesFor(program).accumulation
   const heavy = heavySlots("accumulation", scheme.length, blockLength, program)
   let heavyCount = 0
   let heavySets = 0
@@ -386,8 +567,13 @@ export function prescribeBlockSession(
   // (e.g. reacclimation, which should go through prescribeForBlock instead).
   const schemes = schemesFor(program)
   const ownScheme = schemes[phase]?.length > 0
-  const scheme = ownScheme ? schemes[phase] : schemes.accumulation
   const schemePhase: BlockPhase = ownScheme ? phase : "accumulation"
+  const weeks = (program.schemeVersion ?? 1) >= 3 ? v3Weeks(schemePhase, program.repRange) : null
+  if (weeks) {
+    const length = blockLength ?? weeks.length * WEEK_ORDER.length
+    return prescribeV3(schemePhase, weeks, sessionIndexInBlock, anchorWeight, length, loadOffset, program)
+  }
+  const scheme = ownScheme ? schemes[phase] : schemes.accumulation
   const type = PHASE_SESSION_TYPE[schemePhase]
   const length = blockLength ?? scheme.length
   const slot = slotEntry(scheme.length, length, sessionIndexInBlock, heavySlots(schemePhase, scheme.length, length, program))
@@ -397,7 +583,7 @@ export function prescribeBlockSession(
   const entry = scheme[step]
   const base = schemeLoads(scheme, anchorWeight)[step] + loadOffset
   // Volume a cycle has earned goes on the heavy accumulation days; light days stay light.
-  const extra = schemePhase === "accumulation" && !light ? extraSetsAllowed(scheme, length, program) : 0
+  const extra = !light ? extraSetsAllowed(schemePhase, length, program) : 0
   return {
     weight: roundToPlate(light ? base * LIGHT_LOAD : base),
     reps: entry.reps,
@@ -406,6 +592,21 @@ export function prescribeBlockSession(
     rpe: entry.rpe === null ? null : light ? entry.rpe - LIGHT_RPE_DROP : entry.rpe,
     light,
   }
+}
+
+/** A session's main-lift work in one line, e.g. "90kg × 1, then 72.5kg × 6 × 4". */
+export function describeLoad(rx: Prescription): string {
+  const work = `${rx.weight}kg × ${rx.reps} × ${rx.sets}${rx.paused ? " paused" : ""}`
+  return rx.topSet ? `${rx.topSet.weight}kg × ${rx.topSet.reps}, then ${work}` : work
+}
+
+/** The effort a session aims for, by the kind of day it is. Null where effort doesn't steer the load. */
+export function effortTarget(rx: Prescription): string | null {
+  if (rx.rpe == null) return null
+  if (rx.topSet) return `Heavy day · single at RPE ${rx.topSet.rpe}, back-offs at RPE ${rx.rpe}`
+  if (rx.paused) return `Light day · 3-second pause on the chest, aim for RPE ${rx.rpe}`
+  if (rx.day === "medium") return `Medium day · aim for RPE ${rx.rpe}`
+  return `${rx.light ? "Light day · aim" : "Aim"} for RPE ${rx.rpe}`
 }
 
 /** Session count for a block — dynamic for re-acclimation (its rebuildLoads length). */
@@ -450,7 +651,9 @@ export function blockSlotNumbers(
  * shifted by `loadOffset` (see cycleLoadOffset).
  */
 export function prescribeForBlock(
-  block: Pick<TrainingBlock, "phase" | "rebuildLoads" | "anchorWeight" | "length"> & BlockProgram,
+  block: Pick<TrainingBlock, "phase" | "rebuildLoads" | "anchorWeight" | "length"> &
+    Partial<Pick<TrainingBlock, "switchSlot">> &
+    BlockProgram,
   sessionIndexInBlock: number,
   loadOffset = 0
 ): Prescription {
@@ -468,13 +671,17 @@ export function prescribeForBlock(
       light: false,
     }
   }
+  // A block that switched scheme part-way runs the rest of its slots as a block of their
+  // own on the current scheme, so the new weeks start on a heavy day.
+  const from = block.switchSlot != null && sessionIndexInBlock >= block.switchSlot ? block.switchSlot : 0
+  const program = programOf(block)
   return prescribeBlockSession(
     block.phase,
-    sessionIndexInBlock,
+    sessionIndexInBlock - from,
     block.anchorWeight,
-    getBlockLength(block),
+    getBlockLength(block) - from,
     block.phase === "deload" ? 0 : loadOffset,
-    programOf(block)
+    block.switchSlot != null && from > 0 ? { ...program, schemeVersion: SCHEME_VERSION } : program
   )
 }
 
@@ -512,21 +719,30 @@ const PEAK_SINGLE_RPE = 9.5
  */
 function adjustOffset(offset: number, rx: Prescription, session: Session, anchorWeight: number, plannedReps: number | null): number {
   if (rx.rpe === null) return offset
-  const attempted = getAttemptedSets(session)
-  if (attempted.length === 0) return offset
+  const all = getAttemptedSets(session)
+  if (all.length === 0) return offset
+  // A heavy day's single is judged on its own target; the rest are its back-off sets.
+  const { top: single, rest: attempted } = splitTopSet(rx, all)
   const working = attempted.filter((s) => s.reps > 0)
   const target = plannedReps ?? Math.max(1, ...working.map((s) => s.reps))
   // A set logged at 0 reps is a miss, the clearest one there is.
-  const missed = attempted.some((s) => s.reps < target)
+  const missed = attempted.some((s) => s.reps < target) || (single != null && single.reps === 0)
   const rpes = working.map((s) => s.rpe).filter((r): r is number => r != null)
   const top = rpes.length > 0 ? Math.max(...rpes) : null
+  const singleRpe = rx.topSet && single != null && single.reps > 0 ? single.rpe : null
   const step = loadStep(anchorWeight)
   let next = offset
   if (missed) next -= step
   else if (!rx.light) {
     const margin = rx.reps >= HIGH_REPS ? EASY_RPE_MARGIN.highReps : EASY_RPE_MARGIN.lowReps
-    const tooHard = top !== null && top - Math.max(rx.rpe, 7) >= 1
-    const easyByRpe = top !== null && rx.rpe - top >= margin
+    const singleTarget = rx.topSet?.rpe ?? 0
+    const tooHard =
+      (top !== null && top - Math.max(rx.rpe, 7) >= 1) ||
+      (singleRpe != null && singleRpe - Math.max(singleTarget, 7) >= 1)
+    // A fast single counts as easy unless the back-offs ran over target.
+    const easyByRpe =
+      (top !== null && rx.rpe - top >= margin) ||
+      (singleRpe != null && singleTarget - singleRpe >= EASY_RPE_MARGIN.lowReps && (top === null || top <= rx.rpe))
     const easyByReps =
       plannedReps !== null && working.length > 0 && working.every((s) => s.reps >= plannedReps + EXTRA_REPS_EASY)
     if (tooHard) next -= step
@@ -598,6 +814,29 @@ export function cycleLoadOffset(
     }
   }
   return offset
+}
+
+/**
+ * A heavy day's sets split into its top single and the back-off sets after it. The single
+ * is the first set, when it is heavier than the back-offs; a session logged without one is
+ * all back-offs. Other days are all working sets.
+ */
+function splitTopSet<T extends { kg: number }>(rx: Prescription, sets: T[]): { top: T | null; rest: T[] } {
+  if (!rx.topSet || sets.length === 0 || sets[0].kg <= rx.weight) return { top: null, rest: sets }
+  return { top: sets[0], rest: sets.slice(1) }
+}
+
+/**
+ * How far over (positive) or under its target RPE a session ran, by its hardest set. A
+ * heavy day's single is held to the single's target and its back-offs to theirs. Null
+ * when the session had no target or no rated set.
+ */
+export function effortAgainstTarget(rx: Prescription, session: Session): number | null {
+  if (rx.rpe == null) return null
+  const { top, rest } = splitTopSet(rx, session.sets.filter((x) => !x.isWarmup))
+  const diffs = rest.filter((x) => x.rpe != null).map((x) => x.rpe! - rx.rpe!)
+  if (top?.rpe != null && rx.topSet) diffs.push(top.rpe - rx.topSet.rpe)
+  return diffs.length > 0 ? Math.max(...diffs) : null
 }
 
 /** e1RM of one set, effort included: Brzycki run on the reps the set had in it. */
@@ -720,7 +959,7 @@ export function createNextBlock(
       // Another set only where the weekly cap leaves room for it at this cycle's frequency.
       const accLength = blockLengthFor("accumulation", perWeek, { cycleLength })
       const program: BlockProgram = { schemeVersion: SCHEME_VERSION, repRange, cycleLength, extraSets: extraSets + 1 }
-      if (extraSets < MAX_EXTRA_SETS && extraSetsAllowed(v2Schemes(repRange).accumulation, accLength, program) > extraSets) {
+      if (extraSets < MAX_EXTRA_SETS && extraSetsAllowed("accumulation", accLength, program) > extraSets) {
         extraSets += 1
         change = "volume-up"
       }
@@ -756,6 +995,34 @@ export function createNextBlock(
     cycleLength,
     ...(review ? { review } : {}),
   }
+}
+
+/**
+ * Moves blocks still running an older scheme onto the current one. A block that hasn't
+ * started is re-planned outright, resized for Volume and Intensity to whole weeks. One
+ * part-way through switches from its next slot (see TrainingBlock.switchSlot), so the
+ * sessions already logged keep being read against what they were given. Finished blocks
+ * are left alone. Null when nothing needed moving.
+ */
+export function migrateToCurrentScheme(blocks: TrainingBlock[], sessions: Session[]): TrainingBlock[] | null {
+  let changed = false
+  const next = blocks.map((b) => {
+    if (b.status === "completed" || b.phase === "reacclimation") return b
+    if ((b.schemeVersion ?? 1) >= SCHEME_VERSION || b.switchSlot != null) return b
+    const position = blockPosition(b)
+    if (position >= getBlockLength(b)) return b
+    changed = true
+    if (position > 0) return { ...b, switchSlot: position }
+    const resized = v3Weeks(b.phase, undefined)
+      ? {
+          length: blockLengthFor(b.phase, b.sessionsPerWeek ?? measureSessionsPerWeek(sessions, null), {
+            cycleLength: b.cycleLength,
+          }),
+        }
+      : {}
+    return { ...b, schemeVersion: SCHEME_VERSION, ...resized }
+  })
+  return changed ? next : null
 }
 
 /**

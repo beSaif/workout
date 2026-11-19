@@ -13,6 +13,9 @@ import {
   blockPosition,
   blockSlotNumbers,
   migrateSessionTypes,
+  migrateToCurrentScheme,
+  describeLoad,
+  effortTarget,
   cycleLoadOffset,
   blockLengthFor,
   createFirstBlock,
@@ -105,13 +108,19 @@ function createUpcomingSession(
     prescription = prescribeBlockSession("accumulation", 0, profile.anchor ?? 0)
   }
 
-  const warmups = generateWarmups(prescription.weight, prescription.reps)
-  const workingSets = Array.from({ length: prescription.sets }, (_, i) => ({
+  // A heavy day warms up to its top single, which comes before the back-off sets.
+  const top = prescription.topSet
+  const warmups = top ? generateWarmups(top.weight, top.reps) : generateWarmups(prescription.weight, prescription.reps)
+  const planned = [
+    ...(top ? [{ kg: top.weight, reps: top.reps }] : []),
+    ...Array.from({ length: prescription.sets }, () => ({ kg: prescription.weight, reps: prescription.reps })),
+  ]
+  const workingSets = planned.map((set, i) => ({
     id: `S${i + 1}`,
-    kg: prescription.weight,
-    reps: prescription.reps,
+    kg: set.kg,
+    reps: set.reps,
     rpe: null as null,
-    e1rm: calcE1RM(prescription.weight, prescription.reps),
+    e1rm: calcE1RM(set.kg, set.reps),
     note: "",
     isWarmup: false,
   }))
@@ -120,8 +129,9 @@ function createUpcomingSession(
   const sessionIndex = activeBlock ? blockPosition(activeBlock) : 0
   const phase = activeBlock?.phase ?? "accumulation"
   const blockLength = activeBlock ? getBlockLength(activeBlock) : blockLengthFor("accumulation", measureSessionsPerWeek(sessions, null))
-  const effort = prescription.rpe != null ? ` ${prescription.light ? "Light day, aim" : "Aim"} for RPE ${prescription.rpe}.` : ""
-  const coachNote = `[${PHASE_LABEL[phase]} ${sessionIndex + 1}/${blockLength}] ${prescription.weight}kg × ${prescription.reps} × ${prescription.sets}.${effort} Stay tight, drive the bar.`
+  const target = effortTarget(prescription)
+  const effort = target ? ` ${target}.` : ""
+  const coachNote = `[${PHASE_LABEL[phase]} ${sessionIndex + 1}/${blockLength}] ${describeLoad(prescription)}.${effort} Stay tight, drive the bar.`
 
   const nextDay = suggestNextDay(sessions, trainingDays, config)?.day
 
@@ -364,6 +374,29 @@ export default function Page() {
           if (migrated !== null) finalSessions = migrated
 
           let finalBlocks = loadedBlocks
+
+          // Blocks still on an older scheme move to the heavy / light / medium week. The
+          // upcoming session was planned on the old one, so it is planned again, keeping
+          // its id and day; one whose main lift was skipped has no main-lift sets to redo.
+          const moved = migrateToCurrentScheme(finalBlocks, finalSessions.filter((s) => s.confirmed))
+          if (moved !== null) {
+            finalBlocks = moved
+            const previous = finalSessions.find((s) => !s.confirmed)
+            if (isLiftFocused(p) && previous && !previous.skippedMainLift) {
+              const confirmed = finalSessions.filter((s) => s.confirmed)
+              const regenerated = createUpcomingSession(confirmed, finalBlocks, config, p, days)
+              finalSessions = sortSessions([
+                ...confirmed,
+                {
+                  ...regenerated,
+                  id: previous.id,
+                  selectedTrainingDayId: previous.selectedTrainingDayId,
+                  selectedMuscleGroups: previous.selectedMuscleGroups,
+                },
+              ])
+            }
+            saveAll(finalSessions, finalBlocks)
+          }
 
           // First-time block setup: seed first block from profile anchor (lift-focused only —
           // Balanced users have no anchor and no blocks)
@@ -1147,9 +1180,7 @@ export default function Page() {
   const upcomingRx = liftFocused && activeBlock
     ? prescribeForBlock(activeBlock, blockPosition(activeBlock), activeOffset)
     : undefined
-  const heldPrescription = upcomingRx
-    ? `${upcomingRx.weight}kg × ${upcomingRx.reps} × ${upcomingRx.sets}`
-    : undefined
+  const heldPrescription = upcomingRx ? describeLoad(upcomingRx) : undefined
   const upcomingTarget = (() => {
     if (!upcomingRx || upcoming?.skippedMainLift) return undefined
     if (activeBlock?.phase === "deload") return "Deload · keep every set easy, well short of failure"
@@ -1157,7 +1188,7 @@ export default function Page() {
     const isTest = activeBlock?.phase === "realization" && blockPosition(activeBlock) === getBlockLength(activeBlock) - 1
     const effort = isTest
       ? `Peak single · aim for RPE ${upcomingRx.rpe}. Log it: it sets next cycle's peak.`
-      : `${upcomingRx.light ? "Light day · aim" : "Aim"} for RPE ${upcomingRx.rpe}`
+      : effortTarget(upcomingRx) ?? ""
     const adjust =
       activeOffset > 0
         ? `\n+${activeOffset}kg on the plan: recent sessions felt easy`

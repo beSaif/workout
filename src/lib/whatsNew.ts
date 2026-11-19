@@ -17,6 +17,19 @@ export interface WhatsNewRelease {
  */
 export const WHATS_NEW: WhatsNewRelease[] = [
   {
+    version: 14,
+    items: [
+      {
+        title: "Heavy, light, medium",
+        body: "Volume and Intensity now run in weeks of three sessions, in the order you log them. Heavy: one top single at about RPE 7 to 8, then four back-off sets. Light: paused bench, three seconds on the chest. Medium: the volume work. Each week climbs a step, so you handle heavy singles every week instead of only at the peak. Peak and Deload are unchanged.",
+      },
+      {
+        title: "Your cycle switches today",
+        body: "A block you're part-way through keeps the sessions you've logged and starts the new weeks on a heavy day. Log the single's RPE on its own: it's judged against its own target, and a fast one moves your loads up.",
+      },
+    ],
+  },
+  {
     version: 13,
     items: [
       {

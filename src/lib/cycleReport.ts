@@ -3,6 +3,7 @@ import { calcE1RM } from "./e1rm"
 import {
   blockSlotNumbers,
   cycleLoadOffset,
+  effortAgainstTarget,
   getBlockLength,
   measureSessionsPerWeek,
   prescribeForBlock,
@@ -157,12 +158,11 @@ export function buildCycleReport(
     const slots = blockSlotNumbers(block, logged.map((s) => s.id))
     for (const session of logged) {
       const rx = prescribeForBlock(block, (slots.get(session.id) ?? 1) - 1)
-      const rpes = session.sets.filter((x) => !x.isWarmup && x.rpe != null).map((x) => x.rpe!)
-      if (rx.rpe == null || rpes.length === 0) {
+      const diff = effortAgainstTarget(rx, session)
+      if (diff == null) {
         effort.unrated++
         continue
       }
-      const diff = Math.max(...rpes) - rx.rpe
       if (diff >= 1) effort.harder++
       else if (diff <= -1) effort.easier++
       else effort.onTarget++

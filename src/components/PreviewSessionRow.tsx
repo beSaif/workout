@@ -1,6 +1,6 @@
 "use client"
 
-import { Prescription } from "@/lib/prescription"
+import { DAY_LABEL, Prescription } from "@/lib/prescription"
 
 interface PreviewSessionRowProps {
   label: string
@@ -15,15 +15,18 @@ interface PreviewSessionRowProps {
 
 /** A session that hasn't been generated yet, shown with its projected load. */
 export default function PreviewSessionRow({ label, rx, tag, faint = false, onJump }: PreviewSessionRowProps) {
-  const effort = rx.rpe != null ? `RPE ${rx.rpe}` : null
+  const effort =
+    rx.rpe == null ? null : rx.topSet ? `Single RPE ${rx.topSet.rpe} · back-offs RPE ${rx.rpe}` : `RPE ${rx.rpe}`
+  // Version 3 sessions name their day of the week; older light repeats just say Light.
+  const dayTag = rx.day ? (rx.paused ? `${DAY_LABEL[rx.day]} · paused` : DAY_LABEL[rx.day]) : rx.light ? "Light" : null
   const body = (
     <>
       <span className="flex flex-col gap-0.5 min-w-0">
         <span className="flex items-center gap-1.5">
           <span className={`text-xs font-medium ${faint ? "text-ink-6" : "text-ink-5"}`}>{label}</span>
-          {rx.light && (
+          {dayTag && (
             <span className="text-[10px] font-semibold uppercase tracking-wide text-ink-5 bg-surface rounded px-1 py-px">
-              Light
+              {dayTag}
             </span>
           )}
           {tag && (
@@ -35,12 +38,25 @@ export default function PreviewSessionRow({ label, rx, tag, faint = false, onJum
         {effort && <span className="text-[10px] text-ink-6">{effort}</span>}
       </span>
       <span className="flex items-center gap-3 shrink-0">
-        <span className="text-right">
-          <span className={`text-sm font-semibold tabular-nums ${faint ? "text-ink-5" : "text-ink-3"}`}>
-            {rx.weight}kg
-          </span>
-          <span className="text-xs text-ink-6 tabular-nums ml-1.5">
-            {rx.reps} × {rx.sets}
+        <span className="text-right flex flex-col items-end gap-0.5">
+          {rx.topSet && (
+            <span className="tabular-nums">
+              <span className={`text-sm font-semibold ${faint ? "text-ink-5" : "text-ink-3"}`}>{rx.topSet.weight}kg</span>
+              <span className="text-xs text-ink-6 ml-1.5">× {rx.topSet.reps}</span>
+            </span>
+          )}
+          <span className="tabular-nums">
+            <span
+              className={
+                rx.topSet ? "text-xs font-medium text-ink-5" : `text-sm font-semibold ${faint ? "text-ink-5" : "text-ink-3"}`
+              }
+            >
+              {rx.topSet ? "then " : ""}
+              {rx.weight}kg
+            </span>
+            <span className="text-xs text-ink-6 ml-1.5">
+              {rx.reps} × {rx.sets}
+            </span>
           </span>
         </span>
         {onJump && (

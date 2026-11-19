@@ -67,12 +67,18 @@ export interface TrainingBlock {
   resumeBlockId?: number
   /**
    * Which percentage schemes the block runs. Absent on blocks saved before cycles were
-   * lengthened: those run version 1 until they finish.
+   * lengthened: those run version 1. Version 3 is the heavy / light / medium week.
    */
   schemeVersion?: number
-  /** Version 2: accumulation's rep range. Absent means "moderate". */
+  /**
+   * Set on a block that was part-way through an older scheme when version 3 replaced it:
+   * the slot from which it runs version 3. Slots before it were planned, and are read,
+   * on the scheme the block was made with.
+   */
+  switchSlot?: number
+  /** Version 2 and up: accumulation's rep range. Absent means "moderate". */
   repRange?: RepRange
-  /** Version 2: working sets added to every heavy accumulation session, earned a set per cycle that raised the peak. */
+  /** Working sets added to every heavy (version 2) or medium (version 3) accumulation session, earned a set per cycle that raised the peak. */
   extraSets?: number
   /** Version 2: cycles in a row that ended without raising the peak. */
   stalls?: number

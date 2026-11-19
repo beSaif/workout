@@ -57,26 +57,52 @@ first cycle peaks at the 1RM given in onboarding.
   1) or long (~8: 4, 3, 1), stored as `cycleLength` on its blocks. The first cycle's length
   comes from the onboarding question "how long have you been lifting?" (under a year → short,
   1–3 years → standard, 3+ → long). Sessions per phase are its weeks × days a week (the days
-  chosen in the cycle report, else the last four weeks of benching, else 3). At standard and
-  three a week that's 9 + 6 + 3 + 1, one scheme step per session.
-- **Heavy and light days.** Under four sessions a week every session is heavy; more sessions
-  than scheme steps repeat steps at full load, fewer drop steps. From four a week up, light
-  days (85% of the step before) come in so heavy days stay near three a week, never two light
-  days together.
+  chosen in the cycle report, else the last four weeks of benching, else 3); Volume and
+  Intensity round that to whole weeks of three. At standard and three a week that's
+  9 + 6 + 3 + 1.
+- **Heavy, light, medium.** Volume and Intensity (scheme version 3) run in weeks of three
+  sessions, in the order they're logged, whatever the calendar says: a **heavy** day (one
+  top single at RPE 6.5–8, then four back-off sets), a **light** day (paused bench, a
+  three-second pause on the chest, RPE 6) and a **medium** day (the volume work). Each week
+  climbs a step. A phase with more weeks than its scheme repeats the early weeks; one with
+  fewer drops the middle ones, so it always ends on the heaviest. At standard length:
+
+  | Volume (% of peak) | Week 1 | Week 2 | Week 3 |
+  |---|---|---|---|
+  | Heavy | 1 @ 87.5, then 4×6 @ 72.5 | 1 @ 90, then 4×6 @ 75 | 1 @ 90, then 4×6 @ 77.5 |
+  | Light (paused) | 4×5 @ 65 | 4×5 @ 65 | 4×5 @ 67.5 |
+  | Medium | 5×8 @ 67.5 | 5×8 @ 70 | 5×7 @ 72.5 |
+
+  | Intensity (% of peak) | Week 1 | Week 2 |
+  |---|---|---|
+  | Heavy | 1 @ 90, then 4×4 @ 80 | 1 @ 92.5, then 4×4 @ 82.5 |
+  | Light (paused) | 4×3 @ 70 | 4×3 @ 72.5 |
+  | Medium | 5×5 @ 77.5 | 5×5 @ 80 |
+
+  Peak (doubles, openers, the single) and Deload are unchanged; from four a week up, Peak
+  still slots light repeats between its heavy sessions.
+- **Older schemes.** Blocks made before version 3 keep their schemes only to read the
+  sessions logged on them. On load, a block that hadn't started is re-planned on version 3,
+  and one part-way through gets a `switchSlot`: its remaining slots run as a version 3 block
+  of their own, starting on a heavy day.
 - **Within a cycle.** Each logged session can move the loads still to come by one step (2.5%
   of the peak, at least 2.5kg), up to 7.5% either way. They come down on missed reps or a top
   set a full RPE over target (from RPE 8). They go up on a top set 1.5 RPE under target (sets of
-  six and up) or 1 under (five and fewer), or on every set beating its reps by two. A Peak-block
+  six and up) or 1 under (five and fewer), or on every set beating its reps by two. A heavy
+  day's single is the first set when it's heavier than the back-offs, and is judged against
+  its own target: missed or a full RPE over takes a step off; a full RPE under adds one, as
+  long as the back-offs weren't over theirs. Light days move the loads only on missed reps. A Peak-block
   session that came in harder than planned (effort-adjusted e1RM against the plan's) scales
   the single down by as much.
   The offset is replayed from the logs, so editing a session corrects it.
 - **Between cycles.** The next peak is the best effort-adjusted e1RM from the realization
   block. If the single was made at the peak or above at RPE 9.5 or easier (an unlogged RPE
   counts as 9.5), the next peak is at least one step over it. Changes are capped at 5% and
-  rounded down to 2.5kg. A cycle that raises the peak adds a set to heavy accumulation days
-  (up to two, and only while heavy Volume days stay under 20 working sets a week at the
-  cycle's frequency). One that doesn't drops those sets and gets a full deload week. Two in a row
-  switch accumulation between eights-to-sixes and sixes-to-fours. A jumped-over test changes
+  rounded down to 2.5kg. A cycle that raises the peak adds a set to medium Volume days
+  (up to two, and only while Volume stays under 20 hard sets a week at the cycle's
+  frequency; light days don't count). One that doesn't drops those sets and gets a full deload week. Two in a row
+  switch Volume to a rep lower and 2.5–5% heavier across the week (back-offs 4×5, medium
+  5×6, paused 4×4), and back. A jumped-over test changes
   nothing. The deload's header says what happened.
 - **Missed sets.** The reps picker starts at "miss" (0 reps). A missed set never counts as
   lifted in stats or records. Mid-cycle it takes a step off like any missed rep. A peak single
@@ -97,8 +123,9 @@ first cycle peaks at the 1RM given in onboarding.
   reviews existed get one read off the cycle (`cycleReviewFor`): the realization block's peak
   against the deload's, untested when its final slot was jumped over. Until the first Volume session is logged, the peak
   pill's Edit reopens the report. Deload weeks repeat one session; they have no light days.
-- **Versions.** Blocks saved before this carry no `schemeVersion` and run the original, shorter
-  schemes until they finish. Every block made after that is version 2.
+- **Versions.** Blocks saved without a `schemeVersion` were planned on version 1, the
+  original shorter schemes; version 2 lengthened the cycles. Every block made now is version 3
+  (see "Older schemes" above).
 
 ## Estimated one-rep max
 
