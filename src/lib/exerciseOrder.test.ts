@@ -1,11 +1,11 @@
 import fc from "fast-check"
 import { describe, expect, it } from "vitest"
-import { ExerciseGroup, groupId, reorderGroups, withMainFirst } from "./exerciseOrder"
+import { ExerciseGroup, groupId, reorderGroups } from "./exerciseOrder"
 
 const extra = (exercise: string): ExerciseGroup => ({ kind: "extra", muscle: "Back", exercise })
 const MAIN: ExerciseGroup = { kind: "main" }
 
-/** A main-lift session's rows: the main lift somewhere, then distinct accessories. */
+/** A main-lift session's rows: the main lift somewhere among distinct accessories. */
 const orderArb = fc
   .uniqueArray(fc.string({ minLength: 1, maxLength: 6 }), { minLength: 1, maxLength: 8 })
   .chain((names) =>
@@ -16,32 +16,27 @@ const orderArb = fc
     })
   )
 
-describe("withMainFirst", () => {
-  it("moves the main lift to the top and keeps the accessories' order", () => {
-    expect(withMainFirst([extra("a"), extra("b"), MAIN, extra("c")])).toEqual([MAIN, extra("a"), extra("b"), extra("c")])
-  })
-
-  it("leaves a Balanced session (no main lift) alone", () => {
-    const order = [extra("a"), extra("b")]
-    expect(withMainFirst(order)).toBe(order)
-  })
-})
-
 describe("reorderGroups", () => {
-  it("moves accessories among themselves", () => {
-    const order = [MAIN, extra("a"), extra("b"), extra("c")]
-    expect(reorderGroups(order, groupId(extra("c")), groupId(extra("a")))).toEqual([MAIN, extra("c"), extra("a"), extra("b")])
+  it("moves the main lift like any other row", () => {
+    const order = [MAIN, extra("a"), extra("b")]
+    expect(reorderGroups(order, "main", groupId(extra("b")))).toEqual([extra("a"), extra("b"), MAIN])
+    expect(reorderGroups([extra("a"), MAIN], groupId(extra("a")), "main")).toEqual([MAIN, extra("a")])
   })
 
-  it("never moves the main lift out of first place, whatever is dragged where", () => {
+  it("puts the dragged row where the target was and keeps everything else in order", () => {
     fc.assert(
-      fc.property(orderArb, fc.nat(), fc.nat(), (raw, a, b) => {
-        const order = withMainFirst(raw)
+      fc.property(orderArb, fc.nat(), fc.nat(), (order, a, b) => {
         const ids = order.map(groupId)
-        const next = reorderGroups(order, ids[a % ids.length], ids[b % ids.length])
-        expect(next[0]).toEqual(MAIN)
-        expect(next.map(groupId).sort()).toEqual([...ids].sort())
+        const [from, to] = [a % ids.length, b % ids.length]
+        const next = reorderGroups(order, ids[from], ids[to]).map(groupId)
+        expect(next[to]).toBe(ids[from])
+        expect(next.filter((id) => id !== ids[from])).toEqual(ids.filter((id) => id !== ids[from]))
       })
     )
+  })
+
+  it("ignores a drag onto a row that isn't there", () => {
+    const order = [MAIN, extra("a")]
+    expect(reorderGroups(order, "main", "nope")).toBe(order)
   })
 })

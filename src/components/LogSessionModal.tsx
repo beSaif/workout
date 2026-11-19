@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useRef, type CSSProperties, type HTMLAttributes } from "react"
+import { useState, useEffect, useRef } from "react"
 import {
   Session,
   MainLiftSet,
@@ -8,7 +8,7 @@ import {
   ExtraWorkout,
 } from "@/lib/types"
 import { calcE1RM } from "@/lib/e1rm"
-import { type ExerciseGroup, groupId, reorderGroups, withMainFirst } from "@/lib/exerciseOrder"
+import { type ExerciseGroup, groupId, reorderGroups } from "@/lib/exerciseOrder"
 import { saveDraft, clearDraft, saveMiniPlayer } from "@/lib/storage"
 import type { SessionDraft } from "@/lib/types"
 import { MuscleGroupConfig, getMuscleLabel, getExercisesForMuscle, getSessionExercisesForMuscle, sortedMuscleGroups, sortedCardioGroups, isCardioMuscle, getDefaultSets, DEFAULT_CARDIO_MINUTES } from "@/lib/exerciseConfig"
@@ -232,24 +232,9 @@ interface GroupRowProps {
   onDelete?: () => void
 }
 
-function SortableGroupRow({ id, ...row }: GroupRowProps & { id: string }) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
-    useSortable({ id })
-  return (
-    <GroupRow
-      {...row}
-      sortable={{
-        ref: setNodeRef,
-        style: { transform: CSS.Transform.toString(transform), transition },
-        isDragging,
-        handleProps: { ...attributes, ...listeners },
-      }}
-    />
-  )
-}
-
-/** One row of the exercise list. Without `sortable` it is pinned: a lock where the drag handle goes. */
-function GroupRow({
+/** One row of the exercise list, with its drag handle. */
+function SortableGroupRow({
+  id,
   group,
   sets,
   extraState,
@@ -257,16 +242,9 @@ function GroupRow({
   exerciseConfig,
   mainLiftLabel,
   onDelete,
-  sortable,
-}: GroupRowProps & {
-  sortable?: {
-    ref: (node: HTMLElement | null) => void
-    style: CSSProperties
-    isDragging: boolean
-    handleProps: HTMLAttributes<HTMLButtonElement>
-  }
-}) {
-  const isDragging = sortable?.isDragging ?? false
+}: GroupRowProps & { id: string }) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
+    useSortable({ id })
   const label =
     group.kind === "main"
       ? mainLiftLabel
@@ -316,35 +294,27 @@ function GroupRow({
 
   return (
     <div
-      ref={sortable?.ref}
-      style={sortable?.style}
+      ref={setNodeRef}
+      style={{ transform: CSS.Transform.toString(transform), transition }}
       className={`flex items-center gap-3 py-3.5 px-1 border-b border-line-soft select-none ${
         isDragging ? "bg-surface-1 shadow-sm rounded-lg z-10 relative" : ""
       }`}
     >
-      {!sortable ? (
-        <span className="text-ink-7 p-1 shrink-0" role="img" aria-label="Main lift stays first">
-          <svg width="12" height="16" viewBox="0 0 12 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-            <rect x="1.5" y="7" width="9" height="7" rx="1.5" />
-            <path d="M3.5 7V5a2.5 2.5 0 0 1 5 0v2" />
-          </svg>
-        </span>
-      ) : (
-        <button
-          {...sortable.handleProps}
-          className="text-ink-7 touch-none cursor-grab active:cursor-grabbing p-1 shrink-0"
-          aria-label="Drag to reorder"
-        >
-          <svg width="12" height="16" viewBox="0 0 12 16" fill="currentColor">
-            <circle cx="3" cy="3" r="1.5" />
-            <circle cx="9" cy="3" r="1.5" />
-            <circle cx="3" cy="8" r="1.5" />
-            <circle cx="9" cy="8" r="1.5" />
-            <circle cx="3" cy="13" r="1.5" />
-            <circle cx="9" cy="13" r="1.5" />
-          </svg>
-        </button>
-      )}
+      <button
+        {...attributes}
+        {...listeners}
+        className="text-ink-7 touch-none cursor-grab active:cursor-grabbing p-1 shrink-0"
+        aria-label="Drag to reorder"
+      >
+        <svg width="12" height="16" viewBox="0 0 12 16" fill="currentColor">
+          <circle cx="3" cy="3" r="1.5" />
+          <circle cx="9" cy="3" r="1.5" />
+          <circle cx="3" cy="8" r="1.5" />
+          <circle cx="9" cy="8" r="1.5" />
+          <circle cx="3" cy="13" r="1.5" />
+          <circle cx="9" cy="13" r="1.5" />
+        </svg>
+      </button>
       <div className="flex-1 min-w-0">
         <p className="text-sm font-medium text-ink truncate">{label}</p>
         <div className="flex items-center gap-1 mt-1 flex-wrap">
@@ -550,7 +520,7 @@ export default function LogSessionModal({
     initialDraft?.currentSetIndex ?? 0
   )
   const [exerciseOrder, setExerciseOrder] = useState<ExerciseGroup[]>(
-    () => withMainFirst(initialDraft?.exerciseOrder ?? buildDefaultOrder(session, exerciseConfig, duplicateOfMainLift))
+    () => initialDraft?.exerciseOrder ?? buildDefaultOrder(session, exerciseConfig, duplicateOfMainLift)
   )
   const [showExercisesSheet, setShowExercisesSheet] = useState(false)
   const [exercisesSheetTab, setExercisesSheetTab] = useState<"current" | "add">("current")
@@ -1416,24 +1386,11 @@ export default function LogSessionModal({
                 collisionDetection={closestCenter}
                 onDragEnd={handleDragEnd}
               >
-                {/* The main lift sits outside the sortable list, so nothing can be dragged
-                    above it and it can't be dragged itself. */}
-                {hasMain && (
-                  <GroupRow
-                    group={{ kind: "main" }}
-                    sets={sets}
-                    extraState={extraState}
-                    completedSets={completedSets}
-                    exerciseConfig={exerciseConfig}
-                    mainLiftLabel={mainLiftLabel}
-                    onDelete={() => setPendingDeleteExercise({ kind: "main" })}
-                  />
-                )}
                 <SortableContext
-                  items={exerciseOrder.filter((g) => g.kind === "extra").map(groupId)}
+                  items={exerciseOrder.map(groupId)}
                   strategy={verticalListSortingStrategy}
                 >
-                  {exerciseOrder.map((group) => group.kind === "extra" && (
+                  {exerciseOrder.map((group) => (
                     <SortableGroupRow
                       key={groupId(group)}
                       id={groupId(group)}
@@ -1443,7 +1400,11 @@ export default function LogSessionModal({
                       completedSets={completedSets}
                       exerciseConfig={exerciseConfig}
                       mainLiftLabel={mainLiftLabel}
-                      onDelete={() => setPendingDeleteExercise({ kind: "extra", muscle: group.muscle, exercise: group.exercise })}
+                      onDelete={() =>
+                        setPendingDeleteExercise(
+                          group.kind === "main" ? { kind: "main" } : { kind: "extra", muscle: group.muscle, exercise: group.exercise }
+                        )
+                      }
                     />
                   ))}
                 </SortableContext>
