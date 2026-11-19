@@ -28,7 +28,7 @@ import {
 } from "@/lib/prescription"
 import { generateWarmups } from "@/lib/warmup"
 import { closeBlock, jumpToSession, peekNextBlock, JumpTarget } from "@/lib/jump"
-import { getLayoffState, layoffAnchor, restartActiveBlock } from "@/lib/layoff"
+import { canRestartCycle, currentCycleStart, getLayoffState, layoffAnchor, restartActiveBlock, restartCycle, type CycleSetup } from "@/lib/layoff"
 import { scheduleIncompleteSessionReminder, cancelIncompleteSessionReminder } from "@/lib/swNotify"
 import { calcE1RM, roundToPlate } from "@/lib/e1rm"
 import { MuscleGroupConfig, DEFAULT_MUSCLE_GROUPS, DEFAULT_TRAINING_DAYS } from "@/lib/exerciseConfig"
@@ -36,6 +36,7 @@ import { TrainingDay } from "@/lib/types"
 import SessionCard from "@/components/SessionCard"
 import PreviewSessionRow from "@/components/PreviewSessionRow"
 import CycleReportSheet from "@/components/CycleReportSheet"
+import RestartCycleSheet from "@/components/RestartCycleSheet"
 import { buildCycleReport, cycleReviewFor } from "@/lib/cycleReport"
 import ProgramTimeline from "@/components/ProgramTimeline"
 import ProgressCard from "@/components/ProgressCard"
@@ -222,6 +223,7 @@ export default function Page() {
   const [showHypePanel, setShowHypePanel] = useState(false)
   /** The deload whose cycle report is open: shown once that cycle's last session is logged. */
   const [cycleReportId, setCycleReportId] = useState<number | null>(null)
+  const [restartCycleOpen, setRestartCycleOpen] = useState(false)
   const [lastConfirmed, setLastConfirmed] = useState<Session | null>(null)
   const [lastPR, setLastPR] = useState<{ e1rm: number; previous: number } | null>(null)
   const [shareSession, setShareSession] = useState<Session | null>(null)
@@ -1097,6 +1099,28 @@ export default function Page() {
     dismissLayoffBanner()
   }
 
+  /**
+   * Send the current cycle back to Volume session 1 with the setup picked in the sheet.
+   * The upcoming session is planned again, keeping its day and muscle groups.
+   */
+  function handleRestartCycle(setup: CycleSetup) {
+    setRestartCycleOpen(false)
+    if (!profile) return
+    const result = restartCycle(sessions, blocks, setup)
+    if (!result) return
+    const previous = sessions.find((s) => !s.confirmed)
+    const regenerated = createUpcomingSession(result.sessions, result.blocks, exerciseConfig, profile, trainingDays)
+    const upcoming: Session = previous
+      ? { ...regenerated, selectedTrainingDayId: previous.selectedTrainingDayId, selectedMuscleGroups: previous.selectedMuscleGroups }
+      : regenerated
+    const final = sortSessions([...result.sessions, upcoming])
+    setViewingBlockId(null)
+    setViewingUpcomingPhase(null)
+    setSessions(final)
+    setBlocks(result.blocks)
+    saveAll(final, result.blocks)
+  }
+
   function dismissLayoffBanner() {
     const state = getLayoffState(sessions)
     if (!state.lastSessionDate) return
@@ -1207,6 +1231,7 @@ export default function Page() {
     return before?.phase === "deload" && cycleReviewFor(blocks, before) ? before : undefined
   })()
   const cycleReport = cycleReportId != null ? buildCycleReport(blocks, confirmed, cycleReportId) : null
+  const cycleStart = currentCycleStart(blocks)
   const currentPhaseName = !activeBlock
     ? "current block"
     : activeBlock.phase === "reacclimation"
@@ -1420,6 +1445,7 @@ export default function Page() {
               // the peak and the days a week together. Otherwise it edits the peak alone.
               reportableDeload ? () => setCycleReportId(reportableDeload.id) : handleEditAnchor
             }
+            onRestartCycle={canRestartCycle(blocks) ? () => setRestartCycleOpen(true) : undefined}
             upcomingLength={(phase) => blockLengthFor(phase, planPerWeek, { cycleLength: activeBlock?.cycleLength })}
           />
         )}
@@ -1684,6 +1710,20 @@ export default function Page() {
       )}
 
       {/* Cycle report: after the deload that closes a cycle, before the next one starts */}
+      {restartCycleOpen && cycleStart && (
+        <RestartCycleSheet
+          liftShort={liftShort}
+          current={{
+            anchor: cycleStart.anchorWeight,
+            sessionsPerWeek: cycleStart.sessionsPerWeek ?? planPerWeek,
+            cycleLength: cycleStart.cycleLength ?? "standard",
+          }}
+          sessionsLogged={blocks.filter((b) => b.id >= cycleStart.id).reduce((n, b) => n + b.sessionIds.length, 0)}
+          onRestart={handleRestartCycle}
+          onClose={() => setRestartCycleOpen(false)}
+        />
+      )}
+
       {cycleReport && !showHypePanel && (
         <CycleReportSheet
           report={cycleReport}

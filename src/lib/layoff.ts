@@ -1,6 +1,6 @@
-import { Session, TrainingBlock } from "./types"
+import { CycleLength, Session, TrainingBlock } from "./types"
 import { roundToPlate } from "./e1rm"
-import { createFirstBlock } from "./prescription"
+import { blockLengthFor, blockPosition, createFirstBlock, SCHEME_VERSION } from "./prescription"
 
 /** Days off after which the bar starts feeling heavy — worth a heads-up, nothing more. */
 export const LAYOFF_NUDGE_DAYS = 7
@@ -119,4 +119,73 @@ export function resetToFirstBlock(
   if (sessions.some((s) => !s.confirmed)) notes.push("Cleared upcoming session (regenerates on next load)")
 
   return { sessions: newSessions, blocks: [firstBlock], notes }
+}
+
+/**
+ * The block the current cycle opened with: the latest Volume block at or before the
+ * active one. During a deload that is still the cycle the deload closes; during a
+ * re-acclimation, the cycle it interrupted.
+ */
+export function currentCycleStart(blocks: TrainingBlock[]): TrainingBlock | undefined {
+  const active = blocks.find((b) => b.status === "active")
+  if (!active) return undefined
+  return blocks
+    .filter((b) => b.phase === "accumulation" && b.id <= active.id)
+    .sort((a, b) => b.id - a.id)[0]
+}
+
+/** Whether the current cycle has anything to restart: a session logged or a phase moved past. */
+export function canRestartCycle(blocks: TrainingBlock[]): boolean {
+  const start = currentCycleStart(blocks)
+  if (!start) return false
+  return blocks.some((b) => b.id > start.id) || blockPosition(start) > 0
+}
+
+export interface CycleSetup {
+  anchor: number
+  sessionsPerWeek: number
+  cycleLength: CycleLength
+}
+
+/**
+ * Wind the current cycle back to Volume session 1, at the peak, days a week and length
+ * given. The cycle's later blocks are dropped and its first block starts over on the
+ * current scheme, keeping what earlier cycles earned (rep range, extra sets, stalls).
+ * Earlier cycles, and their reports, are untouched.
+ *
+ * Sessions logged this cycle stay in history but are unlinked from its blocks, as a
+ * block restart does, so they no longer move the plan. The unconfirmed upcoming session
+ * is dropped; the caller regenerates it. Null when there is no cycle to restart.
+ */
+export function restartCycle(
+  sessions: Session[],
+  blocks: TrainingBlock[],
+  setup: CycleSetup
+): { sessions: Session[]; blocks: TrainingBlock[] } | null {
+  const start = currentCycleStart(blocks)
+  if (!start) return null
+  const cycleIds = new Set(blocks.filter((b) => b.id >= start.id).map((b) => b.id))
+
+  // Drop the slot bookkeeping of the old run; everything else the block carries stays.
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const { skippedSlots, switchSlot, review, ...kept } = start
+  const restarted: TrainingBlock = {
+    ...kept,
+    status: "active",
+    sessionIds: [],
+    startDate: null,
+    endDate: null,
+    anchorWeight: roundToPlate(setup.anchor),
+    sessionsPerWeek: setup.sessionsPerWeek,
+    cycleLength: setup.cycleLength,
+    setUp: true,
+    schemeVersion: SCHEME_VERSION,
+    length: blockLengthFor("accumulation", setup.sessionsPerWeek, { cycleLength: setup.cycleLength }),
+  }
+
+  const newSessions = sessions
+    .filter((s) => s.confirmed)
+    .map((s) => (s.blockId != null && cycleIds.has(s.blockId) ? { ...s, blockId: undefined } : s))
+  const newBlocks = [...blocks.filter((b) => b.id < start.id), restarted]
+  return { sessions: newSessions, blocks: newBlocks }
 }

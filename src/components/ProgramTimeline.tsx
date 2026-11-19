@@ -30,11 +30,13 @@ interface ProgramTimelineProps {
   onUpcomingPhaseSelect?: (phase: BlockPhase | null) => void
   /** Opens the sheet that edits the cycle's peak. */
   onEditPeak?: () => void
+  /** Opens the sheet that sends the cycle back to Volume session 1. Absent when there's nothing to restart. */
+  onRestartCycle?: () => void
   /** Sessions a phase still to come will have, for the count under its step. */
   upcomingLength?: (phase: BlockPhase) => number
 }
 
-export default function ProgramTimeline({ blocks, selectedBlockId, onBlockSelect, selectedUpcomingPhase, onUpcomingPhaseSelect, onEditPeak, upcomingLength }: ProgramTimelineProps) {
+export default function ProgramTimeline({ blocks, selectedBlockId, onBlockSelect, selectedUpcomingPhase, onUpcomingPhaseSelect, onEditPeak, onRestartCycle, upcomingLength }: ProgramTimelineProps) {
   const sorted = [...blocks].sort((a, b) => a.id - b.id)
   const activeBlock = sorted.find((b) => b.status === "active")
   if (!activeBlock) return null
@@ -146,6 +148,14 @@ export default function ProgramTimeline({ blocks, selectedBlockId, onBlockSelect
         <span className="font-semibold text-ink">{anchorBlock.anchorWeight}kg</span>
         {onEditPeak && <span className="font-semibold text-brand">· Edit</span>}
       </button>
+      {onRestartCycle && (
+        <button
+          onClick={onRestartCycle}
+          className="mt-1.5 mx-auto block px-3 py-1 text-[11px] font-semibold text-ink-5 underline underline-offset-2 active:opacity-70"
+        >
+          Restart cycle
+        </button>
+      )}
     </div>
   )
 }

@@ -17,6 +17,15 @@ export interface WhatsNewRelease {
  */
 export const WHATS_NEW: WhatsNewRelease[] = [
   {
+    version: 15,
+    items: [
+      {
+        title: "Restart a cycle",
+        body: "Tap Restart cycle under your peak on Home to go back to Volume session 1. Pick the peak, days a week and cycle length again first. Sessions you logged stay in your history; they just stop moving the plan.",
+      },
+    ],
+  },
+  {
     version: 14,
     items: [
       {

@@ -1,9 +1,10 @@
 "use client"
 
 import { useState } from "react"
-import { BlockPhase, CycleLength } from "@/lib/types"
+import { CycleLength } from "@/lib/types"
 import { CycleReport } from "@/lib/cycleReport"
-import { blockLengthFor, CYCLE_LENGTHS, CYCLE_LENGTH_LABEL, loadStep, PHASE_SESSION_TYPE } from "@/lib/prescription"
+import { loadStep, PHASE_SESSION_TYPE } from "@/lib/prescription"
+import CycleSetupFields from "@/components/CycleSetupFields"
 import { PHASE_THEME } from "@/lib/phaseStyle"
 import EscapeKey from "@/components/EscapeKey"
 
@@ -19,8 +20,6 @@ interface CycleReportSheetProps {
   current?: { peak: number; sessionsPerWeek?: number; cycleLength?: CycleLength; setUp?: boolean }
 }
 
-const NEXT_PHASES: BlockPhase[] = ["accumulation", "transmutation", "realization", "deload"]
-const DAYS = [2, 3, 4, 5, 6]
 
 function pct(from: number, to: number): string {
   const p = ((to - from) / from) * 100
@@ -38,7 +37,6 @@ export default function CycleReportSheet({ report, liftShort, onStart, onClose, 
   const [length, setLength] = useState<CycleLength>(
     current?.setUp && current.cycleLength ? current.cycleLength : report.suggestedLength
   )
-  const lengthOf = (l: CycleLength) => NEXT_PHASES.reduce((n, phase) => n + blockLengthFor(phase, perWeek, { cycleLength: l }), 0)
 
   const raised = report.nextPeak > report.previousPeak
   const lowered = report.nextPeak < report.previousPeak
@@ -69,9 +67,6 @@ export default function CycleReportSheet({ report, liftShort, onStart, onClose, 
   const sessions = report.phases.reduce((n, p) => n + p.sessions, 0)
   const skipped = report.phases.reduce((n, p) => n + p.skipped, 0)
   const rated = report.effort.onTarget + report.effort.harder + report.effort.easier
-
-  const nextLength = lengthOf(length)
-  const nextWeeks = Math.round(nextLength / perWeek)
 
   const peakOptions = [
     { label: "Ease off", kg: report.nextPeak - step },
@@ -182,63 +177,18 @@ export default function CycleReportSheet({ report, liftShort, onStart, onClose, 
               </button>
             ))}
           </div>
-          <div className="flex items-center justify-center gap-4 mt-3">
-            <button
-              onClick={() => setPeak((p) => Math.max(step, p - 2.5))}
-              aria-label="2.5kg less"
-              className="w-9 h-9 rounded-full border border-line text-lg text-ink-4 active:opacity-70"
-            >
-              −
-            </button>
-            <span className="text-sm text-ink-4 tabular-nums min-w-[96px] text-center">
-              <span className="font-semibold text-ink">{peak}kg</span> {liftShort.toLowerCase()}
-            </span>
-            <button
-              onClick={() => setPeak((p) => p + 2.5)}
-              aria-label="2.5kg more"
-              className="w-9 h-9 rounded-full border border-line text-lg text-ink-4 active:opacity-70"
-            >
-              +
-            </button>
-          </div>
-
-          <p className="text-sm text-ink-4 mt-5 mb-2">How many days a week will you {liftShort.toLowerCase()}?</p>
-          <div className="flex gap-2">
-            {DAYS.map((d) => (
-              <button
-                key={d}
-                onClick={() => setPerWeek(d)}
-                className={`flex-1 rounded-xl border py-2.5 text-sm font-semibold transition-colors ${
-                  perWeek === d ? "border-brand-line bg-brand-tint text-brand" : "border-line text-ink-4"
-                }`}
-              >
-                {d}
-              </button>
-            ))}
-          </div>
-
-          <p className="text-sm text-ink-4 mt-5 mb-2">How long should the cycle be?</p>
-          <div className="grid grid-cols-3 gap-2">
-            {CYCLE_LENGTHS.map((l) => (
-              <button
-                key={l}
-                onClick={() => setLength(l)}
-                className={`rounded-xl border px-2 py-2.5 text-center transition-colors ${
-                  length === l ? "border-brand-line bg-brand-tint" : "border-line bg-surface"
-                }`}
-              >
-                <span className="block text-sm font-semibold text-ink">{CYCLE_LENGTH_LABEL[l]}</span>
-                <span className="block text-[11px] text-ink-5">
-                  ~{Math.round(lengthOf(l) / perWeek)} weeks{l === report.suggestedLength ? " · suggested" : ""}
-                </span>
-              </button>
-            ))}
-          </div>
-          {report.lengthReason && <p className="text-xs text-brand-soft mt-2">{report.lengthReason}</p>}
-          <p className="text-xs text-ink-6 mt-2">
-            {nextLength} sessions, about {nextWeeks} weeks
-. Volume and Intensity run heavy, light, medium, in that order.
-          </p>
+          <CycleSetupFields
+            liftShort={liftShort}
+            peak={peak}
+            onPeak={setPeak}
+            minPeak={step}
+            perWeek={perWeek}
+            onPerWeek={setPerWeek}
+            length={length}
+            onLength={setLength}
+            suggestedLength={report.suggestedLength}
+            lengthReason={report.lengthReason}
+          />
         </div>
 
         <div className="px-6 pt-5 pb-10">

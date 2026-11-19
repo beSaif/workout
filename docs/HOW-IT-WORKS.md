@@ -123,6 +123,14 @@ first cycle peaks at the 1RM given in onboarding.
   reviews existed get one read off the cycle (`cycleReviewFor`): the realization block's peak
   against the deload's, untested when its final slot was jumped over. Until the first Volume session is logged, the peak
   pill's Edit reopens the report. Deload weeks repeat one session; they have no light days.
+- **Restart cycle.** The link under the peak pill (shown once the cycle has a session logged
+  or a phase behind it) opens a sheet that asks the peak, days a week and length again, then
+  winds the cycle back to Volume session 1 (`restartCycle` in `src/lib/layoff.ts`). The
+  cycle's later blocks are dropped and its first block starts over on the current scheme,
+  keeping what earlier cycles earned (rep range, extra sets, stalls). Sessions logged in the
+  cycle stay in history but are unlinked from its blocks, so they no longer move the plan.
+  Earlier cycles and their reports are untouched. During a deload it restarts the cycle the
+  deload closes.
 - **Versions.** Blocks saved without a `schemeVersion` were planned on version 1, the
   original shorter schemes; version 2 lengthened the cycles. Every block made now is version 3
   (see "Older schemes" above).
