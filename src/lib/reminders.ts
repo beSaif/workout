@@ -174,6 +174,11 @@ function inactivityReminder(
  * What to send this user today, or null for nothing. At most one push a day: two
  * notifications in the same morning is how people end up muting the app.
  *
+ * That holds across runs, not just within one: if either reminder already went out
+ * today, a second run of the job (a retry, a manual trigger) sends nothing. Each
+ * reminder's own weekly check only knows about itself, so without this a rerun after
+ * the time-off nudge would go on to send the weigh-in.
+ *
  * Time off outranks the weigh-in, and deliberately does not consume the weigh-in's slot
  * — its state is left untouched, so the skipped weigh-in nudge goes out tomorrow, by
  * which time the weekly nudge has gone quiet again.
@@ -187,6 +192,7 @@ export function decideReminder(input: {
 }): ReminderDecision | null {
   const { profile, weights, sessions, state, now = new Date() } = input
   const today = dateKeyInTz(now, state.tz)
+  if (state.lastNudgePush === today || state.lastWeighInPush === today) return null
 
   return (
     inactivityReminder(profile, sessions, state, today, state.tz) ??

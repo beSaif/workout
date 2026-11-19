@@ -1,19 +1,15 @@
-import { kv } from "@vercel/kv"
-import { NextRequest, NextResponse } from "next/server"
-import { auth } from "@/auth"
+import { NextResponse } from "next/server"
 import { GymbroMessage } from "@/lib/types"
+import { store } from "@/lib/server/db"
+import { withUser } from "@/lib/server/withUser"
 import { messageInboxKey } from "@/lib/userKeys"
 
-export async function GET() {
-  const session = await auth()
-  if (!session?.user?.email) {
-    return NextResponse.json({ error: "unauthorized" }, { status: 401 })
-  }
-  const me = session.user.email.trim().toLowerCase()
+export const GET = withUser(async ({ email }) => {
+  const me = email.trim().toLowerCase()
 
   let raw: unknown[]
   try {
-    raw = await kv.lrange(messageInboxKey(me), 0, -1)
+    raw = await store.lrange(messageInboxKey(me), 0, -1)
   } catch {
     return NextResponse.json([], { status: 503 })
   }
@@ -29,19 +25,15 @@ export async function GET() {
     .sort((a, b) => new Date(a.sentAt).getTime() - new Date(b.sentAt).getTime())
 
   return NextResponse.json(messages)
-}
+})
 
-export async function DELETE(req: NextRequest) {
-  const session = await auth()
-  if (!session?.user?.email) {
-    return NextResponse.json({ error: "unauthorized" }, { status: 401 })
-  }
-  const me = session.user.email.trim().toLowerCase()
+export const DELETE = withUser(async ({ email, request }) => {
+  const me = email.trim().toLowerCase()
   const key = messageInboxKey(me)
 
   let fromEmail: string | null = null
   try {
-    const body = await req.json()
+    const body = await request.json()
     if (body?.fromEmail && typeof body.fromEmail === "string") {
       fromEmail = body.fromEmail.trim().toLowerCase()
     }
@@ -51,26 +43,26 @@ export async function DELETE(req: NextRequest) {
 
   try {
     if (!fromEmail) {
-      await kv.del(key)
+      await store.del(key)
       return NextResponse.json({ ok: true })
     }
 
     // Selective delete: keep messages not from this sender
-    const raw = await kv.lrange(key, 0, -1)
+    const raw = await store.lrange(key, 0, -1)
     const remaining = raw
       .map((item) => {
         try { return typeof item === "string" ? JSON.parse(item) : item } catch { return null }
       })
       .filter((m): m is GymbroMessage => m !== null && m.fromEmail !== fromEmail)
 
-    await kv.del(key)
+    await store.del(key)
     if (remaining.length > 0) {
-      await kv.rpush(key, ...remaining.map((m) => JSON.stringify(m)))
-      await kv.expire(key, 60 * 60 * 24 * 7)
+      await store.rpush(key, ...remaining.map((m) => JSON.stringify(m)))
+      await store.expire(key, 60 * 60 * 24 * 7)
     }
 
     return NextResponse.json({ ok: true })
   } catch {
     return NextResponse.json({ error: "failed" }, { status: 503 })
   }
-}
+})

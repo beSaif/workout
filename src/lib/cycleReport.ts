@@ -70,6 +70,7 @@ export interface PhaseLine {
   phase: BlockPhase
   sessions: number
   skipped: number
+  /** Working sets lifted (at least one rep); missed sets are in CycleReport.missedSets. */
   sets: number
 }
 
@@ -140,12 +141,13 @@ export function buildCycleReport(
     const own = cycleBlocks.filter((b) => b.phase === phase)
     if (own.length === 0) return []
     const logged = own.flatMap(cycleSessionsOf)
-    const working = logged.flatMap((s) => s.sets.filter((x) => !x.isWarmup && x.kg > 0))
+    // Lifted sets only: missed ones are counted on their own (missedSets).
+    const lifted = logged.flatMap((s) => s.sets.filter((x) => !x.isWarmup && x.kg > 0 && x.reps > 0))
     return [{
       phase,
       sessions: logged.length,
       skipped: own.reduce((n, b) => n + (b.skippedSlots?.length ?? 0), 0),
-      sets: working.length,
+      sets: lifted.length,
     }]
   })
 

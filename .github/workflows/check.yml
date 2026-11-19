@@ -1,0 +1,33 @@
+name: check
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: check-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm run test
+      # Dummy values: the build only needs these to be present, it never calls Google or KV.
+      - run: npm run build
+        env:
+          AUTH_SECRET: ci-build-secret-0123456789abcdef
+          AUTH_GOOGLE_ID: ci
+          AUTH_GOOGLE_SECRET: ci
+          KV_REST_API_URL: http://127.0.0.1:1
+          KV_REST_API_TOKEN: ci

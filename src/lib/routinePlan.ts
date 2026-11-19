@@ -98,39 +98,157 @@ export function exportPlan(config: MuscleGroupConfig[], days: TrainingDay[]): Ro
 // ─── Extract ──────────────────────────────────────────────────────────────────
 
 /**
- * Pull the JSON out of whatever was pasted: a bare object, a ```json fence, or an
- * object with chatter around it. A first parse failure gets one repair pass for the
- * damage a phone's clipboard and a chatty model do most — curly quotes and trailing
- * commas — before giving up.
+ * Pull the plan's JSON out of whatever was pasted: a bare object, a ```json fence, an
+ * object with chatter around it, or a whole conversation — the copy prompt (which holds
+ * an example and the current routine) followed by the model's reply.
+ *
+ * Every fenced block and every balanced top-level `{…}` span is a candidate, and the
+ * last one that reads as a plan wins: in a conversation the reply comes last, and a
+ * fragment quoted in prose ("shaped like {"groups": …}") never reads as one. Each
+ * candidate gets one repair pass for the damage a phone's clipboard and a chatty model
+ * do most — curly quotes and trailing commas.
+ *
+ * A plan is only taken if nothing after it was trying to be one: a reply cut off
+ * mid-stream (a fence or `{` never closed) or a plan-shaped object that fails the checks
+ * reports its own problem, rather than the app quietly importing the routine quoted in
+ * the prompt above it. When no candidate is a plan, the value handed on is the most
+ * plan-like that parsed, so `parsePlan` can say what is wrong with it.
  */
 export function extractPlanJson(text: string): { ok: true; value: unknown } | { ok: false; error: string } {
   const trimmed = text.trim()
   if (!trimmed) return { ok: false, error: "Nothing was pasted." }
 
-  const candidates: string[] = []
-  for (const m of trimmed.matchAll(/```[a-zA-Z]*\s*\n?([\s\S]*?)```/g)) {
-    if (m[1].includes("{")) candidates.push(m[1])
-  }
-  const first = trimmed.indexOf("{")
-  const last = trimmed.lastIndexOf("}")
-  if (first !== -1 && last > first) candidates.push(trimmed.slice(first, last + 1))
+  const candidates = [...fencedBlocks(trimmed), ...objectSpans(trimmed)]
   if (candidates.length === 0) {
     return { ok: false, error: "There's no JSON in that. Paste the reply that starts with { and ends with }." }
   }
-
-  for (const raw of candidates) {
-    for (const attempt of [raw, repairJson(raw)]) {
-      try {
-        return { ok: true, value: JSON.parse(attempt) }
-      } catch {
-        // try the next one
-      }
-    }
-  }
-  return {
-    ok: false,
+  const parsed = candidates.map((c) => parseLoosely(c.text))
+  const doesNotParse = {
+    ok: false as const,
     error: "That JSON doesn't parse. It may have been cut off — copy the whole reply and try again.",
   }
+
+  let chosen = -1
+  for (let i = candidates.length - 1; i >= 0 && chosen === -1; i--) {
+    const p = parsed[i]
+    if (p && parsePlan(p.value).ok) chosen = i
+  }
+
+  if (chosen !== -1) {
+    // The last attempt at a plan that starts after the chosen one ends, if any.
+    let attempt = -1
+    candidates.forEach((c, i) => {
+      if (c.start < candidates[chosen].end) return
+      const failedPlan = parsed[i] ? looksLikePlan(parsed[i]!.value) : !c.complete || mentionsPlanKeys(c.text)
+      if (failedPlan && (attempt === -1 || c.start >= candidates[attempt].start)) attempt = i
+    })
+    if (attempt === -1) return { ok: true, value: parsed[chosen]!.value }
+    return parsed[attempt] ? { ok: true, value: parsed[attempt]!.value } : doesNotParse
+  }
+
+  let best: { value: unknown; planLike: boolean } | null = null
+  for (let i = candidates.length - 1; i >= 0; i--) {
+    const p = parsed[i]
+    if (!p) continue
+    const planLike = looksLikePlan(p.value)
+    if (!best || (planLike && !best.planLike)) best = { value: p.value, planLike }
+  }
+  return best ? { ok: true, value: best.value } : doesNotParse
+}
+
+interface Candidate {
+  text: string
+  /** Offsets into the pasted text. */
+  start: number
+  end: number
+  /** False for a fence or `{` still open when the text runs out. */
+  complete: boolean
+}
+
+function parseLoosely(raw: string): { value: unknown } | null {
+  for (const attempt of [raw, repairJson(raw)]) {
+    try {
+      return { value: JSON.parse(attempt) }
+    } catch {
+      // try the repaired text
+    }
+  }
+  return null
+}
+
+const PLAN_KEYS = ["groups", "days", "muscleGroups", "trainingDays", "plan", "routine"]
+
+function looksLikePlan(v: unknown): boolean {
+  return isObject(v) && PLAN_KEYS.some((k) => k in v)
+}
+
+/** For text that doesn't parse: does it name a plan's keys, straight or curly quoted? */
+function mentionsPlanKeys(raw: string): boolean {
+  return new RegExp(`["“”](${PLAN_KEYS.join("|")})["“”]\\s*:`).test(raw)
+}
+
+/**
+ * The contents of each fenced block that holds a `{`. A fence opens and closes only at
+ * the start of a line, so a ``` mentioned mid-sentence ("send it as a ```json block")
+ * doesn't pair up with the real one. A fence still open at the end — a reply cut off
+ * mid-stream — runs to the end of the text.
+ */
+function fencedBlocks(text: string): Candidate[] {
+  const blocks: Candidate[] = []
+  let start = -1
+  let offset = 0
+  for (const line of text.split("\n")) {
+    if (/^\s*```/.test(line)) {
+      if (start === -1) {
+        start = offset + line.length + 1
+      } else {
+        blocks.push({ text: text.slice(start, Math.max(start, offset - 1)), start, end: offset, complete: true })
+        start = -1
+      }
+    }
+    offset += line.length + 1
+  }
+  if (start !== -1 && start < text.length) {
+    blocks.push({ text: text.slice(start), start, end: text.length, complete: false })
+  }
+  return blocks.filter((b) => b.text.includes("{"))
+}
+
+/**
+ * Each top-level `{…}` span, matching braces outside JSON strings. Quotes only count
+ * inside a span (prose has apostrophes and stray quotes of its own), and a string ends
+ * at a line break, since JSON strings cannot hold one — so an unbalanced quote costs one
+ * line rather than the rest of the text. A span still open at the end is kept as it is,
+ * so a reply cut off mid-stream reads as JSON that doesn't parse. One pass, so a long
+ * paste costs no more than its length.
+ */
+function objectSpans(text: string): Candidate[] {
+  const spans: Candidate[] = []
+  let depth = 0
+  let start = 0
+  let inString = false
+  let escaped = false
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i]
+    if (depth === 0) {
+      if (c === "{") {
+        depth = 1
+        start = i
+      }
+      continue
+    }
+    if (inString) {
+      if (escaped) escaped = false
+      else if (c === "\\") escaped = true
+      else if (c === '"' || c === "\n") inString = false
+      continue
+    }
+    if (c === '"') inString = true
+    else if (c === "{") depth++
+    else if (c === "}" && --depth === 0) spans.push({ text: text.slice(start, i + 1), start, end: i + 1, complete: true })
+  }
+  if (depth > 0) spans.push({ text: text.slice(start), start, end: text.length, complete: false })
+  return spans
 }
 
 function repairJson(raw: string): string {

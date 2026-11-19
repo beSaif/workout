@@ -6,8 +6,9 @@ import { usePathname } from "next/navigation"
 import { signOut } from "next-auth/react"
 import { loadProfile, wipeLocalUserData } from "@/lib/storage"
 import { useNativeInstallPrompt } from "@/lib/installPrompt"
-import { DOT_CHANGE_EVENT, loadDotEnabled, saveDotEnabled } from "@/lib/buddy"
-import { HAPTICS_CHANGE_EVENT, haptic, loadHapticsEnabled, saveHapticsEnabled } from "@/lib/haptics"
+import { dotEnabledSource, saveDotEnabled } from "@/lib/buddy"
+import { haptic, hapticsEnabledSource, saveHapticsEnabled } from "@/lib/haptics"
+import { useLocalValue } from "@/lib/useLocalValue"
 import HapticTap from "@/components/HapticTap"
 import EscapeKey from "@/components/EscapeKey"
 
@@ -28,23 +29,9 @@ export default function NavDrawer({ open, onClose }: NavDrawerProps) {
   // owes the user a standing way in — the home-screen sheet is dismissed for good
   // after one tap. Absent once installed, and on browsers with no such API.
   const { available: canInstall, promptInstall } = useNativeInstallPrompt()
-  // Device switches, read after mount for the same reason as weighInDaily.
-  const [dotOn, setDotOn] = useState(true)
-  const [hapticsOn, setHapticsOn] = useState(true)
-
-  useEffect(() => {
-    const sync = () => {
-      setDotOn(loadDotEnabled())
-      setHapticsOn(loadHapticsEnabled())
-    }
-    sync()
-    window.addEventListener(DOT_CHANGE_EVENT, sync)
-    window.addEventListener(HAPTICS_CHANGE_EVENT, sync)
-    return () => {
-      window.removeEventListener(DOT_CHANGE_EVENT, sync)
-      window.removeEventListener(HAPTICS_CHANGE_EVENT, sync)
-    }
-  }, [])
+  // Device switches. On until read, which is also what an unset switch means.
+  const dotOn = useLocalValue(dotEnabledSource) ?? true
+  const hapticsOn = useLocalValue(hapticsEnabledSource) ?? true
 
   useEffect(() => {
     fetch("/api/friends/requests")

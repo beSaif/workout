@@ -2,8 +2,9 @@
 
 import Link from "next/link"
 import { useState, useEffect } from "react"
-import { Session, TrainingBlock, BlockPhase, UserProfile, TrainingDay } from "@/lib/types"
-import { loadSessionsLocal, loadBlocksLocal, loadExerciseConfig, loadProfileLocal, loadTrainingDaysLocal, loadAll, loadProfile, loadTrainingDays } from "@/lib/storage"
+import { Session, TrainingBlock, BlockPhase } from "@/lib/types"
+import { sessionsCache, blocksCache, profileCache, trainingDaysCache, loadExerciseConfig, loadAll, loadProfile, loadTrainingDays } from "@/lib/storage"
+import { useCachedState, useHydrated } from "@/lib/useLocalValue"
 import { useOnboardingGuard } from "@/lib/useOnboardingGuard"
 import { currentStretchSkips, getMainLiftShortLabel, isLiftFocused } from "@/lib/trainingMode"
 import { MuscleGroupConfig, DEFAULT_MUSCLE_GROUPS, DEFAULT_TRAINING_DAYS } from "@/lib/exerciseConfig"
@@ -27,25 +28,23 @@ function getCurrentCycleCompletedBlockIds(blocks: TrainingBlock[]): Set<number> 
 }
 
 export default function HistoryPage() {
-  const [sessions, setSessions] = useState<Session[]>([])
-  const [blocks, setBlocks] = useState<TrainingBlock[]>([])
+  // Cached copies paint at once, then KV replaces them — on a fresh device nothing is
+  // cached until something loads it, and History should not have to wait for Home.
+  const [cachedSessions, setSessions] = useCachedState(sessionsCache)
+  const [cachedBlocks, setBlocks] = useCachedState(blocksCache)
+  const [cachedTrainingDays, setTrainingDays] = useCachedState(trainingDaysCache)
+  const [cachedProfile, setProfile] = useCachedState(profileCache)
+  const sessions = cachedSessions ?? []
+  const blocks = cachedBlocks ?? []
+  const trainingDays = cachedTrainingDays ?? DEFAULT_TRAINING_DAYS
+  const profile = cachedProfile ?? null
   const [exerciseConfig, setExerciseConfig] = useState<MuscleGroupConfig[]>(DEFAULT_MUSCLE_GROUPS)
-  const [trainingDays, setTrainingDays] = useState<TrainingDay[]>(DEFAULT_TRAINING_DAYS)
-  const [profile, setProfile] = useState<UserProfile | null>(null)
   const [shareSession, setShareSession] = useState<Session | null>(null)
-  const [mounted, setMounted] = useState(false)
+  const mounted = useHydrated()
   useOnboardingGuard()
 
   useEffect(() => {
     let cancelled = false
-    // Local first so the list paints at once, then KV — on a fresh device nothing is
-    // cached until something loads it, and History should not have to wait for Home.
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- localStorage is only readable after mount
-    setSessions(loadSessionsLocal())
-    setBlocks(loadBlocksLocal())
-    setProfile(loadProfileLocal())
-    setTrainingDays(loadTrainingDaysLocal())
-    setMounted(true)
     loadExerciseConfig().then((c) => { if (!cancelled) setExerciseConfig(c) })
     loadTrainingDays().then((d) => { if (!cancelled) setTrainingDays(d) })
     loadProfile().then((p) => { if (!cancelled && p) setProfile(p) })
@@ -57,7 +56,7 @@ export default function HistoryPage() {
     return () => {
       cancelled = true
     }
-  }, [])
+  }, [setSessions, setBlocks, setTrainingDays, setProfile])
 
   if (!mounted) {
     return (

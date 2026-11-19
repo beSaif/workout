@@ -2,18 +2,19 @@
 
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
-import { Session, UserProfile, WeightEntry } from "@/lib/types"
+import { WeightEntry } from "@/lib/types"
 import { isLiftFocused, getMainLiftLabel, getTrainingMode } from "@/lib/trainingMode"
 import {
   loadProfile,
-  loadProfileLocal,
+  profileCache,
   saveProfile,
   loadAll,
-  loadSessionsLocal,
+  sessionsCache,
   loadWeights,
-  loadWeightsLocal,
+  weightsCache,
   saveWeights,
 } from "@/lib/storage"
+import { useCachedState } from "@/lib/useLocalValue"
 import { getBestE1RM } from "@/lib/stats"
 import {
   dateKey,
@@ -40,34 +41,27 @@ const RANGES = [
 
 export default function WeightPage() {
   const router = useRouter()
-  const [mounted, setMounted] = useState(false)
-  const [profile, setProfile] = useState<UserProfile | null>(null)
-  const [sessions, setSessions] = useState<Session[]>([])
-  const [entries, setEntries] = useState<WeightEntry[]>([])
+  // The cached copies paint at once, so a re-navigation doesn't flash a skeleton; the
+  // network replies replace them.
+  const [cachedProfile, setProfile] = useCachedState(profileCache)
+  const [cachedSessions, setSessions] = useCachedState(sessionsCache)
+  const [cachedEntries, setEntries] = useCachedState(weightsCache)
+  const profile = cachedProfile ?? null
+  const sessions = cachedSessions ?? []
+  const entries = cachedEntries ?? []
 
   const [rangeDays, setRangeDays] = useState<number | null>(30)
   /** The day the sheet is editing, or null when it is closed. */
   const [editing, setEditing] = useState<string | null>(null)
 
-  const [goalInput, setGoalInput] = useState("")
+  /** What the user typed; null shows the profile's goal. */
+  const [goalDraft, setGoalDraft] = useState<string | null>(null)
+  const goalInput = goalDraft ?? (profile?.goalBw != null ? String(profile.goalBw) : "")
   const [goalSaving, setGoalSaving] = useState(false)
   const [goalError, setGoalError] = useState<string | null>(null)
 
   useEffect(() => {
     let cancelled = false
-
-    // Seed synchronously from cache so a re-navigation doesn't flash a skeleton, the
-    // same fast path /profile and the home screen use. Reading localStorage in a state
-    // initialiser instead would render different markup on the server and the client.
-    const cached = loadProfileLocal()
-    if (cached) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setProfile(cached)
-      setGoalInput(cached.goalBw != null ? String(cached.goalBw) : "")
-      setSessions(loadSessionsLocal())
-      setEntries(loadWeightsLocal())
-      setMounted(true)
-    }
 
     loadProfile().then((p) => {
       if (cancelled) return
@@ -76,8 +70,7 @@ export default function WeightPage() {
         return
       }
       setProfile(p)
-      setGoalInput(p.goalBw != null ? String(p.goalBw) : "")
-      setMounted(true)
+      setGoalDraft(null)
     })
 
     loadAll().then(({ sessions: data }) => {
@@ -91,7 +84,7 @@ export default function WeightPage() {
     return () => {
       cancelled = true
     }
-  }, [router])
+  }, [router, setProfile, setSessions, setEntries])
 
   function commit(next: WeightEntry[]) {
     setEntries(next)
@@ -129,7 +122,7 @@ export default function WeightPage() {
     setProfile(updated)
   }
 
-  if (!mounted || !profile) {
+  if (!profile) {
     return (
       <main className="mx-auto w-full max-w-[393px] px-4 pt-[calc(1.5rem+env(safe-area-inset-top))] pb-[calc(4rem+env(safe-area-inset-bottom))]">
         <div className="h-8 w-32 bg-surface-4 rounded animate-pulse mb-6" />
@@ -251,7 +244,7 @@ export default function WeightPage() {
               inputMode="decimal"
               step="0.1"
               value={goalInput}
-              onChange={(e) => setGoalInput(e.target.value)}
+              onChange={(e) => setGoalDraft(e.target.value)}
               placeholder="60"
               className="flex-1 text-lg font-semibold text-ink outline-none bg-transparent"
             />
