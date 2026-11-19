@@ -591,6 +591,11 @@ describe("the next cycle's peak", () => {
     )
   })
 
+  it("a single whose effort shows exactly the peak holds it, whatever the float rounding", () => {
+    // 27.5 × 36/33 is 30 on paper and 29.999999999999996 in floating point.
+    expect(reviewTest(30, [set(27.5, 1, 7)])).toEqual({ anchor: 30, outcome: "stalled" })
+  })
+
   it("a single made under the peak moves it toward what it showed, rounded toward the old peak (one plate down under 50 kg)", () => {
     fc.assert(
       fc.property(anchorArb, fc.integer({ min: 1, max: 8 }), fc.option(rpeArb, { nil: null }), (anchor, under, rpe) => {
@@ -598,7 +603,8 @@ describe("the next cycle's peak", () => {
         const kg = Math.max(2.5, anchor - under * 2.5)
         const shown = singleE1RM(kg, rpe)
         const review = reviewTest(anchor, [set(kg, 1, rpe)])
-        if (shown >= anchor) expect(review.anchor).toBe(floorPlate(Math.min(shown, anchor * 1.05)))
+        // Within float noise of the peak is the peak: 27.5 @ 7 on a 30 peak shows 29.999…, not a shortfall.
+        if (shown >= anchor - 1e-9) expect(review.anchor).toBe(floorPlate(Math.min(shown, anchor * 1.05)))
         else if (anchor < 50) expect(review.anchor).toBe(anchor - 2.5)
         else expect(review.anchor).toBe(ceilPlate(Math.max(shown, anchor * 0.95)))
         expect(review.outcome).toBe(review.anchor > anchor ? "raised" : "stalled")
