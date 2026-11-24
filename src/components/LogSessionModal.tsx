@@ -240,6 +240,7 @@ function SortableGroupRow({
   exerciseConfig,
   mainLiftLabel,
   onDelete,
+  onSwap,
 }: {
   id: string
   group: ExerciseGroup
@@ -249,6 +250,7 @@ function SortableGroupRow({
   exerciseConfig: MuscleGroupConfig[]
   mainLiftLabel: string
   onDelete?: () => void
+  onSwap?: () => void
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id })
@@ -347,19 +349,134 @@ function SortableGroupRow({
           </p>
         ) : null}
       </div>
+      {onSwap && (
+        <button
+          onClick={onSwap}
+          className="text-ink-6 hover:text-brand transition-colors p-1.5 shrink-0"
+          aria-label="Swap exercise"
+          title="Swap exercise"
+        >
+          <SwapIcon size={15} />
+        </button>
+      )}
       {onDelete && (
         <button
           onClick={onDelete}
-          className="text-ink-7 hover:text-red-400 transition-colors p-1 shrink-0"
+          className="text-ink-7 hover:text-red-400 transition-colors p-1.5 shrink-0"
           aria-label="Delete exercise"
+          title="Delete exercise"
         >
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-            <polyline points="3 6 5 6 21 6"/>
-            <path d="M19 6l-1 14H6L5 6"/>
-            <path d="M9 6V4h6v2"/>
-          </svg>
+          <TrashIcon size={15} />
         </button>
       )}
+    </div>
+  )
+}
+
+/** Small stroke icons for the card's action row; they take the button's text colour. */
+function TrashIcon({ size = 16 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <polyline points="3 6 5 6 21 6" />
+      <path d="M19 6l-1 14H6L5 6" />
+      <path d="M9 6V4h6v2" />
+    </svg>
+  )
+}
+
+function SwapIcon({ size = 16 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M4 8h14" />
+      <polyline points="14 4 18 8 14 12" />
+      <path d="M20 16H6" />
+      <polyline points="10 12 6 16 10 20" />
+    </svg>
+  )
+}
+
+function MinusIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.25" strokeLinecap="round" aria-hidden="true">
+      <path d="M5 12h14" />
+    </svg>
+  )
+}
+
+function PlusIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.25" strokeLinecap="round" aria-hidden="true">
+      <path d="M12 5v14M5 12h14" />
+    </svg>
+  )
+}
+
+/**
+ * The row under Done: the exercise's own actions on the left (swap, remove) and a
+ * − Set + stepper on the right that removes this set or adds one after it.
+ */
+function CardActions({
+  onSwap,
+  onDeleteExercise,
+  onDeleteSet,
+  canDeleteSet,
+  onAddSet,
+  unit = "Set",
+}: {
+  onSwap?: () => void
+  onDeleteExercise?: () => void
+  onDeleteSet: () => void
+  canDeleteSet: boolean
+  onAddSet: () => void
+  unit?: string
+}) {
+  return (
+    <div className="flex items-center justify-between mt-3 pt-3 border-t border-line-soft">
+      <div className="flex items-center gap-1 -ml-2">
+        {onSwap && (
+          <button
+            onClick={onSwap}
+            className="flex items-center gap-1.5 h-9 px-2.5 rounded-full text-xs font-medium text-ink-5 hover:text-brand hover:bg-surface-2 active:bg-surface-3 transition-colors"
+            aria-label="Swap exercise"
+            title="Swap exercise"
+          >
+            <SwapIcon />
+            Swap
+          </button>
+        )}
+        {onDeleteExercise && (
+          <button
+            onClick={onDeleteExercise}
+            className="flex items-center justify-center h-9 w-9 rounded-full text-ink-6 hover:text-red-500 hover:bg-red-500/10 active:bg-red-500/15 transition-colors"
+            aria-label="Delete exercise"
+            title="Delete exercise"
+          >
+            <TrashIcon />
+          </button>
+        )}
+      </div>
+      <div className="flex items-center rounded-full bg-surface-2 p-0.5">
+        <button
+          onClick={onDeleteSet}
+          disabled={!canDeleteSet}
+          className="flex items-center justify-center h-8 w-8 rounded-full text-ink-4 hover:bg-surface-3 hover:text-red-500 active:bg-surface-4 disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-ink-4 transition-colors"
+          aria-label={`Delete ${unit.toLowerCase()}`}
+          title={`Delete ${unit.toLowerCase()}`}
+        >
+          <MinusIcon />
+        </button>
+        <span className="px-1 text-[10px] uppercase tracking-widest font-medium text-ink-6 select-none">
+          {unit}
+        </span>
+        <button
+          onClick={onAddSet}
+          className="flex items-center justify-center h-8 w-8 rounded-full text-ink-4 hover:bg-surface-3 hover:text-brand active:bg-surface-4 transition-colors"
+          aria-label={`Add ${unit.toLowerCase()} after`}
+          title={`Add ${unit.toLowerCase()} after`}
+        >
+          <PlusIcon />
+        </button>
+      </div>
     </div>
   )
 }
@@ -535,6 +652,9 @@ export default function LogSessionModal({
   const [exercisesSheetTab, setExercisesSheetTab] = useState<"current" | "add">("current")
   const [swapFromMuscle, setSwapFromMuscle] = useState<string | null>(null)
   const [pendingSwap, setPendingSwap] = useState<{ from: string; to: string } | null>(null)
+  /** The exercise the swap sheet is replacing, while it is open. */
+  const [swapTarget, setSwapTarget] = useState<{ muscle: string; exercise: string } | null>(null)
+  const [swapShowAll, setSwapShowAll] = useState(false)
   const [pendingDeleteExercise, setPendingDeleteExercise] = useState<
     { kind: "main" } | { kind: "extra"; muscle: string; exercise: string } | null
   >(null)
@@ -1161,6 +1281,91 @@ export default function LogSessionModal({
     setPendingDeleteExercise(null)
   }
 
+  function openSwap(muscle: string, exercise: string) {
+    setSwapShowAll(false)
+    setSwapTarget({ muscle, exercise })
+  }
+
+  /**
+   * Put another exercise where this one was: same slot in the order, same number of
+   * sets still to do, numbers seeded from the new exercise's own history. Sets already
+   * done stay logged under the old exercise — they happened — and only the rest move.
+   */
+  function replaceExercise(fromMuscle: string, fromExercise: string, toMuscle: string, toExercise: string) {
+    const fromSets = extraState[fromMuscle]?.[fromExercise] ?? []
+    const prefix = `extra-${fromMuscle}-${fromExercise}-`
+    const kept = fromSets.filter((_, i) => completedSets.has(`${prefix}${i}`))
+    const remaining = Math.max(1, fromSets.length - kept.length)
+    const toGroup = exerciseConfig.find((g) => g.id === toMuscle)
+    const fields = isCardioMuscle(exerciseConfig, toMuscle)
+      ? toGroup?.exercises.find((e) => e.name === toExercise)?.cardioFields ?? []
+      : undefined
+    const fresh = seedExerciseSets(toExercise, remaining, previousSessions, fields)
+
+    // Rebuilt rather than patched so the new exercise keeps the old one's place within
+    // its muscle group, which is the order the session is saved in.
+    const nextExtra: ExtraWorkoutState = { ...extraState }
+    const fromGroup: Record<string, EditableExtraSet[]> = {}
+    for (const [name, arr] of Object.entries(extraState[fromMuscle] ?? {})) {
+      if (name !== fromExercise) { fromGroup[name] = arr; continue }
+      if (kept.length > 0) fromGroup[name] = kept
+      if (toMuscle === fromMuscle) fromGroup[toExercise] = fresh
+    }
+    if (Object.keys(fromGroup).length > 0) nextExtra[fromMuscle] = fromGroup
+    else delete nextExtra[fromMuscle]
+    if (toMuscle !== fromMuscle) {
+      nextExtra[toMuscle] = { ...(extraState[toMuscle] ?? {}), [toExercise]: fresh }
+    }
+
+    const nextOrder = exerciseOrder.flatMap((g): ExerciseGroup[] => {
+      if (g.kind !== "extra" || g.muscle !== fromMuscle || g.exercise !== fromExercise) return [g]
+      const replacement: ExerciseGroup = { kind: "extra", muscle: toMuscle, exercise: toExercise }
+      return kept.length > 0 ? [g, replacement] : [replacement]
+    })
+
+    // The done sets were compacted to the front, so their keys are renumbered to match.
+    const nextCompleted = new Set<string>()
+    for (const key of completedSets) {
+      if (!key.startsWith(prefix)) nextCompleted.add(key)
+    }
+    kept.forEach((_, i) => nextCompleted.add(`${prefix}${i}`))
+
+    setExtraState(nextExtra)
+    setExerciseOrder(nextOrder)
+    setCompletedSets(nextCompleted)
+    setSelectedGroups((prev) => {
+      let next = prev.includes(toMuscle) ? prev : [...prev, toMuscle]
+      if (!nextExtra[fromMuscle]) next = next.filter((g) => g !== fromMuscle)
+      return next
+    })
+    const items = buildCarouselItems(nextOrder, sets, nextExtra)
+    const landing = items.findIndex(
+      (it) => it.type === "extra" && it.muscle === toMuscle && it.exercise === toExercise
+    )
+    if (landing >= 0) setCurrentSetIndex(landing)
+    setSwapTarget(null)
+  }
+
+  /**
+   * Trade places with another exercise still in the session — the machine is taken, so
+   * do that one now and this one in its slot later. Nothing is added or dropped.
+   */
+  function swapExerciseOrder(muscle: string, exercise: string, withMuscle: string, withExercise: string) {
+    const a = exerciseOrder.findIndex((g) => g.kind === "extra" && g.muscle === muscle && g.exercise === exercise)
+    const b = exerciseOrder.findIndex((g) => g.kind === "extra" && g.muscle === withMuscle && g.exercise === withExercise)
+    if (a < 0 || b < 0) return
+    const nextOrder = [...exerciseOrder]
+    ;[nextOrder[a], nextOrder[b]] = [nextOrder[b], nextOrder[a]]
+    setExerciseOrder(nextOrder)
+    const items = buildCarouselItems(nextOrder, sets, extraState)
+    const isIncoming = (it: CarouselItem) =>
+      it.type === "extra" && it.muscle === withMuscle && it.exercise === withExercise
+    const landing = items.findIndex((it) => isIncoming(it) && !completedSets.has(getItemKey(it)))
+    const fallback = items.findIndex(isIncoming)
+    if (landing >= 0 || fallback >= 0) setCurrentSetIndex(landing >= 0 ? landing : fallback)
+    setSwapTarget(null)
+  }
+
   function deleteMainExercise() {
     if (mainLiftLabel === MAIN_LIFT_LABEL.bench) {
       setPendingDeleteExercise(null)
@@ -1386,6 +1591,7 @@ export default function LogSessionModal({
                           : group.kind === "extra"
                             ? () => setPendingDeleteExercise({ kind: "extra", muscle: group.muscle, exercise: group.exercise })
                             : () => setPendingDeleteExercise({ kind: "main" })}
+                        onSwap={group.kind === "extra" ? () => openSwap(group.muscle, group.exercise) : undefined}
                       />
                     )
                   })}
@@ -1450,6 +1656,124 @@ export default function LogSessionModal({
       </div>
     </>
   ) : null
+
+  const swapExerciseSheet = swapTarget ? (() => {
+    const { muscle, exercise } = swapTarget
+    const fromCardio = isCardioMuscle(exerciseConfig, muscle)
+    const fromSets = extraState[muscle]?.[exercise] ?? []
+    const doneCount = fromSets.filter((_, i) => completedSets.has(`extra-${muscle}-${exercise}-${i}`)).length
+    const unit = fromCardio ? "bout" : "set"
+    const plural = (n: number) => `${n} ${unit}${n === 1 ? "" : "s"}`
+    // Strength swaps for strength, cardio for cardio: a 3 × 10 does not become minutes.
+    const groups = (fromCardio ? sortedCardioGroups(exerciseConfig) : sortedMuscleGroups(exerciseConfig))
+    const own = groups.find((g) => g.id === muscle)
+    const others = groups.filter((g) => g.id !== muscle)
+    const notInSession = (gid: string) =>
+      getExercisesForMuscle(exerciseConfig, gid).filter((name) => !extraState[gid]?.[name])
+    const ownOptions = own ? notInSession(own.id) : []
+    // Nothing new left in its own group (the usual case: the day already runs all of
+    // them), so the other groups are the only replacements — show them straight away.
+    const showOthers = swapShowAll || ownOptions.length === 0
+    // Exercises already in the session that still have work left: trading places with
+    // one of these is the "machine's taken, do that first" swap.
+    const reorderable = exerciseOrder.filter((g): g is Extract<ExerciseGroup, { kind: "extra" }> => {
+      if (g.kind !== "extra" || (g.muscle === muscle && g.exercise === exercise)) return false
+      if (isCardioMuscle(exerciseConfig, g.muscle) !== fromCardio) return false
+      const arr = extraState[g.muscle]?.[g.exercise] ?? []
+      return arr.some((_, i) => !completedSets.has(`extra-${g.muscle}-${g.exercise}-${i}`))
+    })
+    const sectionLabel = "px-3 pb-1 text-[10px] uppercase tracking-widest font-medium text-ink-6"
+    const rowClass = "w-full flex items-center justify-between gap-3 px-3 py-2.5 rounded-xl text-left hover:bg-surface-2 active:bg-surface-3 transition-colors"
+    const renderOption = (gid: string, name: string) => {
+      const top = getTopSet(name, previousSessions)
+      return (
+        <button
+          key={`${gid}-${name}`}
+          onClick={() => replaceExercise(muscle, exercise, gid, name)}
+          className={rowClass}
+        >
+          <span className="text-sm text-ink">{name}</span>
+          <span className="text-[11px] text-ink-6 tabular-nums shrink-0">
+            {top ? (fromCardio ? formatCardioSet(top) : `${top.kg}kg × ${top.reps}`) : ""}
+          </span>
+        </button>
+      )
+    }
+    return (
+      <>
+        <div className="absolute inset-0 bg-black/30 z-30" onClick={() => setSwapTarget(null)} />
+        <div className="absolute bottom-0 left-0 right-0 bg-raised rounded-t-2xl shadow-[0_-4px_24px_rgba(0,0,0,0.15)] z-40 flex flex-col max-h-[75%]">
+          <div className="flex justify-center pt-3 shrink-0">
+            <div className="w-9 h-1 bg-surface-4 rounded-full" />
+          </div>
+          <div className="px-5 pt-3 pb-3 flex items-start justify-between gap-3 shrink-0">
+            <div className="min-w-0">
+              <p className="text-[10px] uppercase tracking-widest font-medium text-ink-6">Swap exercise</p>
+              <p className="text-base font-bold text-ink truncate">{exercise}</p>
+            </div>
+            <button onClick={() => setSwapTarget(null)} className="text-sm font-semibold text-brand shrink-0 pt-3">
+              Cancel
+            </button>
+          </div>
+          <div className="flex-1 overflow-y-auto px-2 pb-5 border-t border-line-soft">
+            {reorderable.length > 0 && (
+              <div className="pt-3">
+                <p className={sectionLabel}>Do another one first</p>
+                {reorderable.map((g) => (
+                  <button
+                    key={groupId(g)}
+                    onClick={() => swapExerciseOrder(muscle, exercise, g.muscle, g.exercise)}
+                    className={rowClass}
+                  >
+                    <span className="min-w-0">
+                      <span className="block text-sm text-ink truncate">{g.exercise}</span>
+                      <span className="block text-[11px] text-ink-6">{getMuscleLabel(exerciseConfig, g.muscle)}</span>
+                    </span>
+                    <span className="flex items-center gap-1 text-[11px] font-semibold text-brand shrink-0">
+                      <SwapIcon size={13} />
+                      Swap order
+                    </span>
+                  </button>
+                ))}
+              </div>
+            )}
+            <div className="pt-3">
+              <p className={sectionLabel}>Replace with</p>
+              <p className="px-3 pb-1.5 text-[11px] text-ink-6">
+                {doneCount > 0
+                  ? `The ${plural(doneCount)} you've done stay logged as ${exercise}; the other ${plural(Math.max(1, fromSets.length - doneCount))} move over.`
+                  : `Its ${plural(fromSets.length)} move to the new exercise.`}
+              </p>
+            </div>
+            {own && ownOptions.length > 0 && (
+              <div className="pt-1">
+                <p className={sectionLabel}>{own.name}</p>
+                {ownOptions.map((name) => renderOption(own.id, name))}
+              </div>
+            )}
+            {others.length > 0 && !showOthers && (
+              <button
+                onClick={() => setSwapShowAll(true)}
+                className="mt-2 mx-3 w-[calc(100%-1.5rem)] py-2.5 rounded-xl border border-dashed border-line text-xs font-medium text-ink-6 hover:text-ink-5 hover:border-line-heavy transition-colors"
+              >
+                Other muscle groups
+              </button>
+            )}
+            {showOthers && others.map((g) => {
+              const options = notInSession(g.id)
+              if (options.length === 0) return null
+              return (
+                <div key={g.id} className="pt-3">
+                  <p className={sectionLabel}>{g.name}</p>
+                  {options.map((name) => renderOption(g.id, name))}
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      </>
+    )
+  })() : null
 
   const swapConfirmation = pendingSwap ? (
     <>
@@ -1699,6 +2023,7 @@ export default function LogSessionModal({
 
           {exercisesSheet}
           {swapConfirmation}
+          {swapExerciseSheet}
 
           {/* Delete exercise confirmation */}
           {pendingDeleteExercise && (
@@ -1915,31 +2240,14 @@ export default function LogSessionModal({
                         {isDone || poppingKey === item.set.id ? "✓ Done" : "Done"}
                         <HapticTap />
                       </button>
-                      <div className="flex items-center justify-between mt-3 pt-3 border-t border-line-soft">
-                        <div className="flex items-center gap-3">
-                          <button
-                            onClick={() => deleteCurrentSet(item.globalIndex, item.set.id)}
-                            disabled={sets.length <= 1}
-                            className="text-xs text-ink-7 disabled:opacity-30 hover:text-red-400 transition-colors px-1"
-                          >
-                            Delete set
-                          </button>
-                          {mainLiftLabel !== MAIN_LIFT_LABEL.bench && (
-                            <button
-                              onClick={() => setPendingDeleteExercise({ kind: "main" })}
-                              className="text-xs text-ink-7 hover:text-red-400 transition-colors px-1"
-                            >
-                              Delete exercise
-                            </button>
-                          )}
-                        </div>
-                        <button
-                          onClick={() => addSetAfterCurrent(item.globalIndex)}
-                          className="text-xs text-ink-7 hover:text-ink transition-colors px-1"
-                        >
-                          + Add set after
-                        </button>
-                      </div>
+                      <CardActions
+                        onDeleteExercise={mainLiftLabel !== MAIN_LIFT_LABEL.bench
+                          ? () => setPendingDeleteExercise({ kind: "main" })
+                          : undefined}
+                        onDeleteSet={() => deleteCurrentSet(item.globalIndex, item.set.id)}
+                        canDeleteSet={sets.length > 1}
+                        onAddSet={() => addSetAfterCurrent(item.globalIndex)}
+                      />
                     </div>
                   )
                 })()}
@@ -2074,29 +2382,14 @@ export default function LogSessionModal({
                         {isDone || poppingKey === key ? "✓ Done" : "Done"}
                         <HapticTap />
                       </button>
-                      <div className="flex items-center justify-between mt-3 pt-3 border-t border-line-soft">
-                        <div className="flex items-center gap-3">
-                          <button
-                            onClick={() => deleteExtraSet(item.muscle, item.exercise, item.setIndex)}
-                            disabled={(extraState[item.muscle]?.[item.exercise]?.length ?? 0) <= 1}
-                            className="text-xs text-ink-7 disabled:opacity-30 hover:text-red-400 transition-colors px-1"
-                          >
-                            Delete set
-                          </button>
-                          <button
-                            onClick={() => setPendingDeleteExercise({ kind: "extra", muscle: item.muscle, exercise: item.exercise })}
-                            className="text-xs text-ink-7 hover:text-red-400 transition-colors px-1"
-                          >
-                            Delete exercise
-                          </button>
-                        </div>
-                        <button
-                          onClick={() => addExtraSetAfter(item.muscle, item.exercise, item.setIndex)}
-                          className="text-xs text-ink-7 hover:text-ink transition-colors px-1"
-                        >
-                          + Add set after
-                        </button>
-                      </div>
+                      <CardActions
+                        onSwap={() => openSwap(item.muscle, item.exercise)}
+                        onDeleteExercise={() => setPendingDeleteExercise({ kind: "extra", muscle: item.muscle, exercise: item.exercise })}
+                        onDeleteSet={() => deleteExtraSet(item.muscle, item.exercise, item.setIndex)}
+                        canDeleteSet={(extraState[item.muscle]?.[item.exercise]?.length ?? 0) > 1}
+                        onAddSet={() => addExtraSetAfter(item.muscle, item.exercise, item.setIndex)}
+                        unit={isCardio ? "Bout" : "Set"}
+                      />
                     </div>
                   )
                 })()}
@@ -2171,6 +2464,7 @@ export default function LogSessionModal({
 
         {exercisesSheet}
         {swapConfirmation}
+        {swapExerciseSheet}
 
         {/* Delete exercise confirmation */}
         {pendingDeleteExercise && (
