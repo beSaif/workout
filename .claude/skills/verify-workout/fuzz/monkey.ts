@@ -93,6 +93,8 @@ export type Probe = {
   serverErrors: string[]
   /** Network-failure errors the guard's own aborts caused (see NETWORK_FAILURE). */
   harnessInduced: string[]
+  /** Console load errors for /api data responses, whose status the fake chose (not findings). */
+  fakeAnswered: string[]
 }
 
 /** A fresh, non-persistent context with the fake, the leak tracker and the write wall. */
@@ -124,12 +126,24 @@ export async function openProbe(
   }
   if (trace) await context.tracing.start({ screenshots: true, snapshots: true })
   const page = await context.newPage()
-  const probe: Probe = { context, page, api, origin, blocked, leaked, data, pageErrors: [], consoleErrors: [], serverErrors: [], harnessInduced: [] }
+  const probe: Probe = { context, page, api, origin, blocked, leaked, data, pageErrors: [], consoleErrors: [], serverErrors: [], harnessInduced: [], fakeAnswered: [] }
   page.on("pageerror", (err) => probe.pageErrors.push(`${err.name}: ${err.message}`))
   page.on("console", (msg) => {
     if (msg.type() !== "error") return
     const url = msg.location()?.url ?? ""
-    if (!isAllowlisted(allowlist, { message: msg.text(), url })) probe.consoleErrors.push(msg.text())
+    let parsed: URL | null = null
+    try {
+      parsed = new URL(url)
+    } catch {}
+    // Chromium logs every 4xx/5xx load. For /api data that status is the fake's choice
+    // (e.g. 404 for a friend profile it was not seeded with), not the server's.
+    if (/^Failed to load resource/.test(msg.text()) && parsed && isDataApi(parsed, origin)) {
+      probe.fakeAnswered.push(`${msg.text()} (${parsed.pathname})`)
+      return
+    }
+    if (!isAllowlisted(allowlist, { message: msg.text(), url })) {
+      probe.consoleErrors.push(parsed && parsed.origin === origin ? `${msg.text()} (at ${parsed.pathname})` : msg.text())
+    }
   })
   page.on("response", (res) => {
     const url = new URL(res.url())
@@ -500,7 +514,7 @@ export async function runMonkey(browser: Browser, cfg: RunConfig, t: MonkeyTarge
     if (trace && result.status !== "failed") await p.context.tracing.stop().catch(() => {})
     result.blocked = p.blocked
     result.apiLeaks = p.leaked
-    result.harnessInduced = p.harnessInduced
+    result.harnessInduced = [...p.harnessInduced, ...p.fakeAnswered]
     result.dataRequests = { seen: p.data.seen, answered: p.data.answered.size }
     await p.context.close().catch(() => {})
     // The whole action log, finding or not: what this monkey did, replayable by seed.

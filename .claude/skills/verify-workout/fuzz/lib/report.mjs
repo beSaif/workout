@@ -63,7 +63,7 @@ export function renderSummary(report) {
     `- Journeys: ${journeys.length ? `${jPassed}/${journeys.length} passed` : "none run"}${journeys.some((j) => j.status !== "passed") ? ` (not passed: ${journeys.filter((j) => j.status !== "passed").map((j) => `${j.feature} ${j.status}`).join(", ")})` : ""}`,
     `- Monkeys: ${report.monkeys.length} run, ${report.actions} actions${report.monkeys.some((m) => m.status === "skipped") ? ` (${report.monkeys.filter((m) => m.status === "skipped").length} skipped: time budget)` : ""}`,
     `- Blocked requests (never sent): ${blocked}`,
-    `- Unanswered /api data requests: ${report.apiLeaks + (report.unansweredDataRequests ?? 0)}${report.harnessInduced ? ` · errors caused by blocked requests (not findings): ${report.harnessInduced}` : ""}`,
+    `- Unanswered /api data requests: ${report.apiLeaks + (report.unansweredDataRequests ?? 0)}${report.harnessInduced ? ` · errors caused by the harness (blocked requests, fake-answered statuses; not findings): ${report.harnessInduced}` : ""}`,
     `- Findings: ${fresh.length} new, ${known.length} known`,
     "",
   ]
