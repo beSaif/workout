@@ -222,6 +222,14 @@ export function blobDelNames(source) {
   return names
 }
 
+/**
+ * Escape every regex metacharacter so `s` matches literally inside `new RegExp(...)`.
+ * @param {string} s
+ */
+export function escapeRegExp(s) {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+}
+
 function excerpt(line) {
   const t = line.trim()
   return t.length > 120 ? `${t.slice(0, 117)}...` : t
@@ -281,7 +289,7 @@ export function detectIrreversible({ files, paths = [], isEnvKnown, headSource =
         else if (/(^|[^\w.$])[A-Za-z_$][\w$]*\s*\(/.test(line)) {
           const { names, known } = resolveBlobNames()
           for (const n of names) {
-            if (new RegExp(`(^|[^\\w.$])${n.replace(/\$/g, "\\$")}\\s*\\(`).test(line))
+            if (new RegExp(`(^|[^\\w.$])${escapeRegExp(n)}\\s*\\(`).test(line))
               add(`\`${p}\`: ${verb} a \`${n}(\` call (\`del\` from \`@vercel/blob\`, deletes blobs). (\`${excerpt(line)}\`)`)
           }
           // Fail closed: a bare del( in a file whose head content could not be read.

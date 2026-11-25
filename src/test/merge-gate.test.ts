@@ -7,6 +7,7 @@ import {
   decideGate,
   detectIrreversible,
   envVarsIn,
+  escapeRegExp,
   HELP,
   isExcludedFromContentScan,
   IRREVERSIBLE_NOTICE,
@@ -227,6 +228,15 @@ describe("destructive KV/Redis/Blob ops", () => {
       const reasons = detect(diffOf("src/lib/blob.ts", ["  await removeBlob(url)"]), () => head)
       expect(reasons).toHaveLength(1)
       expect(reasons[0]).toMatch(/`removeBlob\(` call \(`del` from `@vercel\/blob`/)
+    })
+
+    it("flags a call through an alias containing $, and escapeRegExp escapes every metacharacter", () => {
+      const head = 'import { del as $del } from "@vercel/blob"\n'
+      const reasons = detect(diffOf("src/lib/blob.ts", ["  await $del(url)", "  await x$del(url)"]), () => head)
+      expect(reasons).toHaveLength(1)
+      expect(reasons[0]).toMatch(/`\$del\(` call/)
+      expect(escapeRegExp(".*+?^${}()|[]\\")).toBe("\\.\\*\\+\\?\\^\\$\\{\\}\\(\\)\\|\\[\\]\\\\")
+      expect(new RegExp(escapeRegExp("a$b\\c")).test("a$b\\c")).toBe(true)
     })
 
     it("does not flag a bare del( defined locally", () => {
