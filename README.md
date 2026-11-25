@@ -81,6 +81,14 @@ used to sign the session cookie) and `VERCEL_AUTOMATION_BYPASS_SECRET` (Vercel â
 Deployment Protection â†’ Protection Bypass for Automation). It can also be run by hand from the
 Actions tab with a `base_url`.
 
+### Verifying a change
+
+User-facing changes are proven with the verify-workout skill ([.claude/skills/verify-workout/SKILL.md](.claude/skills/verify-workout/SKILL.md)).
+Run `node .claude/skills/verify-workout/verify.mjs run` locally, or add `--base-url <PR preview>` with
+`VERCEL_AUTOMATION_BYPASS_SECRET` and `E2E_AUTH_SECRET` set to run it against the Vercel preview.
+Evidence lands in `verify-evidence/<timestamp>/` (`summary.md`, screenshots, video). The feature map
+lives in `.claude/skills/verify-workout/features/`; update it in the same PR when a user-facing feature changes.
+
 ## Under the hood
 
 Next.js (App Router) on Vercel, Auth.js with Google, Vercel KV for everything synced, and one
