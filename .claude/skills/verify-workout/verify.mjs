@@ -16,7 +16,8 @@ import crypto from "node:crypto"
 import fs from "node:fs"
 import net from "node:net"
 import path from "node:path"
-import { fileURLToPath } from "node:url"
+import { fileURLToPath, pathToFileURL } from "node:url"
+import { PRODUCTION_HOSTS } from "./lib/target.mjs"
 
 const SKILL_DIR = path.dirname(fileURLToPath(import.meta.url))
 const ROOT = path.resolve(SKILL_DIR, "../../..")
@@ -26,8 +27,7 @@ const BUILD_STAMP = path.join(ROOT, ".next/verify-workout-build.json")
 const CONFIG = path.join(SKILL_DIR, "playwright.config.ts")
 const FEATURES_DIR = path.join(SKILL_DIR, "features")
 const JOURNEYS_DIR = path.join(SKILL_DIR, "journeys")
-const DEFAULT_PORT = 3210
-const PRODUCTION_HOSTS = ["workout.codesaif.dev"]
+export const DEFAULT_PORT = 3210
 // A throwaway Web Push public key, generated for verification only. No private key for it
 // exists anywhere, so nothing can ever be pushed with it; it only makes the local build
 // render the notifications opt-in (NEXT_PUBLIC_* is inlined at build time).
@@ -333,13 +333,19 @@ async function cleanup() {
 
 // ---------------------------------------------------------------- doctor
 
-async function doctor(target) {
+/**
+ * Doctor never lets verify.mjs touch production. `allowProduction` exists only for
+ * fuzz/fuzz.mjs, which checks its own --allow-production guard first and then drives
+ * production read-only; `requireAuth: false` lets fuzz run signed-out when no secret is
+ * set. verify.mjs always calls doctor(target) with the defaults.
+ */
+async function doctor(target, { allowProduction = false, requireAuth = true } = {}) {
   const checks = []
   const ok = (name, detail) => checks.push({ ok: true, name, detail })
   const bad = (name, detail) => checks.push({ ok: false, name, detail })
   const url = new URL(target.baseUrl)
 
-  if (PRODUCTION_HOSTS.includes(url.hostname)) {
+  if (PRODUCTION_HOSTS.includes(url.hostname.toLowerCase().replace(/\.$/, "")) && !allowProduction) {
     // Not even a read-only request goes to production.
     console.log(`  FAIL target    ${url.host} is production: verify a preview or a local server`)
     return false
@@ -383,7 +389,8 @@ async function doctor(target) {
   }
 
   if (!target.authSecret) {
-    bad("auth", "E2E_AUTH_SECRET is not set: it must equal the deployment's AUTH_SECRET")
+    if (requireAuth) bad("auth", "E2E_AUTH_SECRET is not set: it must equal the deployment's AUTH_SECRET")
+    else ok("auth", "no E2E_AUTH_SECRET: signed-out only")
   } else {
     try {
       const cookie = await forgeSessionCookie(target.baseUrl, target.authSecret)
@@ -562,33 +569,40 @@ function writeSummary({ out, target, rev, wanted, exitCode }) {
 
 // ---------------------------------------------------------------- main
 
-const { cmd, opts } = parseArgs(process.argv.slice(2))
-if (!cmd || opts.help) {
-  console.log(fs.readFileSync(fileURLToPath(import.meta.url), "utf8").split("\n").slice(1, 13).map((l) => l.replace(/^\/\/ ?/, "")).join("\n"))
-  process.exit(cmd ? 0 : 2)
-}
+// fuzz/fuzz.mjs imports the launch, doctor and cleanup code above instead of copying it.
+export { launch, cleanup, doctor, resolveTarget, readState, sourceRevision, featureIds, journeyTags, utcStamp, bypassHeaders, die }
 
-switch (cmd) {
-  case "launch":
-    await launch({ port: opts.port ?? DEFAULT_PORT, rebuild: opts.rebuild })
-    break
-  case "doctor": {
-    const target = await resolveTarget(opts)
-    if (!target) die("no target: pass --base-url (or BASE_URL), or start a local server with `verify.mjs launch`")
-    process.exit((await doctor(target)) ? 0 : 1)
-    break
+if (import.meta.url === pathToFileURL(process.argv[1] ?? "").href) await main()
+
+async function main() {
+  const { cmd, opts } = parseArgs(process.argv.slice(2))
+  if (!cmd || opts.help) {
+    console.log(fs.readFileSync(fileURLToPath(import.meta.url), "utf8").split("\n").slice(1, 13).map((l) => l.replace(/^\/\/ ?/, "")).join("\n"))
+    process.exit(cmd ? 0 : 2)
   }
-  case "run":
-    await runJourneys(opts)
-    break
-  case "features": {
-    const tags = journeyTags()
-    for (const f of featureIds()) console.log(`${f.padEnd(22)} ${tags.has(f) ? `journeys/${tags.get(f)}` : "NO JOURNEY"}`)
-    break
+
+  switch (cmd) {
+    case "launch":
+      await launch({ port: opts.port ?? DEFAULT_PORT, rebuild: opts.rebuild })
+      break
+    case "doctor": {
+      const target = await resolveTarget(opts)
+      if (!target) die("no target: pass --base-url (or BASE_URL), or start a local server with `verify.mjs launch`")
+      process.exit((await doctor(target)) ? 0 : 1)
+      break
+    }
+    case "run":
+      await runJourneys(opts)
+      break
+    case "features": {
+      const tags = journeyTags()
+      for (const f of featureIds()) console.log(`${f.padEnd(22)} ${tags.has(f) ? `journeys/${tags.get(f)}` : "NO JOURNEY"}`)
+      break
+    }
+    case "cleanup":
+      await cleanup()
+      break
+    default:
+      die(`unknown command "${cmd}"`)
   }
-  case "cleanup":
-    await cleanup()
-    break
-  default:
-    die(`unknown command "${cmd}"`)
 }

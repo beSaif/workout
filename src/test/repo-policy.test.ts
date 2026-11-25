@@ -54,6 +54,11 @@ describe("project name", () => {
       reason: "KV keys of the original owner's data, read to migrate it; renaming them loses that data",
     },
     {
+      file: ".claude/skills/verify-workout/lib/target.mjs",
+      line: /^export const PRODUCTION_HOSTS = /,
+      reason: "the production deployment's original vercel.app alias, a hostname verify.mjs and the fuzz harness must recognise as production",
+    },
+    {
       file: "docs/agent-rules.md",
       line: /./,
       reason: "documents this rule",

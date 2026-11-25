@@ -1,0 +1,6 @@
+[
+  {
+    "message": "^Failed to load resource: net::ERR_BLOCKED_BY_CLIENT",
+    "reason": "The harness itself aborts cross-origin requests and every non-GET request it does not fake (server actions, form posts); Chromium logs each aborted load."
+  }
+]

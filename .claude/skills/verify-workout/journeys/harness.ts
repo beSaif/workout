@@ -2,6 +2,7 @@ import fs from "node:fs"
 import path from "node:path"
 import type { Page } from "@playwright/test"
 import { test as smoke, expect, E2E_USER, FakeApi, onboardedProfile } from "../../../../e2e/fixtures"
+import { installFuzzGuard } from "../fuzz/guard"
 
 /**
  * The verify-workout journey harness: the smoke fixtures from e2e/fixtures.ts (forged
@@ -29,6 +30,11 @@ type Fixtures = {
   evidence: Evidence
   /** Cross-origin requests the page tried to make; all are aborted (never sent). */
   externalRequests: string[]
+  /**
+   * Auto, only when fuzz/fuzz.mjs runs the journeys (VERIFY_FUZZ_GUARD=1): the fuzz write
+   * wall (fuzz/guard.ts) on top of the fake. Blocked requests go to VERIFY_FUZZ_BLOCKED_DIR.
+   */
+  fuzzGuard: void
 }
 
 const bypass = process.env.VERCEL_AUTOMATION_BYPASS_SECRET
@@ -59,6 +65,24 @@ export const test = smoke.extend<Fixtures>({
         },
       )
       await provide(seen)
+    },
+    { auto: true },
+  ],
+
+  fuzzGuard: [
+    async ({ context, baseURL }, provide, testInfo) => {
+      if (process.env.VERIFY_FUZZ_GUARD !== "1") return provide()
+      const blocked = await installFuzzGuard(context, new URL(baseURL!).origin, {
+        production: process.env.VERIFY_FUZZ_PRODUCTION === "1",
+        handleExternal: false,
+      })
+      await provide()
+      const dir = process.env.VERIFY_FUZZ_BLOCKED_DIR
+      if (dir) {
+        const feature = (testInfo.tags[0] ?? "@untagged").replace(/^@/, "")
+        fs.mkdirSync(dir, { recursive: true })
+        fs.writeFileSync(path.join(dir, `${feature}.json`), JSON.stringify(blocked, null, 2))
+      }
     },
     { auto: true },
   ],

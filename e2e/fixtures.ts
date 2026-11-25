@@ -13,17 +13,20 @@ import { encode } from "next-auth/jwt"
  * session cookie with the preview's AUTH_SECRET (the E2E_AUTH_SECRET GitHub secret).
  */
 
-export const E2E_USER = {
+/** Who a forged session signs in as. Always a test identity, never a real account. */
+export type TestUser = { readonly sub: string; readonly name: string; readonly email: string }
+
+export const E2E_USER: TestUser = {
   sub: "e2e-smoke",
   name: "E2E Smoke",
   email: "e2e-smoke@example.invalid",
-} as const
+}
 
 /** What a finished onboarding leaves behind: a lift-focused bench profile. */
-export function onboardedProfile() {
+export function onboardedProfile(user: TestUser = E2E_USER) {
   return {
-    email: E2E_USER.email,
-    name: E2E_USER.name,
+    email: user.email,
+    name: user.name,
     bw: 80,
     trainingMode: "lift-focused",
     mainLift: "bench",
@@ -37,7 +40,7 @@ export function onboardedProfile() {
 }
 
 /** Same-origin data APIs, i.e. everything under /api except Auth.js's own routes. */
-function isDataApi(url: URL, origin: string): boolean {
+export function isDataApi(url: URL, origin: string): boolean {
   return url.origin === origin && url.pathname.startsWith("/api/") && !url.pathname.startsWith("/api/auth/")
 }
 
@@ -49,6 +52,8 @@ function isDataApi(url: URL, origin: string): boolean {
  */
 export class FakeApi {
   private readonly store = new Map<string, unknown>()
+  /** The signed-in account; `signIn` sets it. Profile writes are stored under its email. */
+  user: TestUser = E2E_USER
   /** Every request answered, in order, for assertions. */
   readonly calls: { method: string; path: string; body: unknown }[] = []
 
@@ -100,7 +105,7 @@ export class FakeApi {
       const profile = {
         ...existing,
         ...(body as Record<string, unknown>),
-        email: E2E_USER.email,
+        email: this.user.email,
         createdAt: existing.createdAt ?? new Date().toISOString(),
       }
       this.store.set(path, profile)
@@ -117,7 +122,7 @@ export class FakeApi {
  * answered that way. Context-level (not page-level) so popups and, in Chromium,
  * service-worker requests are covered too.
  */
-async function installApiFake(context: BrowserContext, origin: string, fake: FakeApi): Promise<Set<Request>> {
+export async function installApiFake(context: BrowserContext, origin: string, fake: FakeApi): Promise<Set<Request>> {
   const handled = new Set<Request>()
   await context.route(
     (url) => isDataApi(url, origin),
@@ -141,13 +146,70 @@ async function installApiFake(context: BrowserContext, origin: string, fake: Fak
   return handled
 }
 
+/**
+ * Watch `context` for data-API requests the fake did not answer (`handled` comes from
+ * installApiFake). The returned list fills in as such requests settle: each entry is a
+ * request that reached the network, i.e. the real (shared) KV backend.
+ */
+export function trackApiLeaks(context: BrowserContext, origin: string, handled: Set<Request>): string[] {
+  const leaked: string[] = []
+  context.on("request", (req) => {
+    const url = new URL(req.url())
+    if (!isDataApi(url, origin)) return
+    // Checked once the request settles, by which time the route handler has run.
+    void req
+      .response()
+      .catch(() => null)
+      .then(() => {
+        if (!handled.has(req)) leaked.push(`${req.method()} ${url.pathname}`)
+      })
+  })
+  return leaked
+}
+
+/**
+ * Sign `context` in as `user` (default E2E_USER): a forged Auth.js session cookie minted
+ * with E2E_AUTH_SECRET (= the target's AUTH_SECRET), an onboarded profile seeded into
+ * `api`, and the device-local one-offs (install guide, What's new) dismissed.
+ */
+export async function signInContext(context: BrowserContext, api: FakeApi, baseURL: string, user: TestUser = E2E_USER): Promise<void> {
+  const secret = process.env.E2E_AUTH_SECRET
+  if (!secret) throw new Error("E2E_AUTH_SECRET is not set: it must equal the deployment's AUTH_SECRET")
+  const url = new URL(baseURL)
+  const secure = url.protocol === "https:"
+  // Auth.js names (and salts) the cookie by scheme: previews are https.
+  const cookieName = secure ? "__Secure-authjs.session-token" : "authjs.session-token"
+  const value = await encode({
+    token: { sub: user.sub, name: user.name, email: user.email },
+    secret,
+    salt: cookieName,
+  })
+  // Host-only, like the cookie Auth.js sets for a real user: `url` (not `domain`) makes
+  // Playwright store it without a Domain attribute. A domain cookie would survive
+  // Auth.js's sign-out, which clears only the host-only one. The path is "/" from the URL.
+  await context.addCookies([
+    { name: cookieName, value, url: `${url.origin}/`, httpOnly: true, secure, sameSite: "Lax" },
+  ])
+  api.user = user
+  api.seed("/api/profile", onboardedProfile(user))
+  // Device-local one-offs that would otherwise cover the home screen on first load.
+  await context.addInitScript(() => {
+    try {
+      localStorage.setItem("installGuideDismissed", "1")
+      localStorage.setItem("lift-tracker-whats-new-seen", "999999")
+    } catch {
+      // Storage unavailable: the modals would show, and the specs would fail loudly.
+    }
+  })
+}
+
 type Fixtures = {
   /** The in-memory /api backend for this test. */
   api: FakeApi
   /** Auto: installs the fake and fails the test if a data-API request hits the network. */
   apiGuard: void
-  /** Adds a forged Auth.js session cookie for E2E_USER and seeds an onboarded profile. */
-  signIn: () => Promise<void>
+  /** Adds a forged Auth.js session cookie for `user` (default E2E_USER) and seeds an onboarded profile. */
+  signIn: (user?: TestUser) => Promise<void>
   /** Uncaught exceptions thrown in any page of the test. */
   pageErrors: Error[]
 }
@@ -161,18 +223,7 @@ export const test = base.extend<Fixtures>({
     async ({ context, api, baseURL }, provide) => {
       const origin = new URL(baseURL!).origin
       const handled = await installApiFake(context, origin, api)
-      const leaked: string[] = []
-      context.on("request", (req) => {
-        const url = new URL(req.url())
-        if (!isDataApi(url, origin)) return
-        // Checked once the request settles, by which time the route handler has run.
-        void req
-          .response()
-          .catch(() => null)
-          .then(() => {
-            if (!handled.has(req)) leaked.push(`${req.method()} ${url.pathname}`)
-          })
-      })
+      const leaked = trackApiLeaks(context, origin, handled)
       await provide()
       // Give any request still in flight a moment to settle before judging.
       await new Promise((r) => setTimeout(r, 250))
@@ -182,35 +233,7 @@ export const test = base.extend<Fixtures>({
   ],
 
   signIn: async ({ context, api, baseURL }, provide) => {
-    await provide(async () => {
-      const secret = process.env.E2E_AUTH_SECRET
-      if (!secret) throw new Error("E2E_AUTH_SECRET is not set: it must equal the deployment's AUTH_SECRET")
-      const url = new URL(baseURL!)
-      const secure = url.protocol === "https:"
-      // Auth.js names (and salts) the cookie by scheme: previews are https.
-      const cookieName = secure ? "__Secure-authjs.session-token" : "authjs.session-token"
-      const value = await encode({
-        token: { sub: E2E_USER.sub, name: E2E_USER.name, email: E2E_USER.email },
-        secret,
-        salt: cookieName,
-      })
-      // Host-only, like the cookie Auth.js sets for a real user: `url` (not `domain`) makes
-      // Playwright store it without a Domain attribute. A domain cookie would survive
-      // Auth.js's sign-out, which clears only the host-only one. The path is "/" from the URL.
-      await context.addCookies([
-        { name: cookieName, value, url: `${url.origin}/`, httpOnly: true, secure, sameSite: "Lax" },
-      ])
-      api.seed("/api/profile", onboardedProfile())
-      // Device-local one-offs that would otherwise cover the home screen on first load.
-      await context.addInitScript(() => {
-        try {
-          localStorage.setItem("installGuideDismissed", "1")
-          localStorage.setItem("lift-tracker-whats-new-seen", "999999")
-        } catch {
-          // Storage unavailable: the modals would show, and the specs would fail loudly.
-        }
-      })
-    })
+    await provide((user?: TestUser) => signInContext(context, api, baseURL!, user))
   },
 
   pageErrors: async ({ page, baseURL }, provide) => {
@@ -233,7 +256,7 @@ export const test = base.extend<Fixtures>({
  * So exactly that message is ignored, and only for a URL on the deployment's own
  * origin. The same message for any other origin is a real CORS failure and still counts.
  */
-function isCancelledSameOriginFetch(err: Error, origin: string): boolean {
+export function isCancelledSameOriginFetch(err: Error, origin: string): boolean {
   // Playwright sometimes splits WebKit's text at its first colon, which lands the URL's
   // scheme in `name` and the rest in `message`; try the text both whole and rejoined.
   for (const text of [err.message, `${err.name}:${err.message}`]) {
