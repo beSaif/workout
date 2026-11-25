@@ -1,0 +1,101 @@
+name: Smoke
+
+# Playwright smoke tests (e2e/) against the Vercel preview deployment of a pull request.
+# Triggered by pull_request, not deployment_status: a skipped deployment_status run
+# would count as a passing `smoke` check. The job waits for the preview itself.
+on:
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      base_url:
+        description: "Deployment URL to test, e.g. https://<preview>.vercel.app"
+        required: true
+        type: string
+
+concurrency:
+  group: smoke-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  deployments: read
+
+jobs:
+  smoke:
+    name: smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      NEXT_TELEMETRY_DISABLED: "1"
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Wait for Vercel preview
+        id: preview
+        if: github.event_name == 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          deadline=$(( $(date +%s) + 15 * 60 ))
+          while :; do
+            # Newest first. Vercel names the environment "Preview" or "Preview – <project>".
+            ids=$(gh api "repos/$REPO/deployments?sha=$SHA&per_page=100" \
+              --jq '[.[] | select(.environment | contains("Preview")) | .id] | .[]')
+            newest=true
+            for id in $ids; do
+              status=$(gh api "repos/$REPO/deployments/$id/statuses?per_page=1" --jq '.[0] // {}')
+              state=$(jq -r '.state // "pending"' <<<"$status")
+              if [ "$state" = "success" ]; then
+                url=$(jq -r 'if (.environment_url // "") != "" then .environment_url else (.target_url // "") end' <<<"$status")
+                if [ -n "$url" ]; then
+                  echo "Preview deployment $id is ready: $url"
+                  echo "url=$url" >> "$GITHUB_OUTPUT"
+                  exit 0
+                fi
+              fi
+              if $newest && { [ "$state" = "failure" ] || [ "$state" = "error" ]; }; then
+                echo "::error::Vercel preview deployment $id for $SHA ended in '$state'."
+                exit 1
+              fi
+              newest=false
+            done
+            if [ "$(date +%s)" -ge "$deadline" ]; then
+              echo "::error::No successful Vercel preview deployment for $SHA after 15 minutes."
+              exit 1
+            fi
+            echo "Waiting for the Vercel preview of $SHA (deployments: ${ids:-none yet})..."
+            sleep 15
+          done
+
+      # Mirror Vercel and ci.yml: pnpm 10 from pnpm-lock.yaml on Node 24.
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Install Playwright browsers
+        run: pnpm exec playwright install --with-deps chromium webkit
+
+      - name: Run smoke tests
+        run: pnpm test:e2e
+        env:
+          BASE_URL: ${{ steps.preview.outputs.url || inputs.base_url }}
+          E2E_AUTH_SECRET: ${{ secrets.E2E_AUTH_SECRET }}
+          VERCEL_AUTOMATION_BYPASS_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
+
+      - name: Upload Playwright report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 14
