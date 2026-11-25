@@ -35,6 +35,8 @@ Each feature file starts with an H1 title and one paragraph describing the user-
 3. `Driving it with Playwright (verify.mjs)` starts with `Preconditions:` and uses labeled bullets that pair each user action with a locator and an observable result, a **Run.** bullet and a **Proof.** bullet.
 4. `Gotchas` lists traps that can waste or invalidate a verification run.
 
+Every feature also has an entry in `routes.json` (its entry route and whether it needs a session), which the fuzz harness (`../fuzz/`) starts its monkey from; `fuzz/fuzz.test.ts` checks it lists exactly the feature files.
+
 Keep implementation details out of the map. Name only user paths, stable handles, required state and observable proof.
 
 ## Features
