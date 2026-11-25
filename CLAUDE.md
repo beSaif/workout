@@ -6,4 +6,9 @@ Workout is a training log built around one main lift (bench press by default), w
 - Act as bench coach: cue technique, prescribe next session, flag fatigue
 - Check localStorage for existing session data at start of every task
 
+## Verification
+- After any user-facing change, run the `verify-workout` skill (`.claude/skills/verify-workout/SKILL.md`): `node .claude/skills/verify-workout/verify.mjs run` against a local server, or with `--base-url <PR preview>` against the Vercel preview.
+- Attach the run's `summary.md` (from `verify-evidence/<timestamp>/`) to the PR before calling it done.
+- Adding, changing or removing a user-facing feature? Update `.claude/skills/verify-workout/features/` (and its journey) in the same PR. `/maintain-verification-skill` audits the map periodically.
+
 @AGENTS.md

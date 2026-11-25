@@ -1,0 +1,3 @@
+# session-detail
+
+placeholder

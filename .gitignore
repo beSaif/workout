@@ -48,3 +48,6 @@ next-env.d.ts
 /playwright-report/
 /blob-report/
 /playwright/.cache/
+
+# verify-workout evidence (screenshots, videos, summaries)
+/verify-evidence/
