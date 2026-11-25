@@ -16,6 +16,9 @@ export default defineConfig({
     // A fixed zone with DST, so the local-calendar-day maths in weight.ts is tested
     // the same way on every machine and in CI.
     env: { TZ: "Europe/Zurich" },
-    include: ["src/**/*.test.ts"],
+    // Plus the verify-workout skill's own unit tests (fuzz harness: RNG, signatures,
+    // target guard, request classifier). Its Playwright files (*.journey.ts, *.fuzz.ts)
+    // are not matched.
+    include: ["src/**/*.test.ts", ".claude/skills/**/*.test.ts"],
   },
 })
