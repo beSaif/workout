@@ -42,6 +42,9 @@ jobs:
       - name: Test
         run: pnpm test
 
+      - name: Test report redaction script
+        run: python3 -m unittest discover -s scripts -p '*_test.py'
+
       # `next build` needs no production secrets (Vercel KV, Auth.js, web-push are
       # only read at request time), so none are set here.
       - name: Build

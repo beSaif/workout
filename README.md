@@ -81,6 +81,11 @@ used to sign the session cookie) and `VERCEL_AUTOMATION_BYPASS_SECRET` (Vercel â
 Deployment Protection â†’ Protection Bypass for Automation). It can also be run by hand from the
 Actions tab with a `base_url`.
 
+Before the HTML report is uploaded, `scripts/redact-playwright-report.py` scrubs it (including the
+trace zips and the report data embedded in `index.html`): traces record request headers and
+cookies, so they would otherwise carry the bypass secret and session tokens into a public artifact.
+If anything is left, the step fails and the report is not uploaded.
+
 ### Verifying a change
 
 User-facing changes are proven with the verify-workout skill ([.claude/skills/verify-workout/SKILL.md](.claude/skills/verify-workout/SKILL.md)).
