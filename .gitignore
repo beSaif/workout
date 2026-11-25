@@ -51,3 +51,6 @@ next-env.d.ts
 
 # verify-workout evidence (screenshots, videos, summaries)
 /verify-evidence/
+
+# Python bytecode
+__pycache__/
