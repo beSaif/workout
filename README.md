@@ -46,6 +46,19 @@ npm run dev                     # http://localhost:3000
 The variables are listed in [docs/DEPLOY.md](docs/DEPLOY.md). Without a KV store nothing
 persists; `.claude/skills/screenshot` shows how to run the pages against mocked data instead.
 
+## Development checks
+
+CI (`.github/workflows/ci.yml`) runs these on every pull request and on pushes to `main`, with
+pnpm 10 on Node 24 like Vercel. Run them locally before pushing:
+
+```bash
+pnpm install --frozen-lockfile
+pnpm lint         # ESLint (next/core-web-vitals + TypeScript rules)
+pnpm typecheck    # tsc --noEmit, strict
+pnpm test         # Vitest unit tests for src/lib (src/lib/__tests__)
+pnpm build        # next build; needs no secrets
+```
+
 ## Under the hood
 
 Next.js (App Router) on Vercel, Auth.js with Google, Vercel KV for everything synced, and one

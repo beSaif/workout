@@ -74,6 +74,7 @@ export default function OnboardingPage() {
           const d = JSON.parse(raw) as PendingOnboarding
           localStorage.removeItem(PENDING_KEY)
           // Payloads saved before the mode existed carry no mode field; they were lift-focused.
+          // eslint-disable-next-line react-hooks/immutability -- autoFinish is a hoisted function declaration, called from an effect after render
           autoFinish({ ...d, mode: d.mode ?? "lift-focused" })
           return
         } catch {
@@ -94,6 +95,7 @@ export default function OnboardingPage() {
 
   useLayoutEffect(() => {
     if (!TIMED_STEPS.has(step)) return
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- intentional: re-lock reading before paint on step change
     setReadUnlocked(false)
   }, [step])
 
