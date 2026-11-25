@@ -1,7 +1,7 @@
 import type { FriendCardStats } from "../../../../src/lib/friendCard"
 import type { ProfileSocial, RoutineBundle, PersonSummary } from "../../../../src/lib/routines"
 import type { FriendSessionSummary, GymbroMessage, UserPresence, UserProfile } from "../../../../src/lib/types"
-import { E2E_USER, onboardedProfile } from "./harness"
+import { E2E_USER, onboardedProfile, type FakeApi } from "./harness"
 
 /**
  * Fake people and response bodies for the social journeys (gymbros, friend-profile,
@@ -129,3 +129,20 @@ export function myCardProfile() {
     routine,
   }
 }
+
+/**
+ * Give the in-browser FakeApi a per-journey answer for one method + path it does not
+ * model (it answers every write with `{ ok: true }`). The request is still answered by
+ * the fake, recorded in `api.calls` and counted by apiGuard; a page-level route that
+ * fulfils by itself would not be, and apiGuard would fail the journey as a leak.
+ */
+export function answer(api: FakeApi, method: string, path: string, json: unknown, status = 200): void {
+  const original = api.respond.bind(api)
+  api.respond = (m, p, body) => {
+    if (m !== method || p !== path) return original(m, p, body)
+    api.calls.push({ method: m, path: p, body })
+    return { status, json }
+  }
+}
+
+export { routine as OMAR_ROUTINE }

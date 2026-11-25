@@ -69,13 +69,20 @@ function git(...args) {
   }
 }
 
-/** HEAD plus a hash of uncommitted app changes: what a local build was built from. */
+const APP_PATHS = ["src", "public", "next.config.ts", "package.json", "pnpm-lock.yaml"]
+
+/**
+ * What a local build was built from: a hash of the committed app sources (git tree
+ * entries, so commits that touch only docs or .claude/ keep the same value) plus any
+ * uncommitted changes to them. `sha` is HEAD, for the evidence summary.
+ */
 function sourceRevision() {
   const sha = git("rev-parse", "HEAD")
-  const dirty = git("status", "--porcelain", "--", "src", "public", "next.config.ts", "package.json", "pnpm-lock.yaml")
-  const diff = dirty ? git("diff", "HEAD", "--", "src", "public", "next.config.ts", "package.json") : ""
-  const hash = dirty ? crypto.createHash("sha1").update(dirty + diff).digest("hex").slice(0, 8) : ""
-  return { sha, dirty: Boolean(dirty), rev: dirty ? `${sha}+dirty.${hash}` : sha }
+  const tree = git("ls-tree", "HEAD", "--", ...APP_PATHS)
+  const dirty = git("status", "--porcelain", "--", ...APP_PATHS)
+  const diff = dirty ? git("diff", "HEAD", "--", ...APP_PATHS) : ""
+  const app = crypto.createHash("sha1").update(tree + dirty + diff).digest("hex").slice(0, 12)
+  return { sha, dirty: Boolean(dirty), rev: `app.${app}${dirty ? "+dirty" : ""}`, label: `${sha}${dirty ? " (+ uncommitted app changes)" : ""}` }
 }
 
 function readState() {
@@ -438,6 +445,9 @@ async function runJourneys(opts) {
 
   const out = path.resolve(opts.out ?? path.join(ROOT, "verify-evidence", utcStamp()))
   fs.mkdirSync(out, { recursive: true })
+  // Reusing an --out dir: drop the selected features' old artifacts so a stale failure
+  // screenshot never shows up under a passing feature. Other features' files stay.
+  for (const f of wanted) fs.rmSync(path.join(out, f), { recursive: true, force: true })
   const rev = sourceRevision()
   log(`target ${target.baseUrl} (${target.kind}); evidence → ${path.relative(ROOT, out) || out}`)
 
@@ -521,7 +531,7 @@ function writeSummary({ out, target, rev, wanted, exitCode }) {
     "# verify-workout evidence",
     "",
     `- Target: ${target.baseUrl} (${target.kind === "local" ? "local `next start` launched by verify.mjs" : "deployed"})`,
-    `- Git SHA: ${rev.rev}`,
+    `- Git SHA: ${rev.label} (app sources ${rev.rev})`,
     `- Run at (UTC): ${new Date().toISOString()}`,
     `- Result: ${passed}/${rows.length} features passed (playwright exit ${exitCode})`,
     `- Raw output: test-output.txt; machine-readable: results.json`,

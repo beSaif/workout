@@ -2,7 +2,11 @@ import { test, expect } from "./harness"
 import { confirmedSessions } from "../../../../e2e/flows"
 import { completeOpenLogger, loggerDialog } from "./flows"
 
-type SavedExercise = { name?: string; exerciseName?: string; exerciseId?: string; muscleGroup?: string }
+type Balanced = {
+  sets: unknown[]
+  selectedTrainingDayId?: string
+  extraWorkouts?: { muscle: string; exercises: { name: string; sets: { kg: number; reps: number }[] }[] }[]
+}
 
 test("switch to Balanced, log a training-day session and see it on Home", { tag: "@balanced-mode" }, async ({ page, signIn, api, evidence, pageErrors }) => {
   await signIn()
@@ -38,19 +42,23 @@ test("switch to Balanced, log a training-day session and see it on Home", { tag:
 
   // Side effect: one confirmed session of Day A's exercises reached the (fake) API.
   await expect.poll(() => confirmedSessions(api.lastPost("/api/sessions")).length).toBe(1)
-  const [saved] = confirmedSessions(api.lastPost("/api/sessions")) as unknown as (ReturnType<typeof confirmedSessions>[number] & {
-    exercises?: SavedExercise[]
-    trainingDayId?: string
-  })[]
+  const [first] = confirmedSessions(api.lastPost("/api/sessions"))
+  const saved = first as typeof first & Balanced
   expect(saved.coachNote).toBe("verify-workout: balanced-mode")
-  expect(JSON.stringify(saved)).toContain("Lat Pulldown")
-  expect(JSON.stringify(saved)).not.toMatch(/bench/i)
+  // No main-lift sets; Day A's muscles with all 14 prescribed sets.
+  expect(saved.sets).toEqual([])
+  expect(saved.selectedTrainingDayId).toBe("day-a")
+  expect(saved.extraWorkouts?.map((w) => w.muscle)).toEqual(["back", "triceps"])
+  expect(saved.extraWorkouts?.flatMap((w) => w.exercises.flatMap((e) => e.sets)).length).toBe(14)
+  expect(saved.extraWorkouts?.[0].exercises[0].name).toBe("Lat Pulldown")
   evidence.json("saved-session", saved)
 
   // Resulting state: Day B is up next, the muscle balance is tracking, the session is listed.
   await expect(page.getByRole("heading", { level: 2, name: "Day B" })).toBeVisible()
   await expect(page.getByRole("button", { name: /^Muscle balance not tracked yet/ })).toHaveCount(0)
-  await expect(page.getByRole("button", { name: "Show session actions" }).first()).toBeVisible()
+  await expect(page.getByText("Recent sessions", { exact: true })).toBeVisible()
+  await expect(page.getByText("top 10kg × 10 — Lat Pulldown")).toBeVisible()
+  await expect(page.getByRole("button", { name: "Show session actions" })).toHaveCount(1)
   await evidence.shot(page, "result", "home-after-balanced-session")
 
   expect(pageErrors).toEqual([])

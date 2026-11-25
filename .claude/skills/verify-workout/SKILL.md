@@ -62,7 +62,7 @@ Run doctor again after any failed journey before trusting the next one.
 
 Journeys are Playwright tests in `journeys/<feature-id>.journey.ts`, one test per feature, tagged `@<feature-id>`; `run --feature <id>` greps that tag. They run under this directory's `playwright.config.ts` (Chromium at 393×852, service workers blocked so the fake sees every call, video on, no retries) and the fixtures in `journeys/harness.ts`, which extends `e2e/fixtures.ts` rather than replacing it:
 
-- `signIn()` forges the session and seeds an onboarded Main Lift (bench, 80 kg anchor, 100 kg target) profile; `api.seed(path, body)` seeds any `/api` resource before `page.goto`; a per-test `page.route` overrides the fake for responses it does not model.
+- `signIn()` forges the session and seeds an onboarded Main Lift (bench, 80 kg anchor, 100 kg target) profile; `api.seed(path, body)` seeds any `/api` resource before `page.goto`; for a response the fake does not model, wrap `api.respond` in the journey (see `plan-with-dot`); do not use `page.route` for `/api` data paths, because `apiGuard` only trusts requests the fake answered and reports the rest as leaks.
 - `api.calls` / `api.lastPost(path)` are the side effects: every request the UI sent, with its JSON body.
 - `evidence.shot(page, "action" | "result", label)` and `evidence.json(name, data)` write into the evidence dir; `api-calls.json` and `local-storage.json` are written automatically after each journey.
 - `externalRequests` lists cross-origin requests the page attempted (all aborted).
@@ -77,7 +77,7 @@ To drive something ad hoc (a new page before it has a journey), write a journey 
 
 Every `run` writes `verify-evidence/<UTC timestamp>/` (or `--out <dir>`; `verify-evidence/` is git-ignored):
 
-- `summary.md`: target URL, git SHA (with `+dirty.<hash>` for uncommitted app changes), and per feature id: pass/fail, duration, and every artifact path;
+- `summary.md`: target URL, git SHA (noting uncommitted app changes), and per feature id: pass/fail, duration, and every artifact path;
 - `test-output.txt`: the Playwright list-reporter output; `results.json`: the JSON report;
 - `<feature-id>/NN-action-*.png` and `NN-result-*.png`: the user action and the state it produced;
 - `<feature-id>/video.webm`: the whole journey; `api-calls.json`, `local-storage.json` and any journey-specific JSON: the side effects;

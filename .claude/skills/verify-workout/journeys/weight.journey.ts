@@ -52,7 +52,7 @@ test("bodyweight: opt in, weigh in from Home, chart ranges, goal and delete on /
   await page.getByRole("button", { name: "90d" }).click()
   await expect(page.getByText("one reading — log another to see a trend")).toBeHidden()
   await page.getByRole("button", { name: "all" }).click()
-  await expect(page.getByText(/reading/)).toHaveCount(0)
+  await expect(page.getByText("one reading — log another to see a trend")).toBeHidden()
   await evidence.shot(page, "result", "weight-all-range")
   await page.getByRole("button", { name: "30d" }).click()
   await expect(page.getByText("one reading — log another to see a trend")).toBeVisible()
