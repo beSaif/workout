@@ -28,6 +28,14 @@ const FEATURES_DIR = path.join(SKILL_DIR, "features")
 const JOURNEYS_DIR = path.join(SKILL_DIR, "journeys")
 const DEFAULT_PORT = 3210
 const PRODUCTION_HOSTS = ["workout.codesaif.dev"]
+// A throwaway Web Push public key, generated for verification only. No private key for it
+// exists anywhere, so nothing can ever be pushed with it; it only makes the local build
+// render the notifications opt-in (NEXT_PUBLIC_* is inlined at build time).
+const LOCAL_BUILD_ENV = {
+  NEXT_TELEMETRY_DISABLED: "1",
+  NEXT_PUBLIC_VAPID_PUBLIC_KEY: "BAYP8P_XvpmOzThR-finZijmeRsrl9VWbBv8AlEBEiqxCxd3g4J_e2TJA9Ic05KAg6ZMOuYkrIgEhMxlD1XM77w",
+}
+const LOCAL_BUILD_ENV_ID = crypto.createHash("sha1").update(JSON.stringify(LOCAL_BUILD_ENV)).digest("hex").slice(0, 8)
 
 // ---------------------------------------------------------------- args & utils
 
@@ -223,10 +231,11 @@ async function launch({ port = DEFAULT_PORT, rebuild = false } = {}) {
     stamp = JSON.parse(fs.readFileSync(BUILD_STAMP, "utf8"))
   } catch {}
   const haveBuild = fs.existsSync(path.join(ROOT, ".next/BUILD_ID"))
-  if (rebuild || !haveBuild || !stamp || stamp.rev !== rev.rev) {
+  const buildRev = `${rev.rev}/env.${LOCAL_BUILD_ENV_ID}`
+  if (rebuild || !haveBuild || !stamp || stamp.rev !== buildRev) {
     log(`building ${rev.rev} (next build; needs no secrets)`)
-    run1(path.join(ROOT, "node_modules/.bin/next"), ["build"], { NEXT_TELEMETRY_DISABLED: "1" })
-    fs.writeFileSync(BUILD_STAMP, JSON.stringify({ rev: rev.rev, builtAt: new Date().toISOString() }))
+    run1(path.join(ROOT, "node_modules/.bin/next"), ["build"], LOCAL_BUILD_ENV)
+    fs.writeFileSync(BUILD_STAMP, JSON.stringify({ rev: buildRev, builtAt: new Date().toISOString() }))
   } else {
     log(`reusing the existing build of ${rev.rev}`)
   }
@@ -243,7 +252,7 @@ async function launch({ port = DEFAULT_PORT, rebuild = false } = {}) {
     env: {
       ...process.env,
       NODE_ENV: "production",
-      NEXT_TELEMETRY_DISABLED: "1",
+      ...LOCAL_BUILD_ENV,
       AUTH_SECRET: authSecret,
       AUTH_TRUST_HOST: "true",
       AUTH_GOOGLE_ID: "verify-workout-dummy",
@@ -330,8 +339,12 @@ async function doctor(target) {
   const bad = (name, detail) => checks.push({ ok: false, name, detail })
   const url = new URL(target.baseUrl)
 
-  if (PRODUCTION_HOSTS.includes(url.hostname)) bad("target", `${url.host} is production: verify a preview or a local server`)
-  else ok("target", `${target.baseUrl} (${target.kind})`)
+  if (PRODUCTION_HOSTS.includes(url.hostname)) {
+    // Not even a read-only request goes to production.
+    console.log(`  FAIL target    ${url.host} is production: verify a preview or a local server`)
+    return false
+  }
+  ok("target", `${target.baseUrl} (${target.kind})`)
 
   if (target.kind === "local") {
     const st = target.state

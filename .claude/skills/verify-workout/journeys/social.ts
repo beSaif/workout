@@ -1,7 +1,7 @@
 import type { FriendCardStats } from "../../../../src/lib/friendCard"
 import type { ProfileSocial, RoutineBundle, PersonSummary } from "../../../../src/lib/routines"
 import type { FriendSessionSummary, GymbroMessage, UserPresence, UserProfile } from "../../../../src/lib/types"
-import { E2E_USER, onboardedProfile, type FakeApi } from "./harness"
+import { E2E_USER, onboardedProfile } from "./harness"
 
 /**
  * Fake people and response bodies for the social journeys (gymbros, friend-profile,

@@ -21,7 +21,7 @@ node .claude/skills/verify-workout/verify.mjs cleanup                           
 
 ## Targets
 
-**(a) Local server (cloud sessions, sandboxes, no secrets).** `launch` builds the checkout with `next build` (skipped when `.next` was already built from the same commit and uncommitted `src/` changes) and starts `next start -p 3210` in its own process group with throwaway values: a random per-launch `AUTH_SECRET`, dummy `AUTH_GOOGLE_*`, `AUTH_TRUST_HOST=true`, and `KV_REST_API_URL=http://127.0.0.1:1` so even the server cannot reach a KV store. Planner, VAPID and cron secrets are empty. The pid, port, secret and source revision go to `node_modules/.cache/verify-workout/server.json`, the server log next to it. `run` without a target uses that server, or launches one itself and stops it when done (`--keep-server` keeps it).
+**(a) Local server (cloud sessions, sandboxes, no secrets).** `launch` builds the checkout with `next build` (skipped when `.next` was already built from the same commit and uncommitted `src/` changes) and starts `next start -p 3210` in its own process group with throwaway values: a random per-launch `AUTH_SECRET`, dummy `AUTH_GOOGLE_*`, `AUTH_TRUST_HOST=true`, and `KV_REST_API_URL=http://127.0.0.1:1` so even the server cannot reach a KV store. Planner, VAPID private and cron secrets are empty; the build gets a fixed throwaway `NEXT_PUBLIC_VAPID_PUBLIC_KEY` (no private key exists for it) so the notifications opt-in renders. The pid, port, secret and source revision go to `node_modules/.cache/verify-workout/server.json`, the server log next to it. `run` without a target uses that server, or launches one itself and stops it when done (`--keep-server` keeps it).
 
 **(b) A deployed URL, normally the PR's Vercel preview.**
 
