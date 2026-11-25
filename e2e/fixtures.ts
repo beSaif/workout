@@ -194,8 +194,11 @@ export const test = base.extend<Fixtures>({
         secret,
         salt: cookieName,
       })
+      // Host-only, like the cookie Auth.js sets for a real user: `url` (not `domain`) makes
+      // Playwright store it without a Domain attribute. A domain cookie would survive
+      // Auth.js's sign-out, which clears only the host-only one. The path is "/" from the URL.
       await context.addCookies([
-        { name: cookieName, value, domain: url.hostname, path: "/", httpOnly: true, secure, sameSite: "Lax" },
+        { name: cookieName, value, url: `${url.origin}/`, httpOnly: true, secure, sameSite: "Lax" },
       ])
       api.seed("/api/profile", onboardedProfile())
       // Device-local one-offs that would otherwise cover the home screen on first load.
