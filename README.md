@@ -38,9 +38,9 @@ your home screen.
 ## Run it locally
 
 ```bash
-npm install
+pnpm install                    # pnpm 10; pnpm-lock.yaml is the only lockfile
 cp .env.example .env.local      # fill in the Google OAuth client and a KV store
-npm run dev                     # http://localhost:3000
+pnpm dev                        # http://localhost:3000
 ```
 
 The variables are listed in [docs/DEPLOY.md](docs/DEPLOY.md). Without a KV store nothing

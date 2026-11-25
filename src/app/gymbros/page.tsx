@@ -119,7 +119,7 @@ export default function GymBrosPage() {
     return presences.find((p) => p.email === email)
   }
 
-  async function handleAddFriend(e: React.FormEvent) {
+  async function handleAddFriend(e: React.SubmitEvent<HTMLFormElement>) {
     e.preventDefault()
     const email = query.trim().toLowerCase()
     if (!email || !isEmail) return

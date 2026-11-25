@@ -13,7 +13,7 @@
 
 ## How to get to it (user POV)
 
-- Home → gymbros timeline → first face, `me`.
+- Home → gymbros timeline → first face, `me` (`/me`).
 - Home → menu → `Profile` → `My card · View →`.
 
 ## Driving it with Playwright (verify.mjs)

@@ -1,0 +1,30 @@
+# Agent rules
+
+**When a human corrects an agent, propose a lint rule or test and add it to the table below, instead of adding another prose line to CLAUDE.md.** The failure message has to name the root-cause fix (what to do instead, and why), because the reader is usually the next agent.
+
+Lint rules are in `eslint.config.mjs` (run with `pnpm lint`); repo policies are in `src/test/repo-policy.test.ts` (run with `pnpm test`). Both run in CI on every pull request.
+
+## Enforced
+
+| Rule | Enforcement | Origin |
+| --- | --- | --- |
+| Playwright cookies use `url: <base URL>`, never `domain:` in `addCookies(...)`. A domain cookie is a different cookie from the host-only one Auth.js sets and clears, so it survives sign-out. | ESLint `no-restricted-syntax` (first entry of `playwrightRestrictions`), `eslint.config.mjs`. Scope: `e2e/**`, `.claude/skills/**`. | Past correction: broke verify-workout's sign-out journey in PR #146. |
+| Never wait for `"networkidle"`; wait for a specific locator or state. | ESLint `no-restricted-syntax` (`Literal[value='networkidle']`), `eslint.config.mjs`. Scope: `e2e/**`, `.claude/skills/**`. | Past correction: never settles on Vercel previews (analytics, keep-alive). |
+| Never override the `Host` header in Playwright code. | ESLint `no-restricted-syntax` (Host key in `headers` / `extraHTTPHeaders` / `setExtraHTTPHeaders()` / `new Headers()`, or `.set("Host", …)`), `eslint.config.mjs`. Scope: `e2e/**`, `.claude/skills/**`. | Past correction: Vercel's edge drops TLS when Host is not the deployment's own. Test host rules locally. |
+| Heed deprecation notices. | ESLint `@typescript-eslint/no-deprecated` (error, type-aware via `parserOptions.projectService`), `eslint.config.mjs`. Scope: `src/**/*.{ts,tsx}`. | AGENTS.md: "Heed deprecation notices". |
+| No `middleware.ts`: Next 16 renamed it to `proxy.ts`. | Vitest `Next.js conventions > has no middleware file (Next 16 renamed it to proxy)`, `src/test/repo-policy.test.ts`. | AGENTS.md: "This is NOT the Next.js you know" (`node_modules/next/dist/docs/01-app/02-guides/upgrading/version-16.md`). |
+| `pnpm-lock.yaml` is the only lockfile (no `package-lock.json`, `yarn.lock`, `bun.lockb`). | Vitest `lockfiles > tracks pnpm-lock.yaml and no other package manager's lockfile`, `src/test/repo-policy.test.ts`. | Past correction: Vercel and CI install with pnpm 10, yet a `package-lock.json` nothing installs from was still tracked and needed its own fix-up (PR #143). |
+| The app is Workout (repo beSaif/workout, workout.codesaif.dev); no `bench-tracker` outside an allowlist. | Vitest `project name > does not use the old repo name outside the allowlist`, `src/test/repo-policy.test.ts`. Allowlisted: the `LEGACY_*_KEY` KV keys in `src/lib/userKeys.ts` (they migrate the original owner's stored data) and this file. | Past correction: the repo and package were renamed from the old name (PR #143 renamed it in `package-lock.json`). |
+| Every page route has a verify-workout feature (or is listed as deliberately unmapped). | Vitest `verify-workout feature map > maps every page route to a feature file` (and `keeps UNMAPPED to routes that exist`), `src/test/repo-policy.test.ts`. Matches the backticked routes under "How to get to it (user POV)" in `.claude/skills/verify-workout/features/*.md`. | CLAUDE.md, Verification: "Adding, changing or removing a user-facing feature? Update `.claude/skills/verify-workout/features/`". |
+| e1RM via Brzycki: weight × (36 / (37 − reps)). | Vitest `calcE1RM (Brzycki: weight × 36 / (37 − reps))`, `src/lib/__tests__/e1rm.test.ts`. | CLAUDE.md, Bench Coaching Context. |
+
+## Left as prose (and why)
+
+- **In Main Lift mode the main lift is the first exercise of every session, except an explicit "Skip Bench".** Not decided by a pure function in `src/lib`: the upcoming session is built by `createUpcomingSession` and the skip by `handleSkipMainLift`, both in `src/app/page.tsx`, and the order is the logger's layout (`src/components/LogSessionModal.tsx`). It stays in CLAUDE.md. The behaviour is driven end to end by the verify-workout journeys `log-session` and `skip-main-lift`. If that logic moves into `src/lib`, give it unit tests for both cases and move this row up.
+- **Act as bench coach: cue technique, prescribe next session, flag fatigue.** A conversational stance, not a property of the code.
+- **Sessions are only hardcoded after explicit user confirmation.** Depends on what the user said in the conversation; no file can show it.
+- **Check localStorage for existing session data at the start of every task.** A step in the agent's workflow, before any code exists to check.
+- **Read `node_modules/next/dist/docs` before writing code.** Reading can't be linted. Its two checkable consequences are enforced above: no `middleware.ts`, and no deprecated APIs in `src/**`.
+- **Visually judge UI changes.** Needs eyes on screenshots (the `screenshot` and `verify-workout` skills capture them); there's no deterministic pass/fail.
+- **Attach verify-workout's `summary.md` to the PR.** Enforced outside this repo, by Forge's `forge_verify.sh` at merge time.
+- **Never push to `main`; merge only when `ci` and `smoke` are green.** Enforced by GitHub branch protection, not lint.

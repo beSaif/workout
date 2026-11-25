@@ -12,7 +12,7 @@
 
 ## How to get to it (user POV)
 
-- Home → menu (`Open menu`) → `Profile`.
+- Home → menu (`Open menu`) → `Profile` (`/profile`).
 - Home → tap `hello, <name>` (`Open profile`).
 
 ## Driving it with Playwright (verify.mjs)
