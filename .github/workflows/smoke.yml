@@ -92,8 +92,24 @@ jobs:
           E2E_AUTH_SECRET: ${{ secrets.E2E_AUTH_SECRET }}
           VERCEL_AUTOMATION_BYPASS_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
 
-      - name: Upload Playwright report
+      # Traces in the report record request headers and cookies (the Vercel bypass secret,
+      # _vercel_jwt, the forged Auth.js session), and this repo's artifacts are public.
+      - name: Redact secrets from Playwright report
+        id: redact
         if: always()
+        env:
+          REDACT_ENV: VERCEL_AUTOMATION_BYPASS_SECRET,E2E_AUTH_SECRET
+          VERCEL_AUTOMATION_BYPASS_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
+          E2E_AUTH_SECRET: ${{ secrets.E2E_AUTH_SECRET }}
+        run: |
+          if [ ! -d playwright-report ]; then
+            echo "No playwright-report/ directory; nothing to redact."
+            exit 0
+          fi
+          python3 scripts/redact-playwright-report.py playwright-report
+
+      - name: Upload Playwright report
+        if: always() && steps.redact.outcome == 'success'
         uses: actions/upload-artifact@v4
         with:
           name: playwright-report
