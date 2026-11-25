@@ -33,7 +33,9 @@ export default defineConfig({
     extraHTTPHeaders,
     // Every journey is recorded; screenshots of the action and the result are taken
     // explicitly by the journeys (harness.ts `evidence.shot`).
-    video: { mode: "on", size: { width: 393, height: 852 } },
+    // Off when the fuzz harness runs the journeys (VERIFY_FUZZ_GUARD=1): it keeps the run
+    // within its memory budget, and fuzz evidence is screenshots, traces and step logs.
+    video: process.env.VERIFY_FUZZ_GUARD === "1" ? "off" : { mode: "on", size: { width: 393, height: 852 } },
     screenshot: "only-on-failure",
     trace: "retain-on-failure",
     // Service workers would sit between the page and the /api fake.

@@ -64,17 +64,29 @@ export function renderSummary(report) {
     `- Monkeys: ${report.monkeys.length} run, ${report.actions} actions${report.monkeys.some((m) => m.status === "skipped") ? ` (${report.monkeys.filter((m) => m.status === "skipped").length} skipped: time budget)` : ""}`,
     `- Blocked requests (never sent): ${blocked}`,
     `- Unanswered /api data requests: ${report.apiLeaks + (report.unansweredDataRequests ?? 0)}${report.harnessInduced ? ` · errors caused by the harness (blocked requests, fake-answered statuses; not findings): ${report.harnessInduced}` : ""}`,
-    `- Findings: ${fresh.length} new, ${known.length} known`,
+    `- Findings: ${new Set(fresh.map((f) => f.signature)).size} new, ${new Set(known.map((f) => f.signature)).size} known (distinct signatures; ${report.findings.length} occurrences)`,
     "",
   ]
   if (!report.findings.length) lines.push("No findings.", "")
+  // One entry per signature: the shortest reproduction, plus where else it showed up.
+  const bySig = new Map()
   for (const f of [...fresh, ...known]) {
+    const group = bySig.get(f.signature)
+    if (!group) bySig.set(f.signature, { best: f, all: [f] })
+    else {
+      group.all.push(f)
+      if (f.steps.length < group.best.steps.length) group.best = f
+    }
+  }
+  for (const { best: f, all } of bySig.values()) {
+    const others = [...new Set(all.filter((x) => x !== f).map((x) => x.feature))]
     lines.push(
       `### ${f.known ? "known" : "NEW"} \`${f.signature}\` ${f.kind} on \`${f.route}\` (${f.feature})`,
       "",
       `${md(f.message).slice(0, 400)}`,
       "",
-      `Reproducible: ${f.reproducible}${f.known ? ` · issue: ${f.known}` : ""} · screenshot: \`${f.screenshot ?? "-"}\`${f.trace ? ` · trace: \`${f.trace}\`` : ""}`,
+      `Reproducible: ${all.map((x) => x.reproducible).every(Boolean) ? "true" : all.some((x) => x.reproducible) ? "sometimes" : "false"}${f.known ? ` · issue: ${f.known}` : ""} · screenshot: \`${f.screenshot ?? "-"}\`${f.trace ? ` · trace: \`${f.trace}\`` : ""}`,
+      ...(others.length ? ["", `Also found from: ${others.join(", ")} (${all.length} occurrences in fuzz-report.json)`] : []),
       "",
       ...f.steps.map((s, i) => `${i + 1}. ${md(s)}`),
       "",
