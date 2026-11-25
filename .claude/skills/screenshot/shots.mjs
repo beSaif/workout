@@ -53,7 +53,9 @@ for (const shot of scenario.shots) {
     viewport: shot.viewport ?? scenario.viewport ?? { width: 393, height: 852 },
     deviceScaleFactor: 2,
   })
-  await ctx.addCookies([{ name: "authjs.session-token", value: token, domain: new URL(BASE).hostname, path: "/" }])
+  // Host-only (`url`, not `domain`), like the cookie a real sign-in gets: a domain cookie is
+  // a different cookie that Auth.js's sign-out doesn't clear.
+  await ctx.addCookies([{ name: "authjs.session-token", value: token, url: `${new URL(BASE).origin}/` }])
   const mocks = { ...scenario.mocks, ...shot.mocks }
   const page = await ctx.newPage()
   await page.route("**/api/**", (route) => {
@@ -63,8 +65,13 @@ for (const shot of scenario.shots) {
     return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(body) })
   })
 
-  await page.goto(`${BASE}${shot.path}`, { waitUntil: "networkidle", timeout: 120000 })
-  if (shot.waitFor) await page.waitForSelector(shot.waitFor, { timeout: 60000 })
+  // Ready means the page's own content is on screen, not that the network went quiet
+  // (it never does on a Vercel preview). Every page renders its level-1 heading once its
+  // data has loaded; a shot of a page without one, or of a later state, names its own
+  // `waitFor` element.
+  await page.goto(`${BASE}${shot.path}`, { waitUntil: "domcontentloaded", timeout: 120000 })
+  if (shot.waitFor) await page.waitForSelector(shot.waitFor, { timeout: 120000 })
+  else await page.getByRole("heading", { level: 1 }).first().waitFor({ timeout: 120000 })
   await page.waitForTimeout(800)
 
   for (const step of shot.steps ?? []) {

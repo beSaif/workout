@@ -19,10 +19,10 @@ browser) can't be mocked this way; say so rather than faking it.
 ## 1. Install and start the dev server
 
 ```bash
-[ -d node_modules ] || npm ci
+[ -d node_modules ] || pnpm install --frozen-lockfile
 AUTH_SECRET=screenshot-secret-0123456789abcdef AUTH_GOOGLE_ID=x AUTH_GOOGLE_SECRET=x \
 AUTH_TRUST_HOST=true KV_REST_API_URL=http://127.0.0.1:1 KV_REST_API_TOKEN=x \
-npx next dev -p 3100
+pnpm exec next dev -p 3100
 ```
 
 Run it in the background, then wait until `curl -s -o /dev/null localhost:3100/welcome`
@@ -36,7 +36,9 @@ Copy `examples/friend-profile.json` into the scratchpad and edit it. Shape:
 - `mocks`: `{ "/api/path": <JSON body> }`, shared by every shot. Unmocked
   `/api/*` calls get `[]`. Match the real response shape: read the route in
   `src/app/api/**/route.ts` and the types in `src/lib/` before writing a mock.
-- `shots[]`: each has `name`, `path`, optional `waitFor` (selector), `mocks`
+- `shots[]`: each has `name`, `path`, optional `waitFor` (selector for an element
+  that proves the page has loaded; without it the shot waits for the page's level-1
+  heading, so set it for pages that have none, such as `/onboarding`), `mocks`
   (overrides for this shot), `viewport`, `fullPage`, and `steps`, run in order:
   `{ "click": "role:button:Label" | "<selector>", "scroll": 400, "waitFor": "text=…", "wait": 300 }`.
 

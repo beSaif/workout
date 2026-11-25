@@ -8,15 +8,15 @@ deployments. `vercel.json` only declares the cron.
 ## Environment variables
 
 Set these in the Vercel project (Settings → Environment Variables), or in `.env.local` for
-`npm run dev`.
+`pnpm dev`.
 
 | Variable | Purpose |
 | --- | --- |
-| `AUTH_SECRET` | Required. Auth.js session secret (`npx auth secret` generates one). |
+| `AUTH_SECRET` | Required. Auth.js session secret (`pnpm dlx auth secret` generates one). |
 | `AUTH_GOOGLE_ID`, `AUTH_GOOGLE_SECRET` | Required. A Google OAuth client of type "Web application" with `https://<your-address>/api/auth/callback/google` among its authorized redirect URIs and `https://<your-address>` among its JavaScript origins. Every address the app is served from must be listed. |
 | `KV_REST_API_URL`, `KV_REST_API_TOKEN` | Required. Vercel KV (or any Upstash Redis REST endpoint). Vercel fills them in when you attach a KV store to the project. |
 | `CRON_SECRET` | Required for reminders. The cron route rejects every request whose `Authorization` header is not `Bearer $CRON_SECRET`, and refuses to run at all when unset. Vercel sends the header automatically. |
-| `VAPID_EMAIL`, `NEXT_PUBLIC_VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY` | Web push credentials (`npx web-push generate-vapid-keys`). Without them no push is sent. |
+| `VAPID_EMAIL`, `NEXT_PUBLIC_VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY` | Web push credentials (`pnpm exec web-push generate-vapid-keys`). Without them no push is sent. |
 | `PLANNER_API_KEY` | Turns on "Plan with Dot". Without it only the copy-and-paste planner is offered. A free [Groq](https://console.groq.com) key works with the defaults. |
 | `PLANNER_BASE_URL` | Optional. Any OpenAI-compatible endpoint; defaults to `https://api.groq.com/openai/v1`. |
 | `PLANNER_MODEL` | Optional. Defaults to `openai/gpt-oss-120b`. |
