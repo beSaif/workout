@@ -210,25 +210,39 @@ export const test = base.extend<Fixtures>({
     })
   },
 
-  pageErrors: async ({ page }, provide) => {
+  pageErrors: async ({ page, baseURL }, provide) => {
+    const origin = new URL(baseURL!).origin
     const errors: Error[] = []
     page.on("pageerror", (err) => {
-      if (!isAbortedPrefetch(err)) errors.push(err)
+      if (!isCancelledSameOriginFetch(err, origin)) errors.push(err)
     })
     await provide(errors)
   },
 })
 
 /**
- * WebKit reports the Next.js router's route prefetches (`?_rsc=` fetches) that a reload
- * or navigation cancels as page errors ("Fetch API cannot load … due to access control
- * checks"). That is the old page being torn down, not the app failing, so it is the one
- * error not counted.
+ * WebKit reports a fetch that a reload or navigation cancels as an uncaught page error:
+ * "Fetch API cannot load <url> due to access control checks." In this app those are the
+ * Next.js router's own same-origin fetches (route prefetches and RSC navigation
+ * requests) torn down with the old page, which is not the app failing. The URL does not
+ * always show it: locally it carries `?_rsc=`, on Vercel it can be the bare page URL.
+ *
+ * So exactly that message is ignored, and only for a URL on the deployment's own
+ * origin. The same message for any other origin is a real CORS failure and still counts.
  */
-function isAbortedPrefetch(err: Error): boolean {
-  // Playwright splits WebKit's text at the first colon, so the URL's scheme lands in
-  // `name` and the rest in `message`: match on the two put back together.
-  return /^Fetch API cannot load .*[?&]_rsc=.* due to access control checks\.$/.test(`${err.name}:${err.message}`)
+function isCancelledSameOriginFetch(err: Error, origin: string): boolean {
+  // Playwright sometimes splits WebKit's text at its first colon, which lands the URL's
+  // scheme in `name` and the rest in `message`; try the text both whole and rejoined.
+  for (const text of [err.message, `${err.name}:${err.message}`]) {
+    const match = /^Fetch API cannot load (\S+) due to access control checks\.$/.exec(text)
+    if (!match) continue
+    try {
+      return new URL(match[1]).origin === origin
+    } catch {
+      return false
+    }
+  }
+  return false
 }
 
 export { expect }
