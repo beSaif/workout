@@ -23,14 +23,17 @@ test("Jump moves the up-next card to a later session in the block, and Undo puts
   await expect(sheet).toBeVisible()
   await expect(sheet).toContainText("3 sessions in between are skipped and won't count as trained.")
   await expect(sheet).toContainText("That's +2.5kg on today's 70kg.")
-  const label = ((await sheet.getByRole("heading").first().textContent()) ?? "").replace(/^Jump to |\?$/g, "")
+  // The sheet's title names the slot ("Jump to <phase> <n>?"); the undo banner repeats it.
+  const label = /Jump to (.+?)\?/.exec(await sheet.innerText())?.[1] ?? ""
+  expect(label).not.toBe("")
   await evidence.shot(page, "action", "confirm-jump-to-session-4")
   await sheet.getByRole("button", { name: "Jump", exact: true }).click()
   await expect(sheet).toBeHidden()
 
   // Up next is now Session 4 at 72.5kg, with an undo banner; nothing was logged.
   await expect(page.getByText(/^Session 4$/)).toBeVisible()
-  await expect(page.getByText("72.5kg", { exact: true })).toBeVisible()
+  // The up-next weight is the first "72.5kg" on the page (Session 7 previews it too).
+  await expect(page.getByText("72.5kg", { exact: true }).first()).toBeVisible()
   await expect(page.getByText(`Jumped to ${label}`)).toBeVisible()
   await expect(page.getByRole("button", { name: /^Session 4 .*Jump$/ })).toHaveCount(0)
   await expect.poll(() => skippedSlots(api.lastPost("/api/sessions"))).toBe(3)

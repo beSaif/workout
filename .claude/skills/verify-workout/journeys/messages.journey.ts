@@ -64,6 +64,8 @@ test("receive, dismiss, reply to and send gymbro messages, including the post-se
   await completeOpenLogger(page, loggerDialog(page), "verify-workout: messages")
   const hype = page.getByRole("dialog").filter({ hasText: "your pr is older than this app" })
   await expect(hype).toBeVisible()
+  // The presets fade up one by one; let them land so the evidence shows the panel.
+  await page.waitForTimeout(600)
   await evidence.shot(page, "action", "hype-panel")
   await hype.getByRole("button", { name: "your pr is older than this app" }).click()
   await expect.poll(() => sends().at(-1)).toEqual({ toEmail: OMAR.email, text: "your pr is older than this app" })

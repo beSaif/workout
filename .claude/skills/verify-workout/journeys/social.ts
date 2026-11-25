@@ -116,7 +116,7 @@ export function myCardProfile() {
   return {
     profile: { ...onboardedProfile(), email: E2E_USER.email, name: E2E_USER.name },
     lastSessionSummary: null,
-    card: { ...card, level: 5, records: [{ exercise: "Bench Press", kg: 80, reps: 3, date: daysAgoIso(2), isFresh: true }], progressPct: 80 },
+    card: { ...card, level: 5, records: [{ exercise: "Bench Press", kg: 80, reps: 3, date: daysAgoIso(2), isFresh: true }], standingKg: 80, progressPct: 80 },
     social: {
       gymbroCount: 2,
       athleteCount: 0,
@@ -130,19 +130,6 @@ export function myCardProfile() {
   }
 }
 
-/**
- * Give the in-browser FakeApi a per-journey answer for one method + path it does not
- * model (it answers every write with `{ ok: true }`). The request is still answered by
- * the fake, recorded in `api.calls` and counted by apiGuard; a page-level route that
- * fulfils by itself would not be, and apiGuard would fail the journey as a leak.
- */
-export function answer(api: FakeApi, method: string, path: string, json: unknown, status = 200): void {
-  const original = api.respond.bind(api)
-  api.respond = (m, p, body) => {
-    if (m !== method || p !== path) return original(m, p, body)
-    api.calls.push({ method: m, path: p, body })
-    return { status, json }
-  }
-}
+export { answer } from "./harness"
 
 export { routine as OMAR_ROUTINE }

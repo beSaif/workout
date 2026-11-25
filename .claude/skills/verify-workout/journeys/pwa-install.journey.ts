@@ -56,7 +56,7 @@ test("PWA: manifest and icons, service worker, and the add-to-home-screen guide"
   const guide = page.getByRole("dialog").filter({ hasText: "add this to your home screen" })
   await expect(guide).toBeVisible()
   // Android without a captured install prompt: the written Chrome steps.
-  await expect(guide.getByText("open in Chrome if you're not already")).toBeVisible()
+  await expect(guide.getByText(/open in Chrome\s*if you're not already/)).toBeVisible()
   await evidence.shot(page, "action", "install-guide")
   await guide.getByRole("button", { name: "maybe later" }).click()
   await expect(guide).toBeHidden()

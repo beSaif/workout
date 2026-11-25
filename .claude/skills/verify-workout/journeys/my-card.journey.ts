@@ -43,6 +43,7 @@ test("see your own gymbro card, its people, routine and the shareable image", { 
   // Share card: the image is built in the browser and saved as a PNG download.
   await page.getByRole("button", { name: "Share card" }).click()
   await expect(page.getByRole("img", { name: "Your gymbro card" })).toBeVisible({ timeout: 30_000 })
+  await page.waitForTimeout(600) // the preview fades up
   await evidence.shot(page, "action", "share-card-preview")
   const download = page.waitForEvent("download")
   await page.getByRole("button", { name: "save", exact: true }).click()
