@@ -1,0 +1,61 @@
+name: merge-gate
+
+# Required check that decides whether a PR may merge (logic and docs: scripts/merge-gate.mjs,
+# docs/agent-rules.md):
+#  - irreversible changes (Vercel config, env files, migrations, DNS, new env vars, KV/Blob
+#    deletes, domain APIs) get the `needs-saif` label and never auto-merge;
+#  - agent PRs (`claude/*` branches, or auto-merge enabled) need a `forge/verify` success
+#    status on the current head SHA, which Forge posts after verify-workout passes on the
+#    PR's Vercel preview.
+# The gate reads live PR state through the API, so re-runs and label/auto-merge events see
+# the current labels, head SHA and statuses, not the event payload's.
+on:
+  pull_request:
+    types:
+      [opened, synchronize, reopened, ready_for_review, labeled, unlabeled, auto_merge_enabled, auto_merge_disabled]
+
+concurrency:
+  group: merge-gate-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+  statuses: read
+
+jobs:
+  merge-gate:
+    name: merge-gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      # The base branch, not the PR: its tree is what "a new env var" is checked against, and
+      # running the base's gate script means a PR cannot weaken the gate that judges it.
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.base.ref }}
+          fetch-depth: 1
+
+      # Node built-ins and the runner's `gh` only; no app dependencies are installed.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Gate
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR: ${{ github.event.pull_request.number }}
+          ACTION: ${{ github.event.action }}
+        run: |
+          set -euo pipefail
+          script=scripts/merge-gate.mjs
+          if [ ! -f "$script" ]; then
+            # Bootstrap only: the PR that adds the gate runs its own copy.
+            echo "::notice::The base branch has no $script yet; running the PR's copy."
+            git fetch --no-tags --depth=1 origin "+refs/pull/$PR/head:refs/merge-gate/head"
+            script="$RUNNER_TEMP/merge-gate.mjs"
+            git show refs/merge-gate/head:scripts/merge-gate.mjs > "$script"
+          fi
+          node "$script" run --repo "$REPO" --pr "$PR" --action "$ACTION"

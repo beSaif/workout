@@ -12,4 +12,10 @@ Workout is a training log built around one main lift (bench press by default), w
 - Attach the run's `summary.md` (from `verify-evidence/<timestamp>/`) to the PR before calling it done.
 - Adding, changing or removing a user-facing feature? Update `.claude/skills/verify-workout/features/` (and its journey) in the same PR. `/maintain-verification-skill` audits the map periodically.
 
+## Merging
+- `main` merges only through PRs whose required checks pass: `ci`, `smoke` and `merge-gate` (`.github/workflows/merge-gate.yml`, logic in `scripts/merge-gate.mjs`).
+- `merge-gate` fails while the PR has the `needs-saif` label. It adds that label itself when a push touches something irreversible (Vercel config, env files, migrations, DNS/domains, a new env var, KV/Redis/Blob deletes) and comments why. Only Saif removes it, which approves that revision.
+- PRs from `claude/*` branches, or with auto-merge on, also need a `forge/verify` success status on the head SHA. Forge posts it after verify-workout passes on the PR's Vercel preview (`forge_merge_if_green.sh workout <pr>`), then enables auto-merge. Never post it by hand.
+- Dry-run the detection locally: `gh pr diff <pr> > pr.diff && node scripts/merge-gate.mjs detect --diff pr.diff --base-dir <checkout of main>`.
+
 @AGENTS.md
