@@ -55,7 +55,7 @@ test("receive, dismiss, reply to and send gymbro messages, including the post-se
   await expect(composer).toBeVisible()
   await evidence.shot(page, "action", "profile-composer")
   await composer.getByRole("button", { name: "go move something heavy" }).click()
-  await expect(composer.getByText("sent", { exact: true })).toBeVisible()
+  await expect(page.getByRole("dialog").getByText("sent", { exact: true })).toBeVisible()
   expect(sends().at(-1)).toEqual({ toEmail: OMAR.email, text: "go move something heavy" })
 
   // Post-session hype: confirming a session with a gymbro opens the hype panel.
