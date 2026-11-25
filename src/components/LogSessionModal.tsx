@@ -709,6 +709,7 @@ export default function LogSessionModal({
       const key = getItemKey(item)
       const group = item.type === "main" ? "main" : `extra-${item.muscle}-${item.exercise}`
       if (group !== groupKey) {
+        // eslint-disable-next-line react-hooks/immutability -- local accumulator of a synchronous map inside this IIFE, not captured beyond render
         groupKey = group
         setNo = 0
       }
@@ -794,6 +795,7 @@ export default function LogSessionModal({
   function scheduleNotification(delay: number, body: string) {
     if (typeof Notification === "undefined" || Notification.permission !== "granted") return
     if (!navigator.serviceWorker) return
+    // eslint-disable-next-line react-hooks/purity -- only called from event handlers, never during render
     const id = String(Date.now())
     notifIdRef.current = id
     navigator.serviceWorker.ready.then((reg) => {
@@ -883,6 +885,7 @@ export default function LogSessionModal({
         const item = carouselItems.find((i) => getItemKey(i) === key)
         reportSetMoment(setMoment(item), { finishesExercise: finishesExercise(key), buzzed })
         const rest = restAfter(item)
+        // eslint-disable-next-line react-hooks/purity -- markSetDone runs from the tapDone click handler, not render
         setRestEndTime(Date.now() + rest * 1000)
         setRestSeconds(rest)
         advanceToNextSet()
@@ -2370,6 +2373,7 @@ export default function LogSessionModal({
                         </div>
                       )}
                       <button
+                        // eslint-disable-next-line react-hooks/refs -- tapDone reads refs only when the click fires, not during render
                         onClick={() => tapDone(key)}
                         className={`relative w-full rounded-xl py-3.5 text-sm font-semibold transition-[background-color,color,transform] duration-100 active:scale-[0.97] ${
                           poppingKey === key

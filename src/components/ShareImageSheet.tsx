@@ -34,6 +34,7 @@ export default function ShareImageSheet({ title, fileName, alt, capture, onClose
   const [canShare, setCanShare] = useState(false)
   const [canCopy, setCanCopy] = useState(false)
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- intentional: client-only feature detection after mount (avoids hydration mismatch)
     setCanShare(typeof navigator !== "undefined" && typeof navigator.share === "function")
     setCanCopy(
       typeof navigator !== "undefined" &&
@@ -45,6 +46,7 @@ export default function ShareImageSheet({ title, fileName, alt, capture, onClose
 
   // Held in a ref so an inline arrow from the caller doesn't re-run the capture.
   const captureRef = useRef(capture)
+  // eslint-disable-next-line react-hooks/refs -- latest-callback ref pattern; read only inside the effect below
   captureRef.current = capture
 
   useEffect(() => {

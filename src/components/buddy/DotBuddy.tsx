@@ -377,6 +377,7 @@ export default function DotBuddy({ cue = null, startAsleep = false }: Props) {
     b.hop = {
       fromX: from.x,
       fromY: from.y,
+      // eslint-disable-next-line react-hooks/purity -- runs in an imperative hop helper (effects/handlers), not during render
       start: performance.now(),
       dur,
       arc: 22 + Math.min(50, Math.abs(toY - from.y) * 0.12),

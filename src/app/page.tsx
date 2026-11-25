@@ -305,6 +305,7 @@ export default function Page() {
       const localBlocks = loadBlocksLocal()
       const localConfig = loadExerciseConfigLocal()
       const localDays = loadTrainingDaysLocal()
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- intentional: hydrate from localStorage on mount (client-only data)
       setProfile(cachedProfile)
       if (localSessions.length > 0) setSessions(backfillMuscles(localSessions, localConfig, localDays))
       if (localBlocks.length > 0) setBlocks(localBlocks)
@@ -468,6 +469,7 @@ export default function Page() {
     const target = sessions.find(s => s.id.toString() === resumeId)
     const draft = loadDraft()
     if (target && draft && draft.sessionId.toString() === resumeId) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- intentional: resume a draft found in sessionStorage once sessions load
       setLoggingSession(JSON.parse(JSON.stringify(target)))
       setActiveDraft(draft)
       scheduleIncompleteSessionReminder()
@@ -590,6 +592,7 @@ export default function Page() {
     if (Notification.permission === "granted") {
       subscribeAndStore(vapidKey)
     } else if (Notification.permission === "default") {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- intentional: Notification.permission is browser-only state read after mount
       setShowNotifBanner(true)
     }
   }, [profile])
