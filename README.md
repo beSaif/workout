@@ -59,6 +59,28 @@ pnpm test         # Vitest unit tests for src/lib (src/lib/__tests__)
 pnpm build        # next build; needs no secrets
 ```
 
+### Smoke tests
+
+`.github/workflows/smoke.yml` (check `smoke`) runs the Playwright specs in `e2e/` on every pull
+request against its Vercel preview, in Chromium and iPhone WebKit. They sign in with a forged
+Auth.js cookie and answer every `/api/*` call (except `/api/auth/*`) from an in-memory fake,
+failing if one reaches the network: KV is shared with production, so tests never touch it.
+
+To run them locally against a preview:
+
+```bash
+pnpm exec playwright install chromium webkit          # once
+BASE_URL=https://<preview>.vercel.app \
+E2E_AUTH_SECRET=<the preview's AUTH_SECRET> \
+VERCEL_AUTOMATION_BYPASS_SECRET=<protection bypass secret> \
+pnpm test:e2e                                         # add --project=chromium for one browser
+```
+
+GitHub secrets the workflow needs: `E2E_AUTH_SECRET` (the Preview environment's `AUTH_SECRET`,
+used to sign the session cookie) and `VERCEL_AUTOMATION_BYPASS_SECRET` (Vercel → Settings →
+Deployment Protection → Protection Bypass for Automation). It can also be run by hand from the
+Actions tab with a `base_url`.
+
 ## Under the hood
 
 Next.js (App Router) on Vercel, Auth.js with Google, Vercel KV for everything synced, and one
